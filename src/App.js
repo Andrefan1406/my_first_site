@@ -63,308 +63,319 @@ const hoursOptions = Array.from({ length: 17 }, (_, i) => i + 6);
 const quantityOptions = Array.from({ length: 10 }, (_, i) => i + 1);
 
 const App = () => {
-  const [requests, setRequests] = useState([
-    { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }
-  ]);
-
-  // Состояния для модального окна и данных пользователя
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [userFullName, setUserFullName] = useState("");
-  const [userPhone, setUserPhone] = useState("");
-
-  const handleChange = (index, field, value) => {
-    const newRequests = [...requests];
-    newRequests[index][field] = value;
-
-    if (field === "objectCategory") newRequests[index].object = "";
-    if (field === "object") newRequests[index].position = "";
-    if (field === "category") newRequests[index].equipmentName = "";
-
-    setRequests(newRequests);
-  };
-
-  const isRequestComplete = (request) => {
-    return Object.values(request).every(value => value !== "");
-  };
-
-  const addRequest = () => {
-    if (!isRequestComplete(requests[requests.length - 1])) {
-      alert("Пожалуйста, заполните все поля перед добавлением новой техники.");
-      return;
-    }
-    setRequests([...requests, { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }]);
-  };
-
-  const removeLastRequest = () => {
-    if (requests.length > 1) {
-      setRequests(requests.slice(0, -1));
-    }
-  };
-
-  // При клике на кнопку «Отправить заявку» сначала проверяем поля и затем открываем модальное окно
-  const submitRequest = () => {
-    for (let request of requests) {
-      if (!isRequestComplete(request)) {
-        alert("Пожалуйста, заполните все поля перед отправкой заявки.");
+    const [requests, setRequests] = useState([
+      { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }
+    ]);
+  
+    // Состояния для модального окна и данных пользователя
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [userFullName, setUserFullName] = useState("");
+    const [userPhone, setUserPhone] = useState("");
+    // Флаг, указывающий на то, что данные отправляются
+    const [isSubmitting, setIsSubmitting] = useState(false);
+  
+    const handleChange = (index, field, value) => {
+      const newRequests = [...requests];
+      newRequests[index][field] = value;
+  
+      if (field === "objectCategory") newRequests[index].object = "";
+      if (field === "object") newRequests[index].position = "";
+      if (field === "category") newRequests[index].equipmentName = "";
+  
+      setRequests(newRequests);
+    };
+  
+    const isRequestComplete = (request) => {
+      return Object.values(request).every(value => value !== "");
+    };
+  
+    const addRequest = () => {
+      if (!isRequestComplete(requests[requests.length - 1])) {
+        alert("Пожалуйста, заполните все поля перед добавлением новой техники.");
         return;
       }
-    }
-    // Открываем модальное окно для ввода ФИО и номера телефона
-    setIsModalOpen(true);
-  };
-
-  // Обработка отправки данных из модального окна
-  const handleModalSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!userFullName || !userPhone) {
-      alert("Пожалуйста, заполните ФИО и номер телефона.");
-      return;
-    }
-
-    // Добавляем данные пользователя к каждой заявке
-    const updatedRequests = requests.map(request => ({
-      ...request,
-      fullName: userFullName,
-      phone: userPhone
-    }));
-
-    console.log("Отправляемые данные:", updatedRequests);
-
-    try {
-      await fetch("https://script.google.com/macros/s/AKfycbxf5vPbxx2RQM9g2DmuD2TZCAWXmiPxVLY3bEeIFTF2tJc7CLUR2YV-cv82mgNWKqTI/exec", {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedRequests),
-      });
-      alert("Заявка отправлена!");
-      // Сброс заявки и полей модального окна
-      setRequests([{ date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }]);
-      setUserFullName("");
-      setUserPhone("");
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error("Ошибка при отправке:", error);
-      alert("Ошибка при отправке заявки!");
-    }
-  };
-
-  return (
-    <div style={styles.container}>
-      <h2>Заявка на технику</h2>
-      {requests.map((request, index) => (
-        <div key={index} style={styles.formBlock}>
-          <label>Введите дату:</label>
-          <input
-            type="date"
-            value={request.date}
-            onChange={e => handleChange(index, "date", e.target.value)}
-          />
-
-          <label>Укажите время начала работы:</label>
-          <select
-            value={request.startTime}
-            onChange={e => handleChange(index, "startTime", e.target.value)}
-          >
-            <option value="">Выберите время</option>
-            {hoursOptions.map(hour => (
-              <option key={hour} value={hour}>{hour}:00</option>
-            ))}
-          </select>
-
-          <label>Укажите время окончания работы:</label>
-          <select
-            value={request.endTime}
-            onChange={e => handleChange(index, "endTime", e.target.value)}
-          >
-            <option value="">Выберите время</option>
-            {hoursOptions.map(hour => (
-              <option key={hour} value={hour}>{hour}:00</option>
-            ))}
-          </select>
-
-          <label>Категория объекта:</label>
-          <select 
-            value={request.objectCategory} 
-            onChange={e => handleChange(index, "objectCategory", e.target.value)}
-          >
-            <option value="">Выберите категорию объекта</option>
-            {Object.keys(objectCategoryOptions).map(category => (
-              <option key={category} value={category}>{category}</option>
-            ))}
-          </select>
-
-          <label>Объект:</label>
-          <select 
-            value={request.object} 
-            onChange={e => handleChange(index, "object", e.target.value)}
-            disabled={!request.objectCategory}
-          >
-            <option value="">Выберите объект</option>
-            {objectCategoryOptions[request.objectCategory]?.map(obj => (
-              <option key={obj} value={obj}>{obj}</option>
-            ))}
-          </select>
-
-          <label>Позиция или строение:</label>
-          <select
-            value={request.position}
-            onChange={e => handleChange(index, "position", e.target.value)}
-            disabled={!request.object}
-          >
-            <option value="">Выберите позицию</option>
-            {(objectPositionOptions[request.object] || []).map(pos => (
-              <option key={pos} value={pos}>{pos}</option>
-            ))}
-          </select>
-
-          <label>Выберите категорию техники:</label>
-          <select
-            value={request.category}
-            onChange={e => handleChange(index, "category", e.target.value)}
-          >
-            <option value="">Выберите категорию</option>
-            {Object.keys(categoryOptions).map(category => (
-              <option key={category} value={category}>{category}</option>
-            ))}
-          </select>
-
-          <label>Выберите наименование техники:</label>
-          <select
-            value={request.equipmentName}
-            onChange={e => handleChange(index, "equipmentName", e.target.value)}
-            disabled={!request.category}
-          >
-            <option value="">Выберите наименование</option>
-            {(categoryOptions[request.category] || []).map(name => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
-
-          <label>Количество:</label>
-          <select
-            value={request.quantity}
-            onChange={e => handleChange(index, "quantity", e.target.value)}
-          >
-            <option value="">Выберите количество</option>
-            {quantityOptions.map(quantity => (
-              <option key={quantity} value={quantity}>{quantity}</option>
-            ))}
-          </select>
-        </div>
-      ))}
-
-      <button onClick={addRequest} style={styles.addButton}>Добавить технику</button>
-      {requests.length > 1 && (
-        <button onClick={removeLastRequest} style={styles.backButton}>Назад</button>
-      )}
-      <button onClick={submitRequest} style={styles.submitButton}>Отправить заявку</button>
-
-      {/* Модальное окно для ввода ФИО и номера телефона */}
-      {isModalOpen && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalContent}>
-            <span style={styles.modalClose} onClick={() => setIsModalOpen(false)}>&times;</span>
-            <h2>Введите ваши данные</h2>
-            <form onSubmit={handleModalSubmit}>
-              <label>ФИО:</label>
-              <input
-                type="text"
-                value={userFullName}
-                onChange={e => setUserFullName(e.target.value)}
-                required
-              />
-              <br />
-              <label>Номер телефона:</label>
-              <input
-                type="tel"
-                value={userPhone}
-                onChange={e => setUserPhone(e.target.value)}
-                required
-              />
-              <br />
-              <button type="submit" style={styles.submitButton}>Отправить заявку</button>
-            </form>
+      setRequests([...requests, { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }]);
+    };
+  
+    const removeLastRequest = () => {
+      if (requests.length > 1) {
+        setRequests(requests.slice(0, -1));
+      }
+    };
+  
+    // При клике на кнопку «Отправить заявку» проверяем заполненность и открываем модальное окно
+    const submitRequest = () => {
+      for (let request of requests) {
+        if (!isRequestComplete(request)) {
+          alert("Пожалуйста, заполните все поля перед отправкой заявки.");
+          return;
+        }
+      }
+      setIsModalOpen(true);
+    };
+  
+    // Обработка отправки данных из модального окна
+    const handleModalSubmit = async (e) => {
+      e.preventDefault();
+  
+      if (isSubmitting) return; // если запрос уже отправляется, не выполняем повторно
+      if (!userFullName || !userPhone) {
+        alert("Пожалуйста, заполните ФИО и номер телефона.");
+        return;
+      }
+  
+      setIsSubmitting(true); // блокируем кнопку до завершения отправки
+  
+      // Добавляем данные пользователя к каждой заявке
+      const updatedRequests = requests.map(request => ({
+        ...request,
+        fullName: userFullName,
+        phone: userPhone
+      }));
+  
+      console.log("Отправляемые данные:", updatedRequests);
+  
+      try {
+        await fetch("https://script.google.com/macros/s/AKfycbxf5vPbxx2RQM9g2DmuD2TZCAWXmiPxVLY3bEeIFTF2tJc7CLUR2YV-cv82mgNWKqTI/exec", {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedRequests),
+        });
+        alert("Заявка отправлена!");
+        // Сброс состояния
+        setRequests([{ date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }]);
+        setUserFullName("");
+        setUserPhone("");
+        setIsModalOpen(false);
+      } catch (error) {
+        console.error("Ошибка при отправке:", error);
+        alert("Ошибка при отправке заявки!");
+      } finally {
+        setIsSubmitting(false); // разблокируем кнопку, когда запрос завершится
+      }
+    };
+  
+    return (
+      <div style={styles.container}>
+        <h2>Заявка на технику</h2>
+        {requests.map((request, index) => (
+          <div key={index} style={styles.formBlock}>
+            <label>Введите дату:</label>
+            <input
+              type="date"
+              value={request.date}
+              onChange={e => handleChange(index, "date", e.target.value)}
+            />
+  
+            <label>Укажите время начала работы:</label>
+            <select
+              value={request.startTime}
+              onChange={e => handleChange(index, "startTime", e.target.value)}
+            >
+              <option value="">Выберите время</option>
+              {hoursOptions.map(hour => (
+                <option key={hour} value={hour}>{hour}:00</option>
+              ))}
+            </select>
+  
+            <label>Укажите время окончания работы:</label>
+            <select
+              value={request.endTime}
+              onChange={e => handleChange(index, "endTime", e.target.value)}
+            >
+              <option value="">Выберите время</option>
+              {hoursOptions.map(hour => (
+                <option key={hour} value={hour}>{hour}:00</option>
+              ))}
+            </select>
+  
+            <label>Категория объекта:</label>
+            <select 
+              value={request.objectCategory} 
+              onChange={e => handleChange(index, "objectCategory", e.target.value)}
+            >
+              <option value="">Выберите категорию объекта</option>
+              {Object.keys(objectCategoryOptions).map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+  
+            <label>Объект:</label>
+            <select 
+              value={request.object} 
+              onChange={e => handleChange(index, "object", e.target.value)}
+              disabled={!request.objectCategory}
+            >
+              <option value="">Выберите объект</option>
+              {objectCategoryOptions[request.objectCategory]?.map(obj => (
+                <option key={obj} value={obj}>{obj}</option>
+              ))}
+            </select>
+  
+            <label>Позиция или строение:</label>
+            <select
+              value={request.position}
+              onChange={e => handleChange(index, "position", e.target.value)}
+              disabled={!request.object}
+            >
+              <option value="">Выберите позицию</option>
+              {(objectPositionOptions[request.object] || []).map(pos => (
+                <option key={pos} value={pos}>{pos}</option>
+              ))}
+            </select>
+  
+            <label>Выберите категорию техники:</label>
+            <select
+              value={request.category}
+              onChange={e => handleChange(index, "category", e.target.value)}
+            >
+              <option value="">Выберите категорию</option>
+              {Object.keys(categoryOptions).map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+  
+            <label>Выберите наименование техники:</label>
+            <select
+              value={request.equipmentName}
+              onChange={e => handleChange(index, "equipmentName", e.target.value)}
+              disabled={!request.category}
+            >
+              <option value="">Выберите наименование</option>
+              {(categoryOptions[request.category] || []).map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+  
+            <label>Количество:</label>
+            <select
+              value={request.quantity}
+              onChange={e => handleChange(index, "quantity", e.target.value)}
+            >
+              <option value="">Выберите количество</option>
+              {quantityOptions.map(quantity => (
+                <option key={quantity} value={quantity}>{quantity}</option>
+              ))}
+            </select>
           </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Стили для формы и модального окна
-const styles = {
-  container: {
-    maxWidth: "600px",
-    margin: "20px auto",
-    padding: "20px",
-    border: "1px solid #ddd",
-    borderRadius: "10px",
-    textAlign: "center"
-  },
-  formBlock: {
-    marginBottom: "15px",
-    padding: "10px",
-    border: "1px solid #ccc",
-    borderRadius: "5px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "5px",
-    textAlign: "left"
-  },
-  addButton: {
-    marginRight: "10px",
-    padding: "10px",
-    background: "#007bff",
-    color: "white",
-    border: "none",
-    borderRadius: "5px",
-    cursor: "pointer"
-  },
-  backButton: {
-    marginRight: "10px",
-    padding: "10px",
-    background: "#dc3545",
-    color: "white",
-    border: "none",
-    borderRadius: "5px",
-    cursor: "pointer"
-  },
-  submitButton: {
-    padding: "10px",
-    background: "green",
-    color: "white",
-    border: "none",
-    borderRadius: "5px",
-    cursor: "pointer"
-  },
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  modalContent: {
-    background: "#fff",
-    padding: "20px",
-    borderRadius: "5px",
-    position: "relative",
-    width: "90%",
-    maxWidth: "400px"
-  },
-  modalClose: {
-    position: "absolute",
-    top: "10px",
-    right: "10px",
-    cursor: "pointer",
-    fontSize: "24px"
-  }
-};
-
-export default App;
+        ))}
+  
+        <button onClick={addRequest} style={styles.addButton}>Добавить технику</button>
+        {requests.length > 1 && (
+          <button onClick={removeLastRequest} style={styles.backButton}>Назад</button>
+        )}
+        <button onClick={submitRequest} style={styles.submitButton}>Отправить заявку</button>
+  
+        {/* Модальное окно для ввода ФИО и номера телефона */}
+        {isModalOpen && (
+          <div style={styles.modalOverlay}>
+            <div style={styles.modalContent}>
+              <span style={styles.modalClose} onClick={() => setIsModalOpen(false)}>&times;</span>
+              <h2>Введите ваши данные</h2>
+              <form onSubmit={handleModalSubmit}>
+                <label>ФИО:</label>
+                <input
+                  type="text"
+                  value={userFullName}
+                  onChange={e => setUserFullName(e.target.value)}
+                  required
+                />
+                <br />
+                <label>Номер телефона:</label>
+                <input
+                  type="tel"
+                  value={userPhone}
+                  onChange={e => setUserPhone(e.target.value)}
+                  required
+                />
+                <br />
+                <button 
+                  type="submit" 
+                  style={styles.submitButton}
+                  disabled={isSubmitting}  // блокировка кнопки во время отправки
+                >
+                  {isSubmitting ? "Отправка..." : "Отправить заявку"}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  const styles = {
+    container: {
+      maxWidth: "600px",
+      margin: "20px auto",
+      padding: "20px",
+      border: "1px solid #ddd",
+      borderRadius: "10px",
+      textAlign: "center"
+    },
+    formBlock: {
+      marginBottom: "15px",
+      padding: "10px",
+      border: "1px solid #ccc",
+      borderRadius: "5px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "5px",
+      textAlign: "left"
+    },
+    addButton: {
+      marginRight: "10px",
+      padding: "10px",
+      background: "#007bff",
+      color: "white",
+      border: "none",
+      borderRadius: "5px",
+      cursor: "pointer"
+    },
+    backButton: {
+      marginRight: "10px",
+      padding: "10px",
+      background: "#dc3545",
+      color: "white",
+      border: "none",
+      borderRadius: "5px",
+      cursor: "pointer"
+    },
+    submitButton: {
+      padding: "10px",
+      background: "green",
+      color: "white",
+      border: "none",
+      borderRadius: "5px",
+      cursor: "pointer"
+    },
+    modalOverlay: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0,0,0,0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    modalContent: {
+      background: "#fff",
+      padding: "20px",
+      borderRadius: "5px",
+      position: "relative",
+      width: "90%",
+      maxWidth: "400px"
+    },
+    modalClose: {
+      position: "absolute",
+      top: "10px",
+      right: "10px",
+      cursor: "pointer",
+      fontSize: "24px"
+    }
+  };
+  
+  export default App;
