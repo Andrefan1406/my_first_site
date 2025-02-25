@@ -271,7 +271,7 @@ const App = () => {
           <div style={styles.modalOverlay}>
             <div style={styles.modalContent}>
               <span style={styles.modalClose} onClick={() => setIsModalOpen(false)}>&times;</span>
-              <h2>Введите ваши данные</h2>
+              <h2>Ответственный</h2>
               <form onSubmit={handleModalSubmit}>
                 <label>ФИО:</label>
                 <input
