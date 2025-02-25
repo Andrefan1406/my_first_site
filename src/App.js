@@ -62,28 +62,35 @@ const hoursOptions = Array.from({ length: 17 }, (_, i) => i + 6);
 const quantityOptions = Array.from({ length: 10 }, (_, i) => i + 1);
 
 const App = () => {
-    const [requests, setRequests] = useState([
-      { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }
-    ]);
-  
-    // Состояния для модального окна и данных пользователя
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [userFullName, setUserFullName] = useState("");
-    const [userPhone, setUserPhone] = useState("");
-    // Флаг, указывающий на то, что данные отправляются
-    const [isSubmitting, setIsSubmitting] = useState(false);
-  
-    const handleChange = (index, field, value) => {
-      const newRequests = [...requests];
-      newRequests[index][field] = value;
-  
-      if (field === "objectCategory") newRequests[index].object = "";
-      if (field === "object") newRequests[index].position = "";
-      if (field === "category") newRequests[index].equipmentName = "";
-  
-      setRequests(newRequests);
-    };
-  
+  const [requests, setRequests] = useState([
+    { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }
+  ]);
+
+  // Состояния для модального окна и данных пользователя
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [userFullName, setUserFullName] = useState("");
+  const [userPhone, setUserPhone] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Функция для получения текущей даты в формате YYYY-MM-DD
+  const getCurrentDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0"); // Месяцы начинаются с 0
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const handleChange = (index, field, value) => {
+    const newRequests = [...requests];
+    newRequests[index][field] = value;
+
+    if (field === "objectCategory") newRequests[index].object = "";
+    if (field === "object") newRequests[index].position = "";
+    if (field === "category") newRequests[index].equipmentName = "";
+
+    setRequests(newRequests);
+  };  
     const isRequestComplete = (request) => {
       return Object.values(request).every(value => value !== "");
     };
@@ -164,6 +171,7 @@ const App = () => {
             <input
               type="date"
               value={request.date}
+              min={getCurrentDate()} // Устанавливаем минимальную дату как текущую
               onChange={e => handleChange(index, "date", e.target.value)}
             />
   
