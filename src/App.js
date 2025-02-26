@@ -89,6 +89,11 @@ const App = () => {
     if (field === "object") newRequests[index].position = "";
     if (field === "category") newRequests[index].equipmentName = "";
 
+    // Если изменяется время начала, сбрасываем время окончания, если оно меньше или равно
+    if (field === "startTime" && newRequests[index].endTime <= value) {
+      newRequests[index].endTime = "";
+    }
+
     setRequests(newRequests);
   };  
     const isRequestComplete = (request) => {
@@ -190,11 +195,14 @@ const App = () => {
             <select
               value={request.endTime}
               onChange={e => handleChange(index, "endTime", e.target.value)}
+              disabled={!request.startTime}
             >
               <option value="">Выберите время</option>
-              {hoursOptions.map(hour => (
-                <option key={hour} value={hour}>{hour}:00</option>
-              ))}
+              {hoursOptions
+                .filter(hour => hour > request.startTime) // Фильтруем часы, чтобы они были больше времени начала
+                .map(hour => (
+                  <option key={hour} value={hour}>{hour}:00</option>
+                ))}
             </select>
   
             <label>Категория объекта:</label>
