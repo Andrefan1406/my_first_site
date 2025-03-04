@@ -23,7 +23,7 @@ const objectCategoryOptions = {
      "Коммерческие помещения в жилых домах", "Мелада", "Нуртау", "Орлан", "Урунтаева 12/1", "Черемушки"],
   "Строительство сетей и благоустройство": ["Сети и благоустройство", "Благоустройство", "Инженерные сети"],
   "Строительство объектов инфраструктуры (кроме жилых домов)": ["Бизнес центр пр.Победы", "Ветлаборатория", "Резиденция", "Учебные заведения", "Хилтон"],
-  "Строительство производственных объектов": ["База Самарское", "База Эскор", "БРУ", "Новоявленка", "Парыгино", "Цех брусчатки", "Цех ЖБИ"]
+  "Строительство производственных объектов": ["База Самарское", "База Эскор", "БРУ", "Кирзавод", "Новоявленка", "Парыгино", "Цех брусчатки", "Цех ЖБИ"]
 };
 
 const objectPositionOptions = {
@@ -54,6 +54,7 @@ const objectPositionOptions = {
   "База Самарское": ["База Самарское"],
   "База Эскор": ["База Эскор"],
   "БРУ": ["БРУ"],
+  "Кирзавод": ["Кирзавод"],
   "Новоявленка": ["Комбинат ПГС"],
   "Парыгино": ["БСУ"],  
   "Цех брусчатки": ["Цех брусчатки"],
@@ -65,7 +66,7 @@ const quantityOptions = Array.from({ length: 10 }, (_, i) => i + 1);
 
 const App = () => {
   const [requests, setRequests] = useState([
-    { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }
+    { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "", note: "" } // поля заявки
   ]);
 
   // Состояния для модального окна и данных пользователя
@@ -98,8 +99,9 @@ const App = () => {
 
     setRequests(newRequests);
   };  
+  
     const isRequestComplete = (request) => {
-      return Object.values(request).every(value => value !== "");
+      return Object.entries(request).every(([key, value]) => key === "note" || value !== "");
     };
   
     const addRequest = () => {
@@ -107,7 +109,7 @@ const App = () => {
         alert("Пожалуйста, заполните все поля перед добавлением новой техники.");
         return;
       }
-      setRequests([...requests, { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" }]);
+      setRequests([...requests, { date: "", startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "" , note: ""}]);
     };
   
     const removeLastRequest = () => {
@@ -120,7 +122,7 @@ const App = () => {
     const submitRequest = () => {
       for (let request of requests) {
         if (!isRequestComplete(request)) {
-          alert("Пожалуйста, заполните все поля перед отправкой заявки.");
+          alert("Пожалуйста, заполните все обязательные поля.");
           return;
         }
       }
@@ -275,6 +277,8 @@ const App = () => {
                 <option key={quantity} value={quantity}>{quantity}</option>
               ))}
             </select>
+            <label>Примечание (необязательно):</label>
+            <textarea value={request.note} onChange={e => handleChange(index, "note", e.target.value)} placeholder="Введите примечание..." />
           </div>
         ))}
   
