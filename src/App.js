@@ -151,7 +151,7 @@ const App = () => {
       console.log("Отправляемые данные:", updatedRequests);
   
       try {
-        await fetch("https://script.google.com/macros/s/AKfycbxf5vPbxx2RQM9g2DmuD2TZCAWXmiPxVLY3bEeIFTF2tJc7CLUR2YV-cv82mgNWKqTI/exec", {
+        await fetch("https://script.google.com/macros/s/AKfycbyyXRi_lPGYJZI-C1uHmqRhlIOtKQtkrFW7-ha772JZbMxP3oXwcsH5QvHAprH-4fnL/exec", {
           method: "POST",
           mode: "no-cors",
           headers: { "Content-Type": "application/json" },
