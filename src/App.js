@@ -172,6 +172,8 @@ const App = () => {
       setUserFullName("");
       setUserPhone("");
       setIsModalOpen(false);
+      // Перенаправление на Google Таблицу
+      window.location.href = "https://docs.google.com/spreadsheets/d/1nd1AxUUgxLcd6GYlnY5ZJZ0WYr-qmvrP67CGe1Ut4i8/edit?pli=1&gid=0#gid=0";
     } catch (error) {
       console.error("Ошибка при отправке:", error);
       alert("Ошибка при отправке заявки!");
