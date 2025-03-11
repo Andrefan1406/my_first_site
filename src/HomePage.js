@@ -11,13 +11,13 @@ const HomePage = () => {
         onClick={() => navigate('/request')} 
         style={styles.button}
       >
-        Перейти к заявке на технику
+        Заявка на технику
       </button>
       <button 
         onClick={() => navigate('/concrete-request')} 
         style={styles.button}
       >
-        Перейти к заявке на бетон и раствор
+        Заявка на бетон и раствор
       </button>
     </div>
   );
