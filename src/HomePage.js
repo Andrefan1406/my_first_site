@@ -19,6 +19,18 @@ const HomePage = () => {
       >
         Заявка на бетон и раствор
       </button>
+      <button 
+        onClick={() => navigate('/electricans-request')} 
+        style={styles.button}
+      >
+        Заявка электриков
+      </button>
+      <button 
+        onClick={() => navigate('/geo-request')} 
+        style={styles.button}
+      >
+        Заявка геодезистов
+      </button>
     </div>
   );
 };
