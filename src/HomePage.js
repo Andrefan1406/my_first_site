@@ -6,7 +6,11 @@ const HomePage = () => {
 
   return (
     <div style={styles.container}>
+      {/* Логотип вверху страницы */}
+      <img src="/Логотип.png" alt="Логотип" style={styles.logo} />
+      
       <h1>Добро пожаловать!</h1>
+      
       <button 
         onClick={() => navigate('/request')} 
         style={styles.button}
@@ -44,6 +48,10 @@ const styles = {
     height: '100vh',
     textAlign: 'center',
     gap: '20px'
+  },
+  logo: {
+    width: '300px', // Измените размер логотипа, если нужно
+    marginBottom: '20px' // Отступ перед заголовком
   },
   button: {
     padding: '10px 20px',
