@@ -70,8 +70,9 @@ const RequestPage = () => {
     { startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "", note: "" } // поля заявки
   ]);
 
+  
   // Состояния для даты, модального окна и данных пользователя
-  const [selectedDate, setSelectedDate] = useState("");
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userFullName, setUserFullName] = useState("");
   const [userPhone, setUserPhone] = useState("");
@@ -85,6 +86,16 @@ const RequestPage = () => {
     const day = String(today.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
+
+  const [selectedDate, setSelectedDate] = useState(getCurrentDate());
+  
+  const handleDateChange = (e) => {
+    const newDate = e.target.value;
+    if (newDate < getCurrentDate()) {
+      alert("Нельзя выбрать дату меньше текущей!");
+      return;
+    }
+  }
 
   const handleChange = (index, field, value) => {
     const newRequests = [...requests];
@@ -190,7 +201,7 @@ const RequestPage = () => {
         type="date"
         value={selectedDate}
         min={getCurrentDate()} // Устанавливаем минимальную дату как текущую
-        onChange={e => setSelectedDate(e.target.value)}
+        onChange={handleDateChange}
       />
 
       {requests.map((request, index) => (
