@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import styles from './RequestPage.module.css';
 
 // Списки категорий техники, объектов, позиций
@@ -67,23 +67,34 @@ const hoursOptions = Array.from({ length: 17 }, (_, i) => i + 6);
 const quantityOptions = Array.from({ length: 10 }, (_, i) => i + 1);
 
 const RequestPage = () => {
+  const [isMobile, setIsMobile] = useState(false);
   const [requests, setRequests] = useState([
-    { startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "", note: "" } // поля заявки
+    { startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "", note: "" }
   ]);
 
-  
-  // Состояния для даты, модального окна и данных пользователя
-  
+  // Проверяем размер экрана при загрузке и при изменении размера
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkIfMobile();
+    window.addEventListener('resize', checkIfMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkIfMobile);
+    };
+  }, []);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userFullName, setUserFullName] = useState("");
   const [userPhone, setUserPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Функция для получения текущей даты в формате YYYY-MM-DD
   const getCurrentDate = () => {
     const today = new Date();
     const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0"); // Месяцы начинаются с 0
+    const month = String(today.getMonth() + 1).padStart(2, "0");
     const day = String(today.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
@@ -96,6 +107,7 @@ const RequestPage = () => {
       alert("Нельзя выбрать дату меньше текущей!");
       return;
     }
+    setSelectedDate(newDate);
   }
 
   const handleChange = (index, field, value) => {
@@ -106,7 +118,6 @@ const RequestPage = () => {
     if (field === "object") newRequests[index].position = "";
     if (field === "category") newRequests[index].equipmentName = "";
 
-    // Если изменяется время начала, сбрасываем время окончания, если оно меньше или равно
     if (field === "startTime" && newRequests[index].endTime <= value) {
       newRequests[index].endTime = "";
     }
@@ -126,13 +137,14 @@ const RequestPage = () => {
     setRequests([...requests, { startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "", note: "" }]);
   };
 
-  const removeLastRequest = () => {
+  const removeRequest = (index) => {
     if (requests.length > 1) {
-      setRequests(requests.slice(0, -1));
+      const newRequests = [...requests];
+      newRequests.splice(index, 1);
+      setRequests(newRequests);
     }
   };
 
-  // При клике на кнопку «Отправить заявку» проверяем заполненность и открываем модальное окно
   const submitRequest = () => {
     if (!selectedDate) {
       alert("Пожалуйста, выберите дату.");
@@ -148,22 +160,20 @@ const RequestPage = () => {
     setIsModalOpen(true);
   };
 
-  // Обработка отправки данных из модального окна
   const handleModalSubmit = async (e) => {
     e.preventDefault();
 
-    if (isSubmitting) return; // если запрос уже отправляется, не выполняем повторно
+    if (isSubmitting) return;
     if (!userFullName || !userPhone) {
       alert("Пожалуйста, заполните ФИО и номер телефона.");
       return;
     }
 
-    setIsSubmitting(true); // блокируем кнопку до завершения отправки
+    setIsSubmitting(true);
 
-    // Добавляем данные пользователя и дату к каждой заявке
     const updatedRequests = requests.map(request => ({
       ...request,
-      date: selectedDate, // добавляем выбранную дату
+      date: selectedDate,
       fullName: userFullName,
       phone: userPhone
     }));
@@ -178,19 +188,17 @@ const RequestPage = () => {
         body: JSON.stringify(updatedRequests),
       });
       alert("Заявка отправлена!");
-      // Сброс состояния
       setRequests([{ startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "", note: "" }]);
-      setSelectedDate("");
+      setSelectedDate(getCurrentDate());
       setUserFullName("");
       setUserPhone("");
       setIsModalOpen(false);
-      // Перенаправление на Google Таблицу
       window.location.href = "https://docs.google.com/spreadsheets/d/1nd1AxUUgxLcd6GYlnY5ZJZ0WYr-qmvrP67CGe1Ut4i8/edit?pli=1&gid=0#gid=0";
     } catch (error) {
       console.error("Ошибка при отправке:", error);
       alert("Ошибка при отправке заявки!");
     } finally {
-      setIsSubmitting(false); // разблокируем кнопку, когда запрос завершится
+      setIsSubmitting(false);
     }
   };
 
@@ -200,123 +208,285 @@ const RequestPage = () => {
         <h2>Заявка на технику</h2>
         <div className={styles.dateBlock}>
           <label htmlFor="dateInput">Введите дату:</label>
-        <input
-          id="dateInput"
-          type="date"
-          value={selectedDate}
-          min={getCurrentDate()} // Устанавливаем минимальную дату как текущую
-          onChange={handleDateChange}
-        />
+          <input
+            id="dateInput"
+            type="date"
+            value={selectedDate}
+            min={getCurrentDate()}
+            onChange={handleDateChange}
+          />
         </div>
       </div>
 
-      {requests.map((request, index) => (
-        <div key={index} className={styles.formBlock}>
-          <label>Укажите время начала работы:</label>
-          <select
-            value={request.startTime}
-            onChange={e => handleChange(index, "startTime", e.target.value)}
-          >
-            <option value="">Выберите время</option>
-            {hoursOptions.map(hour => (
-              <option key={hour} value={hour}>{hour}:00</option>
-            ))}
-          </select>
-
-          <label>Укажите время окончания работы:</label>
-          <select
-            value={request.endTime}
-            onChange={e => handleChange(index, "endTime", e.target.value)}
-            disabled={!request.startTime}
-          >
-            <option value="">Выберите время</option>
-            {hoursOptions
-              .filter(hour => hour > request.startTime) // Фильтруем часы, чтобы они были больше времени начала
-              .map(hour => (
+      {isMobile ? (
+        // Мобильная версия - вертикальное отображение
+        requests.map((request, index) => (
+          <div key={index} className={styles.formBlock}>
+            <label>Укажите время начала работы:</label>
+            <select
+              value={request.startTime}
+              onChange={e => handleChange(index, "startTime", e.target.value)}
+            >
+              <option value="">Выберите время</option>
+              {hoursOptions.map(hour => (
                 <option key={hour} value={hour}>{hour}:00</option>
               ))}
-          </select>
+            </select>
 
-          <label>Категория объекта:</label>
-          <select 
-            value={request.objectCategory} 
-            onChange={e => handleChange(index, "objectCategory", e.target.value)}
-          >
-            <option value="">Выберите категорию объекта</option>
-            {Object.keys(objectCategoryOptions).map(category => (
-              <option key={category} value={category}>{category}</option>
-            ))}
-          </select>
+            <label>Укажите время окончания работы:</label>
+            <select
+              value={request.endTime}
+              onChange={e => handleChange(index, "endTime", e.target.value)}
+              disabled={!request.startTime}
+            >
+              <option value="">Выберите время</option>
+              {hoursOptions
+                .filter(hour => hour > request.startTime)
+                .map(hour => (
+                  <option key={hour} value={hour}>{hour}:00</option>
+                ))}
+            </select>
 
-          <label>Объект:</label>
-          <select 
-            value={request.object} 
-            onChange={e => handleChange(index, "object", e.target.value)}
-            disabled={!request.objectCategory}
-          >
-            <option value="">Выберите объект</option>
-            {objectCategoryOptions[request.objectCategory]?.map(obj => (
-              <option key={obj} value={obj}>{obj}</option>
-            ))}
-          </select>
+            <label>Категория объекта:</label>
+            <select 
+              value={request.objectCategory} 
+              onChange={e => handleChange(index, "objectCategory", e.target.value)}
+            >
+              <option value="">Выберите категорию объекта</option>
+              {Object.keys(objectCategoryOptions).map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
 
-          <label>Позиция или строение:</label>
-          <select
-            value={request.position}
-            onChange={e => handleChange(index, "position", e.target.value)}
-            disabled={!request.object}
-          >
-            <option value="">Выберите позицию</option>
-            {(objectPositionOptions[request.object] || []).map(pos => (
-              <option key={pos} value={pos}>{pos}</option>
-            ))}
-          </select>
+            <label>Объект:</label>
+            <select 
+              value={request.object} 
+              onChange={e => handleChange(index, "object", e.target.value)}
+              disabled={!request.objectCategory}
+            >
+              <option value="">Выберите объект</option>
+              {objectCategoryOptions[request.objectCategory]?.map(obj => (
+                <option key={obj} value={obj}>{obj}</option>
+              ))}
+            </select>
 
-          <label>Выберите категорию техники:</label>
-          <select
-            value={request.category}
-            onChange={e => handleChange(index, "category", e.target.value)}
-          >
-            <option value="">Выберите категорию</option>
-            {Object.keys(categoryOptions).map(category => (
-              <option key={category} value={category}>{category}</option>
-            ))}
-          </select>
+            <label>Позиция или строение:</label>
+            <select
+              value={request.position}
+              onChange={e => handleChange(index, "position", e.target.value)}
+              disabled={!request.object}
+            >
+              <option value="">Выберите позицию</option>
+              {(objectPositionOptions[request.object] || []).map(pos => (
+                <option key={pos} value={pos}>{pos}</option>
+              ))}
+            </select>
 
-          <label>Выберите наименование техники:</label>
-          <select
-            value={request.equipmentName}
-            onChange={e => handleChange(index, "equipmentName", e.target.value)}
-            disabled={!request.category}
-          >
-            <option value="">Выберите наименование</option>
-            {(categoryOptions[request.category] || []).map(name => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
+            <label>Выберите категорию техники:</label>
+            <select
+              value={request.category}
+              onChange={e => handleChange(index, "category", e.target.value)}
+            >
+              <option value="">Выберите категорию</option>
+              {Object.keys(categoryOptions).map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
 
-          <label>Количество:</label>
-          <select
-            value={request.quantity}
-            onChange={e => handleChange(index, "quantity", e.target.value)}
-          >
-            <option value="">Выберите количество</option>
-            {quantityOptions.map(quantity => (
-              <option key={quantity} value={quantity}>{quantity}</option>
-            ))}
-          </select>
-          <label>Примечание (необязательно):</label>
-          <textarea value={request.note} onChange={e => handleChange(index, "note", e.target.value)} placeholder="Введите примечание..." />
+            <label>Выберите наименование техники:</label>
+            <select
+              value={request.equipmentName}
+              onChange={e => handleChange(index, "equipmentName", e.target.value)}
+              disabled={!request.category}
+            >
+              <option value="">Выберите наименование</option>
+              {(categoryOptions[request.category] || []).map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+
+            <label>Количество:</label>
+            <select
+              value={request.quantity}
+              onChange={e => handleChange(index, "quantity", e.target.value)}
+            >
+              <option value="">Выберите количество</option>
+              {quantityOptions.map(quantity => (
+                <option key={quantity} value={quantity}>{quantity}</option>
+              ))}
+            </select>
+            
+            <label>Примечание (необязательно):</label>
+            <textarea 
+              value={request.note} 
+              onChange={e => handleChange(index, "note", e.target.value)} 
+              placeholder="Введите примечание..." 
+            />
+
+            {requests.length > 1 && (
+              <button 
+                onClick={() => removeRequest(index)}
+                className={styles.removeButton}
+              >
+                Удалить эту технику
+              </button>
+            )}
+          </div>
+        ))
+      ) : (
+        // Десктопная версия - табличное отображение
+        <div className={styles.tableContainer}>
+          <table className={styles.requestTable}>
+            <thead>
+              <tr>
+                <th>Время начала</th>
+                <th>Время окончания</th>
+                <th>Категория объекта</th>
+                <th>Объект</th>
+                <th>Позиция</th>
+                <th>Категория техники</th>
+                <th>Наименование техники</th>
+                <th>Количество</th>
+                <th>Примечание</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {requests.map((request, index) => (
+                <tr key={index}>
+                  <td>
+                    <select
+                      value={request.startTime}
+                      onChange={e => handleChange(index, "startTime", e.target.value)}
+                    >
+                      <option value="">Выберите</option>
+                      {hoursOptions.map(hour => (
+                        <option key={hour} value={hour}>{hour}:00</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={request.endTime}
+                      onChange={e => handleChange(index, "endTime", e.target.value)}
+                      disabled={!request.startTime}
+                    >
+                      <option value="">Выберите</option>
+                      {hoursOptions
+                        .filter(hour => hour > request.startTime)
+                        .map(hour => (
+                          <option key={hour} value={hour}>{hour}:00</option>
+                        ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select 
+                      value={request.objectCategory} 
+                      onChange={e => handleChange(index, "objectCategory", e.target.value)}
+                    >
+                      <option value="">Выберите</option>
+                      {Object.keys(objectCategoryOptions).map(category => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select 
+                      value={request.object} 
+                      onChange={e => handleChange(index, "object", e.target.value)}
+                      disabled={!request.objectCategory}
+                    >
+                      <option value="">Выберите</option>
+                      {objectCategoryOptions[request.objectCategory]?.map(obj => (
+                        <option key={obj} value={obj}>{obj}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={request.position}
+                      onChange={e => handleChange(index, "position", e.target.value)}
+                      disabled={!request.object}
+                    >
+                      <option value="">Выберите</option>
+                      {(objectPositionOptions[request.object] || []).map(pos => (
+                        <option key={pos} value={pos}>{pos}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={request.category}
+                      onChange={e => handleChange(index, "category", e.target.value)}
+                    >
+                      <option value="">Выберите</option>
+                      {Object.keys(categoryOptions).map(category => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={request.equipmentName}
+                      onChange={e => handleChange(index, "equipmentName", e.target.value)}
+                      disabled={!request.category}
+                    >
+                      <option value="">Выберите</option>
+                      {(categoryOptions[request.category] || []).map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={request.quantity}
+                      onChange={e => handleChange(index, "quantity", e.target.value)}
+                    >
+                      <option value="">Выберите</option>
+                      {quantityOptions.map(quantity => (
+                        <option key={quantity} value={quantity}>{quantity}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <textarea 
+                      value={request.note} 
+                      onChange={e => handleChange(index, "note", e.target.value)} 
+                      placeholder="Примечание"
+                      rows={2} // Количество строк
+                      className={styles.tableTextarea}
+                      style={{
+                        minHeight: '40px',
+                        maxHeight: '120px',
+                        overflowY: 'auto'
+                      }}
+                    />
+                  </td>
+                  <td>
+                    {requests.length > 1 && (
+                      <button 
+                        onClick={() => removeRequest(index)}
+                        className={styles.removeButton}
+                      >
+                        Удалить
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      ))}
-
-      <button onClick={addRequest} className={styles.addButton}>Добавить технику</button>
-      {requests.length > 1 && (
-        <button onClick={removeLastRequest} className={styles.backButton}>Назад</button>
       )}
-      <button onClick={submitRequest} className={styles.submitButton}>Отправить заявку</button>
 
-      {/* Модальное окно для ввода ФИО и номера телефона */}
+      <div className={styles.buttonsContainer}>
+        <button onClick={addRequest} className={styles.addButton}>
+          {isMobile ? "Добавить технику" : "Добавить строку"}
+        </button>
+        <button onClick={submitRequest} className={styles.submitButton}>Отправить заявку</button>
+      </div>
+
+      {/* Модальное окно остается без изменений */}
       {isModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalContent}>
@@ -342,7 +512,7 @@ const RequestPage = () => {
               <button 
                 type="submit" 
                 className={styles.submitButton}
-                disabled={isSubmitting}  // блокировка кнопки во время отправки
+                disabled={isSubmitting}
               >
                 {isSubmitting ? "Отправка..." : "Отправить заявку"}
               </button>

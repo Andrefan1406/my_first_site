@@ -1,90 +1,180 @@
-/* Стили по умолчанию (мобильный вид) */
 .container {
-    max-width: 600px;
-    margin: 20px auto;
     padding: 20px;
-    border: 1px solid #ddd;
-    border-radius: 10px;
-    text-align: center;
+    max-width: 1200px;
+    margin: 0 auto;
   }
   
-  .formBlock {
-    margin-bottom: 15px;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
+  .headerBlock {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    margin-bottom: 20px;
+  }
+  
+  .dateBlock {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+  }
+  
+  .dateBlock label {
+    margin-right: 10px;
+  }
+  
+  /* Стили для десктопной таблицы */
+  .tableContainer {
+    width: 100%;
+    overflow-x: auto;
+    margin-bottom: 20px;
+  }
+  
+  .requestTable {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  
+  .requestTable th, .requestTable td {
+    border: 1px solid #ddd;
+    padding: 8px;
     text-align: left;
   }
   
-  .addButton,
-  .backButton,
-  .submitButton {
-    padding: 10px;
-    margin: 5px;
-    color: white;
-    border: none;
+  .requestTable th {
+    background-color: #f2f2f2;
+    position: sticky;
+    top: 0;
+  }
+  
+  .requestTable select, .requestTable input {
+    width: 100%;
+    padding: 5px;
+    box-sizing: border-box;
+  }
+  
+  /* Стили для мобильной версии */
+  .formBlock {
+    border: 1px solid #ddd;
+    padding: 15px;
+    margin-bottom: 20px;
     border-radius: 5px;
+  }
+  
+  .formBlock label {
+    display: block;
+    margin-top: 10px;
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+  
+  .formBlock select, .formBlock input, .formBlock textarea {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  
+  .formBlock textarea {
+    min-height: 60px;
+  }
+  
+  /* Общие стили для кнопок */
+  .buttonsContainer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+  }
+  
+  .addButton, .submitButton, .removeButton {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
     cursor: pointer;
+    font-size: 14px;
   }
   
   .addButton {
-    background: #007bff;
-  }
-  
-  .backButton {
-    background: #dc3545;
+    background-color: #4CAF50;
+    color: white;
   }
   
   .submitButton {
-    background: green;
+    background-color: #2196F3;
+    color: white;
   }
-
-  .dateBlock {
+  
+  .removeButton {
+    background-color: #f44336;
+    color: white;
+    margin-top: 10px;
+    width: 100%;
+  }
+  
+  .addButton:hover, .submitButton:hover, .removeButton:hover {
+    opacity: 0.8;
+  }
+  
+  /* Модальное окно */
+  .modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  
+  .modalContent {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    width: 90%;
+    max-width: 400px;
+    position: relative;
+  }
+  
+  .modalClose {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 20px;
+    cursor: pointer;
+  }
+  
+  .modalContent form {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .headerBlock {
-    grid-column: span 2;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  
-  /* 💻 Десктопная версия (ширина экрана от 1024px) */
-  @media (min-width: 1024px) {
-    .container {
-      max-width: 1000px;
-      background-color: #f9f9f9;
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-      text-align: left;
-    }
-  
-    .formBlock {
-      grid-column: span 2;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 15px;
-      background-color: #ffffff;
-      padding: 20px;
-    }
-  
-    .formBlock label,
-    .formBlock select,
-    .formBlock textarea {
-      width: 100%;
-    }
-  
-    textarea {
-      grid-column: span 2;
-    }
   }
   
+  .modalContent label {
+    margin-top: 10px;
+  }
+  
+  .modalContent input {
+    padding: 8px;
+    margin-top: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  
+  /* Адаптация для мобильных устройств */
+  @media (min-width: 769px) {
+    .headerBlock {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .dateBlock {
+      margin-top: 0;
+    }
+    
+    .removeButton {
+      width: auto;
+      margin-top: 0;
+    }
+  }
