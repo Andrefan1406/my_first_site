@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import styles from './RequestPage.module.css';
 
 // Списки категорий техники, объектов, позиций
 const categoryOptions = {
@@ -194,18 +195,23 @@ const RequestPage = () => {
   };
 
   return (
-    <div style={styles.container}>
-      <h2>Заявка на технику</h2>
-      <label>Введите дату:</label>
-      <input
-        type="date"
-        value={selectedDate}
-        min={getCurrentDate()} // Устанавливаем минимальную дату как текущую
-        onChange={handleDateChange}
-      />
+    <div className={styles.container}>
+      <div className={styles.headerBlock}>
+        <h2>Заявка на технику</h2>
+        <div className={styles.dateBlock}>
+          <label htmlFor="dateInput">Введите дату:</label>
+        <input
+          id="dateInput"
+          type="date"
+          value={selectedDate}
+          min={getCurrentDate()} // Устанавливаем минимальную дату как текущую
+          onChange={handleDateChange}
+        />
+        </div>
+      </div>
 
       {requests.map((request, index) => (
-        <div key={index} style={styles.formBlock}>
+        <div key={index} className={styles.formBlock}>
           <label>Укажите время начала работы:</label>
           <select
             value={request.startTime}
@@ -304,17 +310,17 @@ const RequestPage = () => {
         </div>
       ))}
 
-      <button onClick={addRequest} style={styles.addButton}>Добавить технику</button>
+      <button onClick={addRequest} className={styles.addButton}>Добавить технику</button>
       {requests.length > 1 && (
-        <button onClick={removeLastRequest} style={styles.backButton}>Назад</button>
+        <button onClick={removeLastRequest} className={styles.backButton}>Назад</button>
       )}
-      <button onClick={submitRequest} style={styles.submitButton}>Отправить заявку</button>
+      <button onClick={submitRequest} className={styles.submitButton}>Отправить заявку</button>
 
       {/* Модальное окно для ввода ФИО и номера телефона */}
       {isModalOpen && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalContent}>
-            <span style={styles.modalClose} onClick={() => setIsModalOpen(false)}>&times;</span>
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalContent}>
+            <span className={styles.modalClose} onClick={() => setIsModalOpen(false)}>&times;</span>
             <h2>Ответственный</h2>
             <form onSubmit={handleModalSubmit}>
               <label>ФИО:</label>
@@ -335,7 +341,7 @@ const RequestPage = () => {
               <br />
               <button 
                 type="submit" 
-                style={styles.submitButton}
+                className={styles.submitButton}
                 disabled={isSubmitting}  // блокировка кнопки во время отправки
               >
                 {isSubmitting ? "Отправка..." : "Отправить заявку"}
@@ -346,79 +352,6 @@ const RequestPage = () => {
       )}
     </div>
   );
-};
-
-const styles = {
-  container: {
-    maxWidth: "600px",
-    margin: "20px auto",
-    padding: "20px",
-    border: "1px solid #ddd",
-    borderRadius: "10px",
-    textAlign: "center"
-  },
-  formBlock: {
-    marginBottom: "15px",
-    padding: "10px",
-    border: "1px solid #ccc",
-    borderRadius: "5px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "5px",
-    textAlign: "left"
-  },
-  addButton: {
-    marginRight: "10px",
-    padding: "10px",
-    background: "#007bff",
-    color: "white",
-    border: "none",
-    borderRadius: "5px",
-    cursor: "pointer"
-  },
-  backButton: {
-    marginRight: "10px",
-    padding: "10px",
-    background: "#dc3545",
-    color: "white",
-    border: "none",
-    borderRadius: "5px",
-    cursor: "pointer"
-  },
-  submitButton: {
-    padding: "10px",
-    background: "green",
-    color: "white",
-    border: "none",
-    borderRadius: "5px",
-    cursor: "pointer"
-  },
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  modalContent: {
-    background: "#fff",
-    padding: "20px",
-    borderRadius: "5px",
-    position: "relative",
-    width: "90%",
-    maxWidth: "400px"
-  },
-  modalClose: {
-    position: "absolute",
-    top: "10px",
-    right: "10px",
-    cursor: "pointer",
-    fontSize: "24px"
-  }
 };
 
 export default RequestPage;
