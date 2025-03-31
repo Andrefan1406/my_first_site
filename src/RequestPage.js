@@ -207,7 +207,7 @@ const RequestPage = () => {
       <div className={styles.headerBlock}>
         <h2>Заявка на технику</h2>
         <div className={styles.dateBlock}>
-          <label htmlFor="dateInput">Введите дату:</label>
+          <label htmlFor="dateInput">Дата:</label>
           <input
             id="dateInput"
             type="date"

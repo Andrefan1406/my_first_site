@@ -5,19 +5,25 @@
   }
   
   .headerBlock {
-    display: flex;
-    flex-direction: column;
     margin-bottom: 20px;
   }
   
   .dateBlock {
+    margin-top: 10px;
     display: flex;
     align-items: center;
     margin-top: 10px;
   }
   
   .dateBlock label {
-    margin-right: 10px;
+    margin: 0; /* Убираем внешние отступы */
+    white-space: nowrap; /* Запрещаем перенос текста */
+  }
+
+  .dateBlock input {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
   }
   
   /* Стили для десктопной таблицы */
@@ -159,6 +165,25 @@
     margin-top: 5px;
     border: 1px solid #ddd;
     border-radius: 4px;
+  }
+
+  .requestTable textarea {
+    width: 100%;
+    min-width: 200px; /* Минимальная ширина */
+    resize: vertical; /* Разрешить изменение размера только по вертикали */
+    padding: 5px;
+    box-sizing: border-box;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: inherit;
+  }
+  
+  /* Опционально: стили при фокусе */
+  .requestTable textarea:focus {
+    outline: none;
+    border-color: #2196F3;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
   }
   
   /* Адаптация для мобильных устройств */
