@@ -35,6 +35,12 @@ const HomePage = () => {
       >
         Заявка геодезистов
       </button>
+      <button 
+        onClick={() => navigate('/people-report')} 
+        style={styles.button}
+      >
+        Отчёты по людям
+      </button>
     </div>
   );
 };
