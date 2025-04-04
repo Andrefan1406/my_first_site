@@ -19,7 +19,7 @@ const PeopleReportPage = () => {
       <div style={styles.tableWrapper}>
         <iframe
           src={sheetUrl}
-          width="50%"
+          width="100%"
           height="500"
           style={styles.iframe}
           frameBorder="0"
@@ -35,9 +35,11 @@ const PeopleReportPage = () => {
 
 const styles = {
   container: {
+    width: "100%",
     maxWidth: "1000px",
-    margin: "20px auto",
-    padding: "20px",
+    margin: "0 auto",
+    padding: "10px",
+    boxSizing: "border-box",
   },
   header: {
     display: 'flex',
@@ -62,16 +64,18 @@ const styles = {
     margin: 0,
   },
   tableWrapper: {
-    overflow: 'hidden',
-    borderRadius: '8px',
-    boxShadow: '0 0px 0px rgba(0,0,0,0.1)',
     display: 'flex',
     justifyContent: 'center',
+    width: '100%',
+    overflowX: 'auto',
   },
   iframe: {
+    width: '100%',
+    maxWidth: '600px',
+    height: '500px',
     border: 'none',
     background: 'transparent',
-  },
+  },  
 };
 
 export default PeopleReportPage;
