@@ -75,16 +75,23 @@ const RequestPage = () => {
   // Проверяем размер экрана при загрузке и при изменении размера
   useEffect(() => {
     const checkIfMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
+      const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+      const isNarrow = window.innerWidth <= 768;
+  
+      // В вертикальном режиме при узкой ширине — мобильная версия
+      // В горизонтальном — десктопная, даже если ширина небольшая
+      setIsMobile(isNarrow && isPortrait);
     };
-    
+  
     checkIfMobile();
-    window.addEventListener('resize', checkIfMobile);
-    
+    window.addEventListener("resize", checkIfMobile);
+    window.addEventListener("orientationchange", checkIfMobile); // для надёжности
+  
     return () => {
-      window.removeEventListener('resize', checkIfMobile);
+      window.removeEventListener("resize", checkIfMobile);
+      window.removeEventListener("orientationchange", checkIfMobile);
     };
-  }, []);
+  }, []);  
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userFullName, setUserFullName] = useState("");
