@@ -93,6 +93,22 @@ const RequestPage = () => {
     };
   }, []);  
 
+  // Загрузка заявки из localStorage
+  useEffect(() => {
+    const savedRequests = localStorage.getItem("lastRequestData");
+    if (savedRequests) {
+      try {
+        const parsed = JSON.parse(savedRequests);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const restored = parsed.map(({ date, fullName, phone, ...rest }) => rest);
+          setRequests(restored);
+        }
+      } catch (err) {
+        console.error("Ошибка при загрузке сохранённой заявки:", err);
+      }
+    }
+  }, []);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userFullName, setUserFullName] = useState("");
   const [userPhone, setUserPhone] = useState("");
@@ -194,6 +210,7 @@ const RequestPage = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedRequests),
       });
+      localStorage.setItem("lastRequestData", JSON.stringify(updatedRequests));
       alert("Заявка отправлена!");
       setRequests([{ startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "", note: "" }]);
       setSelectedDate(getCurrentDate());
@@ -491,6 +508,18 @@ const RequestPage = () => {
           {isMobile ? "Добавить технику" : "Добавить строку"}
         </button>
         <button onClick={submitRequest} className={styles.submitButton}>Отправить заявку</button>
+        <button 
+          onClick={() => {
+            localStorage.removeItem("lastRequestData");
+            setRequests([{ 
+              startTime: "", endTime: "", objectCategory: "", object: "", 
+              position: "", category: "", equipmentName: "", quantity: "", note: "" 
+            }]);
+          }} 
+          className={styles.removeButton}
+        >
+          Очистить заявку
+        </button>
       </div>
 
       {/* Модальное окно остается без изменений */}
