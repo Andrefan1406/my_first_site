@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FaEye } from 'react-icons/fa';
+
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -74,9 +76,11 @@ const HomePage = () => {
         bottom: '10px',
         left: '10px',
         fontSize: '16px',
-        opacity: 0.7
+        opacity: 0.7,
+        display: 'flex',
+        alignItems: 'center'
       }}>
-        <span role="img" aria-label="eye">👁️</span> {count !== null ? count : '...'}
+        <FaEye style={{ marginRight: '5px' }} /> {count !== null ? count : '...'}
 </div>
 
     </div>
