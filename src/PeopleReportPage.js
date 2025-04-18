@@ -1,4 +1,4 @@
-import React from 'react';
+/* import React from 'react';
 import { useNavigate } from 'react-router-dom'; // Или useHistory для react-router-dom v5
 
 const PeopleReportPage = () => {
@@ -78,4 +78,142 @@ const styles = {
   },  
 };
 
-export default PeopleReportPage;
+export default PeopleReportPage; */
+import React, { useState } from 'react';
+
+const PeopleReportForm = () => {
+  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [rows, setRows] = useState([
+    { object: '', position: '', work: '', contractor: '', count: '', note: '' }
+  ]);
+
+  const emptyRow = { object: '', position: '', work: '', contractor: '', count: '', note: '' };
+
+  const handleInputChange = (index, field, value) => {
+    const updatedRows = [...rows];
+    updatedRows[index][field] = value;
+    setRows(updatedRows);
+  };
+
+  const handleAddRowAt = (index) => {
+    const updatedRows = [...rows];
+    updatedRows.splice(index + 1, 0, { ...emptyRow });
+    setRows(updatedRows);
+  };
+
+  const handleClear = () => {
+    setRows([{ ...emptyRow }]);
+  };
+
+  const handleSubmit = () => {
+    const data = rows.map(row => ({ date: reportDate, ...row }));
+    console.log("Отправленные данные:", data);
+    // Здесь можно добавить fetch() или axios.post() для отправки на сервер
+  };
+
+  return (
+    <div style={styles.container}>
+      <h2>Отчёт по людям</h2>
+      <label>
+        Дата:
+        <input
+          type="date"
+          value={reportDate}
+          onChange={e => setReportDate(e.target.value)}
+          style={styles.dateInput}
+        />
+      </label>
+
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Объект</th>
+            <th>Позиция</th>
+            <th>Наименование работ/профессий</th>
+            <th>Подрядчик</th>
+            <th>Количество людей</th>
+            <th>Примечание</th>
+            <th>+</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index}>
+              <td>{reportDate}</td>
+              <td><input value={row.object} onChange={e => handleInputChange(index, 'object', e.target.value)} /></td>
+              <td><input value={row.position} onChange={e => handleInputChange(index, 'position', e.target.value)} /></td>
+              <td><input value={row.work} onChange={e => handleInputChange(index, 'work', e.target.value)} /></td>
+              <td><input value={row.contractor} onChange={e => handleInputChange(index, 'contractor', e.target.value)} /></td>
+              <td><input type="number" value={row.count} onChange={e => handleInputChange(index, 'count', e.target.value)} /></td>
+              <td><input value={row.note} onChange={e => handleInputChange(index, 'note', e.target.value)} /></td>
+              <td>
+                <button onClick={() => handleAddRowAt(index)} style={styles.plusButton}>＋</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={styles.buttons}>
+        <button style={styles.submitButton} onClick={handleSubmit}>Отправить отчёт</button>
+        <button style={styles.clearButton} onClick={handleClear}>Очистить</button>
+      </div>
+    </div>
+  );
+};
+
+const styles = {
+  container: {
+    padding: '20px',
+    fontFamily: 'sans-serif',
+    maxWidth: '1100px',
+    margin: '0 auto',
+  },
+  dateInput: {
+    marginLeft: '10px',
+    padding: '5px',
+    fontSize: '14px',
+  },
+  table: {
+    width: '100%',
+    marginTop: '20px',
+    borderCollapse: 'collapse',
+  },
+  buttons: {
+    marginTop: '20px',
+    display: 'flex',
+    gap: '10px'
+  },
+  submitButton: {
+    padding: '10px',
+    backgroundColor: 'dodgerblue',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+  },
+  clearButton: {
+    padding: '10px',
+    backgroundColor: 'crimson',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+  },
+  plusButton: {
+    fontSize: '24px',
+    width: '36px',
+    height: '36px',
+    backgroundColor: '#28a745', // ярко-зелёный
+    color: 'white',
+    border: 'none',
+    borderRadius: '50%', // круглая форма
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 0 4px rgba(0,0,0,0.2)',
+    transition: 'background-color 0.3s',
+  },
+};
+
+export default PeopleReportForm;
