@@ -9,9 +9,10 @@ const HomePage = () => {
 
   useEffect(() => {
     const alreadyVisited = sessionStorage.getItem('visited_homepage');
+    const SERVER_URL = "https://visitor-counter-server.onrender.com";
   
     const fetchCount = () => {
-      fetch("http://localhost:5000/api/visitor-count")
+      fetch(`${SERVER_URL}/api/visitor-count`)
         .then(res => res.json())
         .then(data => setCount(data.count))
         .catch(err => console.error("Ошибка при получении счётчика:", err));
@@ -22,7 +23,7 @@ const HomePage = () => {
       fetchCount();
     } else {
       // Первый заход → увеличиваем счётчик
-      fetch("http://localhost:5000/api/increment-visitor", {
+      fetch(`${SERVER_URL}/api/increment-visitor`, {
         method: "POST"
       })
         .then(res => res.json())
