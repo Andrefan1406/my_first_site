@@ -186,6 +186,68 @@
     box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
   }
   
+  .requestTable {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .requestTable th,
+  .requestTable td {
+    padding: 8px;
+    border: 1px solid #ccc;
+  }
+  
+  .requestTable th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+  }
+  
+  .requestTable select,
+  .requestTable input {
+    width: 100%;
+    padding: 4px;
+    box-sizing: border-box;
+  }
+  
+  .actionsCell {
+    text-align: center;
+    white-space: nowrap;
+  }
+  
+  .iconButton {
+    font-size: 18px;
+    width: 30px;
+    height: 30px;
+    margin: 0 2px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  
+  .iconButton.green {
+    background-color: #28a745;
+    color: white;
+  }
+  
+  .iconButton.red {
+    background-color: #dc3545;
+    color: white;
+  }
+
+  .backButton {
+    margin: 10px 0;
+    padding: 6px 12px;
+    font-size: 16px;
+    background-color: #f1f1f1;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .backButton:hover {
+    background-color: #e2e2e2;
+  }
+  
+  
   /* Адаптация для мобильных устройств */
   @media (min-width: 769px) {
     .headerBlock {

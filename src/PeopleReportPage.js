@@ -1,219 +1,278 @@
-/* import React from 'react';
-import { useNavigate } from 'react-router-dom'; // Или useHistory для react-router-dom v5
+import React, { useState } from "react";
+import styles from './RequestPage.module.css';
+import { useNavigate } from "react-router-dom";
+
+const siteOptions = [
+  "БЦ пр.Побецы", "Благоустройство", "Брик Таун, Лицей", "Ветлаборатория",
+  "Комфортная школа", "Ледовый каток", "Мет.цех", "Нурлы Жол 3", "ОГЭ",
+  "Развязка", "Разнорабочии", "Сан.тех.участок", "Сантехники-подрядчики",
+  "СПОРТ", "Уч.монтажа м/к", "Фасадчики", "Royal B"
+];
+
+const objectCategoryOptions = {
+  "Строительство жилых домов": ["Брик таун", "НЖ 3", "СПОРТ 2", "Элитка"],
+  "Строительство и ремонт дорог": ["Дороги НЖ 4,5", "Дорога Шале ла Бале", "Развязка"],
+  "Строительство и реконструкция коммерческих, частных и туристических объектов": [
+    "Горная Ульбинка", "Зимовьё", "Коммерческие объекты", "Коммерческие помещения в жилых домах",
+    "Мелада", "Нуртау", "Орлан", "Урунтаева 12/1", "Черемушки"
+  ],
+  "Строительство сетей и благоустройство": ["Сети и благоустройство", "Благоустройство", "Инженерные сети"],
+  "Строительство объектов инфраструктуры (кроме жилых домов)": ["Бизнес центр пр.Победы", "Ветлаборатория", "Резиденция", "Учебные заведения", "Хилтон"],
+  "Производственные объекты": ["База Самарское", "База Эскор", "БРУ", "Кирзавод", "КОС", "Новоявленка", "Парыгино", "Цех брусчатки", "Цех ЖБИ", "Карьеры"]
+};
+
+const objectPositionOptions = {
+  "Брик таун": ["Брик Таун 1", "Брик Таун 2"],
+  "НЖ 3": ["поз.56", "поз. 57", "поз. 58", "поз. 59", "поз.60", "поз. 63", "поз. 64", "поз. 65", "поз. 69", "поз. 72", "Стройгородок НЖ3", "Экополис поз.103", "Экополис поз.104", "Экополис паркинг поз.105"],
+  "СПОРТ 2": ["поз. 100", "поз. 101", "поз. 73-75", "поз. 74", "поз. 76", "поз. 93"],
+  "Элитка": ["Элитка"],
+  "Дороги НЖ 4,5": ["Дороги НЖ 4,5"],
+  "Дорога Шале ла Бале": ["Дорога Шале ла Бале"],
+  "Развязка": ["Развязка"],
+  "Горная Ульбинка": ["Горная Ульбинка", "Орленок", "Каменный карьер"],
+  "Зимовьё": ["Зимовьё"],
+  "Коммерческие объекты": ["ROYAL B", "Автомойка (АТХ)", "Автомойка (Нурлы Жол)", "Кафе Бистро", "Кренделия"],
+  "Коммерческие помещения в жилых домах": ["Магазин Жибек Жолы 3", "Медцентр Жибек Жолы", "поз. 107 (Детский сад)", "поз. 107 КП", "поз. 13/1 КП", "поз. 49/1 КП", "поз. 50/1 КП (Салон Красоты)", "поз. 53/2 КП"],
+  "Мелада": ["Мелада"],
+  "Нуртау": ["Нуртау"],
+  "Орлан": ["б/о Орлан", "Орлан ИЖД-1", "Орлан ИЖД-1"],
+  "Урунтаева 12/1": ["Урунтаева 12/1"],
+  "Черемушки": ["Черемушки"],
+  "Сети и благоустройство": ["Н.Бухтарма"],
+  "Благоустройство": ["Благоустройство Гребной канал", "Благоустройство НЖ3", "Благоустройство СПОРТ 2"],
+  "Инженерные сети": ["Коллектор", "Сети ОВ ВК НЖ 3", "Сети ОВ ВК НЖ 4,5", "Сети ОВ ВК СПОРТ 2", "Сети Эл НЖ 4,5"],
+  "Бизнес центр пр.Победы": ["Бизнес центр пр.Победы"],
+  "Ветлаборатория": ["Ветлаборатория"],
+  "Резиденция": ["Резиденция"],
+  "Учебные заведения": ["Дет.сад НЖ", "Комфортная школа", "Ледовый каток", "Лицей"],
+  "Хилтон": ["Хилтон"],
+  "База Самарское": ["База Самарское"],
+  "База Эскор": ["База Эскор"],
+  "БРУ": ["БРУ"],
+  "Карьеры": ["Карьер Аблакетка", "Карьер Новоявленка"],
+  "Кирзавод": ["Кирзавод"],
+  "КОС": ["КОС"],
+  "Новоявленка": ["Комбинат ПГС"],
+  "Парыгино": ["БСУ"],
+  "Цех брусчатки": ["Цех брусчатки"],
+  "Цех ЖБИ": ["Цех ЖБИ"]
+};
 
 const PeopleReportPage = () => {
-  const navigate = useNavigate(); // Для react-router-dom v6
-  // const history = useHistory(); // Для react-router-dom v5
+  const [requests, setRequests] = useState([{
+    startTime: "", objectCategory: "", endTime: "", object: "",
+    position: "", category: "", equipmentName: ""
+  }]);
+  const [selectedDate, setSelectedDate] = useState(getCurrentDate());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const navigate = useNavigate();
+
+  function getCurrentDate() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  const handleChange = (index, field, value) => {
+    const newRequests = [...requests];
+    newRequests[index][field] = value;
+    if (field === "objectCategory") {
+      newRequests[index].endTime = "";
+      newRequests[index].object = "";
+    }
+    if (field === "endTime") {
+      newRequests[index].object = "";
+    }
+    setRequests(newRequests);
+  };
+
+  const addRequest = () => {
+    setRequests([...requests, {
+      startTime: "", objectCategory: "", endTime: "", object: "",
+      position: "", category: "", equipmentName: ""
+    }]);
+  };
+
+  const removeRequest = (index) => {
+    const newRequests = [...requests];
+    newRequests.splice(index, 1);
+    setRequests(newRequests);
+  };
+
+  const hasEmptyFields = () => {
+    return requests.some(row =>
+      !row.startTime ||
+      !row.objectCategory ||
+      !row.endTime ||
+      !row.object ||
+      !row.position ||
+      !row.category ||
+      !row.equipmentName
+    );
+  };
   
-  // URL с дополнительными параметрами для скрытия интерфейса
-  const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSKPriusPx1zZKLa1-wYhi2zJ_HXibB0drsS4_mHcA2-yGjtDH-Lu2XRe7-X0meN18_eUef5vC8IPv_/pubhtml?gid=1723079056&single=true&range=A1:C22&widget=false&headers=false&chrome=false";
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+  
+    if (hasEmptyFields()) {
+      alert("Пожалуйста, заполните все поля перед отправкой отчёта.");
+      return;
+    }
+  
+    setIsSubmitting(true);
+    const updatedRequests = requests.map(r => ({ ...r, date: selectedDate }));
 
-  const handleGoBack = () => {
-    navigate(-1); // Для react-router-dom v6
-    // history.goBack(); // Для react-router-dom v5
+    try {
+      await fetch("https://script.google.com/macros/s/AKfycbwuh3ksOR53O039FnsoYsgAfPjhgUAQbbX-EG1mUgmqQXubFwgmDZf0tCBNz23rVomA/exec", {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedRequests)
+      });
+      alert("Отчёт успешно отправлен!");
+    } catch (e) {
+      console.error("Ошибка при отправке", e);
+      alert("Ошибка при отправке!");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Таблица не сдавших сегодняшний отчёт</h2>
-      <div style={styles.tableWrapper}>
-        <iframe
-          src={sheetUrl}
-          width="100%"
-          height="500"
-          style={styles.iframe}
-          frameBorder="0"
-          title="Отчёт по сотрудникам"
-        />
-      </div>
-      <button onClick={handleGoBack} style={styles.backButton}>
-        ← Назад
-      </button>
-    </div>
-  );
-};
+    <div className={styles.container}>
+      <h2>Ежедневный отчёт по людям</h2>
+      
+      <label>Дата:
+      <input
+        type="date"
+        value={selectedDate}
+        min="2025-01-01"
+        max={getCurrentDate()}
+        onChange={(e) => {
+          const enteredDate = e.target.value;
+          const today = getCurrentDate();
 
-const styles = {
-  container: {
-    width: "100%",
-    maxWidth: "1000px",
-    margin: "0 auto",
-    padding: "10px",
-    boxSizing: "border-box",
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    marginBottom: '20px',
-    position: 'relative',
-  },
-  backButton: {
-    display: 'block',
-    margin: '30px auto 0',
-    padding: '8px 16px',
-    backgroundColor: '#f0f0f0',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '16px',
-    transition: 'background-color 0.3s',
-  },
-  title: {
-    textAlign: 'center',
-    flex: 1,
-    margin: 0,
-  },
-  tableWrapper: {
-    display: 'flex',
-    justifyContent: 'center',
-    width: '100%',
-    overflowX: 'auto',
-  },
-  iframe: {
-    width: '100%',
-    maxWidth: '600px',
-    height: '500px',
-    border: 'none',
-    background: 'transparent',
-  },  
-};
+          if (enteredDate > today) {
+            alert("Нельзя выбрать будущую дату");
+            return;
+          }
 
-export default PeopleReportPage; */
-import React, { useState } from 'react';
-
-const PeopleReportForm = () => {
-  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
-  const [rows, setRows] = useState([
-    { object: '', position: '', work: '', contractor: '', count: '', note: '' }
-  ]);
-
-  const emptyRow = { object: '', position: '', work: '', contractor: '', count: '', note: '' };
-
-  const handleInputChange = (index, field, value) => {
-    const updatedRows = [...rows];
-    updatedRows[index][field] = value;
-    setRows(updatedRows);
-  };
-
-  const handleAddRowAt = (index) => {
-    const updatedRows = [...rows];
-    updatedRows.splice(index + 1, 0, { ...emptyRow });
-    setRows(updatedRows);
-  };
-
-  const handleClear = () => {
-    setRows([{ ...emptyRow }]);
-  };
-
-  const handleSubmit = () => {
-    const data = rows.map(row => ({ date: reportDate, ...row }));
-    console.log("Отправленные данные:", data);
-    // Здесь можно добавить fetch() или axios.post() для отправки на сервер
-  };
-
-  return (
-    <div style={styles.container}>
-      <h2>Отчёт по людям</h2>
-      <label>
-        Дата:
-        <input
-          type="date"
-          value={reportDate}
-          onChange={e => setReportDate(e.target.value)}
-          style={styles.dateInput}
-        />
+          setSelectedDate(enteredDate);
+        }}
+      />
       </label>
 
-      <table style={styles.table}>
+      <table className={styles.requestTable}>
         <thead>
           <tr>
-            <th>Дата</th>
+            <th>Участок</th>
+            <th>Категория объекта</th>
             <th>Объект</th>
             <th>Позиция</th>
             <th>Наименование работ/профессий</th>
             <th>Подрядчик</th>
-            <th>Количество людей</th>
-            <th>Примечание</th>
-            <th>+</th>
+            <th>Количество</th>
+            <th>Действия</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
+          {requests.map((row, index) => (
             <tr key={index}>
-              <td>{reportDate}</td>
-              <td><input value={row.object} onChange={e => handleInputChange(index, 'object', e.target.value)} /></td>
-              <td><input value={row.position} onChange={e => handleInputChange(index, 'position', e.target.value)} /></td>
-              <td><input value={row.work} onChange={e => handleInputChange(index, 'work', e.target.value)} /></td>
-              <td><input value={row.contractor} onChange={e => handleInputChange(index, 'contractor', e.target.value)} /></td>
-              <td><input type="number" value={row.count} onChange={e => handleInputChange(index, 'count', e.target.value)} /></td>
-              <td><input value={row.note} onChange={e => handleInputChange(index, 'note', e.target.value)} /></td>
               <td>
-                <button onClick={() => handleAddRowAt(index)} style={styles.plusButton}>＋</button>
+                <select value={row.startTime} onChange={e => handleChange(index, "startTime", e.target.value)}>
+                  <option value="">Выберите</option>
+                  {siteOptions.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </td>
+              <td>
+                <select value={row.objectCategory} onChange={e => handleChange(index, "objectCategory", e.target.value)}>
+                  <option value="">Выберите</option>
+                  {Object.keys(objectCategoryOptions).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </td>
+              <td>
+                <select
+                  value={row.endTime}
+                  onChange={e => handleChange(index, "endTime", e.target.value)}
+                  disabled={!row.objectCategory}
+                >
+                  <option value="">Выберите</option>
+                  {(objectCategoryOptions[row.objectCategory] || []).map(obj => (
+                    <option key={obj} value={obj}>{obj}</option>
+                  ))}
+                </select>
+              </td>
+              <td>
+                <select
+                  value={row.object}
+                  onChange={e => handleChange(index, "object", e.target.value)}
+                  disabled={!row.endTime}
+                >
+                  <option value="">Выберите</option>
+                  {(objectPositionOptions[row.endTime] || []).map(pos => (
+                    <option key={pos} value={pos}>{pos}</option>
+                  ))}
+                </select>
+              </td>
+              <td>
+                <input
+                  value={row.position}
+                  onChange={e => handleChange(index, "position", e.target.value)}
+                />
+              </td>
+              <td>
+                <input
+                  value={row.category}
+                  onChange={e => handleChange(index, "category", e.target.value)}
+                />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={row.equipmentName}
+                  onChange={e => {
+                    const value = e.target.value;
+
+                    // Запрещаем нецелые и отрицательные значения
+                    if (!/^\d*$/.test(value)) return;
+
+                    handleChange(index, "equipmentName", value);
+                  }}
+                />
+
+              </td>
+              <td className={styles.actionsCell}>
+                <button
+                  className={`${styles.iconButton} ${styles.green}`}
+                  onClick={addRequest}
+                  title="Добавить строку"
+                >＋</button>
+                {requests.length > 1 && (
+                  <button
+                    className={`${styles.iconButton} ${styles.red}`}
+                    onClick={() => removeRequest(index)}
+                    title="Удалить строку"
+                  >−</button>
+                )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <div style={styles.buttons}>
-        <button style={styles.submitButton} onClick={handleSubmit}>Отправить отчёт</button>
-        <button style={styles.clearButton} onClick={handleClear}>Очистить</button>
+
+      <div className={styles.buttonsContainer}>
+        <button className={styles.submitButton} onClick={handleSubmit}>Отправить отчёт</button>
+        <button className={styles.backButton} onClick={() => navigate("/")}>← Назад</button>
+        <button className={styles.removeButton} onClick={() => setRequests([{ startTime: "", objectCategory: "", endTime: "", object: "", position: "", category: "", equipmentName: "" }])}>Очистить </button>
       </div>
     </div>
   );
 };
 
-const styles = {
-  container: {
-    padding: '20px',
-    fontFamily: 'sans-serif',
-    maxWidth: '1100px',
-    margin: '0 auto',
-  },
-  dateInput: {
-    marginLeft: '10px',
-    padding: '5px',
-    fontSize: '14px',
-  },
-  table: {
-    width: '100%',
-    marginTop: '20px',
-    borderCollapse: 'collapse',
-  },
-  buttons: {
-    marginTop: '20px',
-    display: 'flex',
-    gap: '10px'
-  },
-  submitButton: {
-    padding: '10px',
-    backgroundColor: 'dodgerblue',
-    color: 'white',
-    border: 'none',
-    cursor: 'pointer',
-  },
-  clearButton: {
-    padding: '10px',
-    backgroundColor: 'crimson',
-    color: 'white',
-    border: 'none',
-    cursor: 'pointer',
-  },
-  plusButton: {
-    fontSize: '24px',
-    width: '36px',
-    height: '36px',
-    backgroundColor: '#28a745', // ярко-зелёный
-    color: 'white',
-    border: 'none',
-    borderRadius: '50%', // круглая форма
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 0 4px rgba(0,0,0,0.2)',
-    transition: 'background-color 0.3s',
-  },
-};
-
-export default PeopleReportForm;
+export default PeopleReportPage;
