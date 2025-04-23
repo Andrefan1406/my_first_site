@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import styles from './RequestPage.module.css';
 import { useNavigate } from "react-router-dom";
 
@@ -59,14 +59,21 @@ const objectPositionOptions = {
 };
 
 const PeopleReportPage = () => {
-  const [requests, setRequests] = useState([{
-    startTime: "", objectCategory: "", endTime: "", object: "",
-    position: "", category: "", equipmentName: ""
-  }]);
+  const [requests, setRequests] = useState(() => {
+    const saved = localStorage.getItem("peopleReportData");
+    return saved ? JSON.parse(saved) : [{
+      startTime: "", objectCategory: "", endTime: "", object: "",
+      position: "", category: "", equipmentName: ""
+    }];
+  });
   const [selectedDate, setSelectedDate] = useState(getCurrentDate());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    localStorage.setItem("peopleReportData", JSON.stringify(requests));
+  }, [requests]);
 
   function getCurrentDate() {
     return new Date().toISOString().slice(0, 10);
@@ -85,11 +92,13 @@ const PeopleReportPage = () => {
     setRequests(newRequests);
   };
 
-  const addRequest = () => {
-    setRequests([...requests, {
+  const addRequest = (index) => {
+    const newRequests = [...requests];
+    newRequests.splice(index + 1, 0, {
       startTime: "", objectCategory: "", endTime: "", object: "",
       position: "", category: "", equipmentName: ""
-    }]);
+    });
+    setRequests(newRequests);
   };
 
   const removeRequest = (index) => {
@@ -237,19 +246,15 @@ const PeopleReportPage = () => {
                   value={row.equipmentName}
                   onChange={e => {
                     const value = e.target.value;
-
-                    // Запрещаем нецелые и отрицательные значения
                     if (!/^\d*$/.test(value)) return;
-
                     handleChange(index, "equipmentName", value);
                   }}
                 />
-
               </td>
               <td className={styles.actionsCell}>
                 <button
                   className={`${styles.iconButton} ${styles.green}`}
-                  onClick={addRequest}
+                  onClick={() => addRequest(index)}
                   title="Добавить строку"
                 >＋</button>
                 {requests.length > 1 && (
@@ -265,11 +270,14 @@ const PeopleReportPage = () => {
         </tbody>
       </table>
 
-
       <div className={styles.buttonsContainer}>
-        <button className={styles.submitButton} onClick={handleSubmit}>Отправить отчёт</button>
+        <button className={styles.submitButton} onClick={handleSubmit} disabled={isSubmitting}>
+          {isSubmitting ? "Отправка..." : "Отправить отчёт"}
+        </button>
         <button className={styles.backButton} onClick={() => navigate("/")}>← Назад</button>
-        <button className={styles.removeButton} onClick={() => setRequests([{ startTime: "", objectCategory: "", endTime: "", object: "", position: "", category: "", equipmentName: "" }])}>Очистить </button>
+        <button className={styles.removeButton} onClick={() => setRequests([{ startTime: "", objectCategory: "", endTime: "", object: "", position: "", category: "", equipmentName: "" }])}>
+          Очистить
+        </button>
       </div>
     </div>
   );
