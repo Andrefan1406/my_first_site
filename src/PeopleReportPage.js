@@ -59,16 +59,10 @@ const objectPositionOptions = {
 };
 
 const professionOptions = [
-  "каменщики",
-  "монолитчики",
-  "отделочники",  
-  "разнорабочие",
-  "сантехники",  
-  "фасадчики",
-  "электрики",
-  "прочие"
+  "каменщики", "монолитчики", "отделочники",  
+  "разнорабочие", "сантехники",  
+  "фасадчики", "электрики", "прочие"
 ];
-
 
 const PeopleReportPage = () => {
   const [requests, setRequests] = useState(() => {
@@ -80,6 +74,9 @@ const PeopleReportPage = () => {
   });
   const [selectedDate, setSelectedDate] = useState(getCurrentDate());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [userPhone, setUserPhone] = useState("");
 
   const navigate = useNavigate();
 
@@ -121,26 +118,34 @@ const PeopleReportPage = () => {
 
   const hasEmptyFields = () => {
     return requests.some(row =>
-      !row.startTime ||
-      !row.objectCategory ||
-      !row.endTime ||
-      !row.object ||
-      !row.position ||
-      !row.category ||
-      !row.equipmentName
+      !row.startTime || !row.objectCategory || !row.endTime ||
+      !row.object || !row.position || !row.category || !row.equipmentName
     );
   };
-  
-  const handleSubmit = async () => {
-    if (isSubmitting) return;
-  
+
+  const handleSubmit = () => {
     if (hasEmptyFields()) {
       alert("Пожалуйста, заполните все поля перед отправкой отчёта.");
       return;
     }
-  
+    setShowModal(true);
+  };
+
+  const confirmSubmit = async () => {
+    if (!userName.trim() || !userPhone.trim()) {
+      alert("Пожалуйста, введите ФИО и номер телефона.");
+      return;
+    }
+
     setIsSubmitting(true);
-    const updatedRequests = requests.map(r => ({ ...r, date: selectedDate }));
+    setShowModal(false);
+
+    const updatedRequests = requests.map(r => ({
+      ...r,
+      date: selectedDate,
+      submittedBy: userName,
+      phone: userPhone
+    }));
 
     try {
       await fetch("https://script.google.com/macros/s/AKfycbwuh3ksOR53O039FnsoYsgAfPjhgUAQbbX-EG1mUgmqQXubFwgmDZf0tCBNz23rVomA/exec", {
@@ -155,44 +160,25 @@ const PeopleReportPage = () => {
       alert("Ошибка при отправке!");
     } finally {
       setIsSubmitting(false);
+      setUserName("");
+      setUserPhone("");
     }
   };
 
   return (
     <div className={styles.container}>
       <h2>Ежедневный отчёт по людям</h2>
-      
       <label>Дата:
-      <input
-        type="date"
-        value={selectedDate}
-        min="2025-01-01"
-        max={getCurrentDate()}
-        onChange={(e) => {
-          const enteredDate = e.target.value;
-          const today = getCurrentDate();
-
-          if (enteredDate > today) {
-            alert("Нельзя выбрать будущую дату");
-            return;
-          }
-
-          setSelectedDate(enteredDate);
-        }}
-      />
+        <input type="date" value={selectedDate} min="2025-01-01" max={getCurrentDate()}
+          onChange={e => setSelectedDate(e.target.value)} />
       </label>
 
       <table className={styles.requestTable}>
         <thead>
           <tr>
-            <th>Участок</th>
-            <th>Категория объекта</th>
-            <th>Объект</th>
-            <th>Позиция</th>
-            <th>Наименование работ/подрядчика</th>
-            <th>Профессия</th>
-            <th>Количество</th>
-            <th>Действия</th>
+            <th>Участок</th><th>Категория объекта</th><th>Объект</th>
+            <th>Позиция</th><th>Наименование работ/подрядчика</th><th>Профессия</th>
+            <th>Количество</th><th>Действия</th>
           </tr>
         </thead>
         <tbody>
@@ -201,86 +187,43 @@ const PeopleReportPage = () => {
               <td>
                 <select value={row.startTime} onChange={e => handleChange(index, "startTime", e.target.value)}>
                   <option value="">Выберите</option>
-                  {siteOptions.map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
+                  {siteOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </td>
               <td>
                 <select value={row.objectCategory} onChange={e => handleChange(index, "objectCategory", e.target.value)}>
                   <option value="">Выберите</option>
-                  {Object.keys(objectCategoryOptions).map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
+                  {Object.keys(objectCategoryOptions).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </td>
               <td>
-                <select
-                  value={row.endTime}
-                  onChange={e => handleChange(index, "endTime", e.target.value)}
-                  disabled={!row.objectCategory}
-                >
+                <select value={row.endTime} onChange={e => handleChange(index, "endTime", e.target.value)} disabled={!row.objectCategory}>
                   <option value="">Выберите</option>
-                  {(objectCategoryOptions[row.objectCategory] || []).map(obj => (
-                    <option key={obj} value={obj}>{obj}</option>
-                  ))}
+                  {(objectCategoryOptions[row.objectCategory] || []).map(obj => <option key={obj} value={obj}>{obj}</option>)}
                 </select>
               </td>
               <td>
-                <select
-                  value={row.object}
-                  onChange={e => handleChange(index, "object", e.target.value)}
-                  disabled={!row.endTime}
-                >
+                <select value={row.object} onChange={e => handleChange(index, "object", e.target.value)} disabled={!row.endTime}>
                   <option value="">Выберите</option>
-                  {(objectPositionOptions[row.endTime] || []).map(pos => (
-                    <option key={pos} value={pos}>{pos}</option>
-                  ))}
+                  {(objectPositionOptions[row.endTime] || []).map(pos => <option key={pos} value={pos}>{pos}</option>)}
                 </select>
               </td>
               <td>
-                <input
-                  value={row.position}
-                  onChange={e => handleChange(index, "position", e.target.value)}
-                />
+                <input value={row.position} onChange={e => handleChange(index, "position", e.target.value)} />
               </td>
               <td>
-              <select
-                value={row.category}
-                onChange={e => handleChange(index, "category", e.target.value)}
-              >
-                <option value="">Выберите</option>
-                {professionOptions.map(option => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
+                <select value={row.category} onChange={e => handleChange(index, "category", e.target.value)}>
+                  <option value="">Выберите</option>
+                  {professionOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                </select>
               </td>
               <td>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={row.equipmentName}
-                  onChange={e => {
-                    const value = e.target.value;
-                    if (!/^\d*$/.test(value)) return;
-                    handleChange(index, "equipmentName", value);
-                  }}
-                />
+                <input type="number" min="1" step="1" value={row.equipmentName}
+                  onChange={e => /^\d*$/.test(e.target.value) && handleChange(index, "equipmentName", e.target.value)} />
               </td>
-              <td className={styles.actionsCell}>
-                <button
-                  className={`${styles.iconButton} ${styles.green}`}
-                  onClick={() => addRequest(index)}
-                  title="Добавить строку"
-                >＋</button>
-                {requests.length > 1 && (
-                  <button
-                    className={`${styles.iconButton} ${styles.red}`}
-                    onClick={() => removeRequest(index)}
-                    title="Удалить строку"
-                  >−</button>
-                )}
+              <td>
+                <button className={`${styles.iconButton} ${styles.green}`} onClick={() => addRequest(index)}>＋</button>
+                {requests.length > 1 && <button className={`${styles.iconButton} ${styles.red}`} onClick={() => removeRequest(index)}>−</button>}
               </td>
             </tr>
           ))}
@@ -296,6 +239,20 @@ const PeopleReportPage = () => {
           Очистить
         </button>
       </div>
+
+      {showModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3>Введите ФИО и номер телефона</h3>
+            <input type="text" placeholder="ФИО" value={userName} onChange={e => setUserName(e.target.value)} />
+            <input type="tel" placeholder="Телефон" value={userPhone} onChange={e => setUserPhone(e.target.value)} />
+            <div className={styles.modalButtons}>
+              <button onClick={confirmSubmit}>Подтвердить</button>
+              <button onClick={() => setShowModal(false)}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
