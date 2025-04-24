@@ -58,6 +58,18 @@ const objectPositionOptions = {
   "Цех ЖБИ": ["Цех ЖБИ"]
 };
 
+const professionOptions = [
+  "каменщики",
+  "монолитчики",
+  "отделочники",  
+  "разнорабочие",
+  "сантехники",  
+  "фасадчики",
+  "электрики",
+  "прочие"
+];
+
+
 const PeopleReportPage = () => {
   const [requests, setRequests] = useState(() => {
     const saved = localStorage.getItem("peopleReportData");
@@ -177,8 +189,8 @@ const PeopleReportPage = () => {
             <th>Категория объекта</th>
             <th>Объект</th>
             <th>Позиция</th>
-            <th>Наименование работ/профессий</th>
-            <th>Подрядчик</th>
+            <th>Наименование работ/подрядчика</th>
+            <th>Профессия</th>
             <th>Количество</th>
             <th>Действия</th>
           </tr>
@@ -233,10 +245,15 @@ const PeopleReportPage = () => {
                 />
               </td>
               <td>
-                <input
-                  value={row.category}
-                  onChange={e => handleChange(index, "category", e.target.value)}
-                />
+              <select
+                value={row.category}
+                onChange={e => handleChange(index, "category", e.target.value)}
+              >
+                <option value="">Выберите</option>
+                {professionOptions.map(option => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
               </td>
               <td>
                 <input
