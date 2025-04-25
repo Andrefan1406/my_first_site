@@ -79,6 +79,8 @@ const PeopleReportPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [userName, setUserName] = useState("");
   const [userPhone, setUserPhone] = useState("");
+  const [invalidFields, setInvalidFields] = useState([]);
+  const [dateError, setDateError] = useState("");
 
   const navigate = useNavigate();
 
@@ -118,11 +120,21 @@ const PeopleReportPage = () => {
     setRequests(newRequests);
   };
 
+  const isInvalid = (index, field) => invalidFields.some(f => f.index === index && f.field === field);
+
   const hasEmptyFields = () => {
-    return requests.some(row =>
-      !row.startTime || !row.objectCategory || !row.endTime ||
-      !row.object || !row.position || !row.category || !row.equipmentName
-    );
+    const emptyFields = [];
+  
+    requests.forEach((row, index) => {
+      for (const field of ["startTime", "objectCategory", "endTime", "object", "position", "category", "equipmentName"]) {
+        if (!row[field]) {
+          emptyFields.push({ index, field });
+        }
+      }
+    });
+  
+    setInvalidFields(emptyFields);
+    return emptyFields.length > 0;
   };
 
   const handleSubmit = () => {
@@ -171,9 +183,26 @@ const PeopleReportPage = () => {
     <div className={styles.container}>
       <h2>Ежедневный отчёт по людям</h2>
       <label>Дата:
-        <input type="date" value={selectedDate} min="2025-01-01" max={getCurrentDate()}
-          onChange={e => setSelectedDate(e.target.value)} />
+        <input
+          type="date"
+          value={selectedDate}
+          min="2025-01-01"
+          max={getCurrentDate()}
+          onChange={(e) => {
+            const inputDate = e.target.value;
+            const today = getCurrentDate();
+            if (inputDate > today) {
+              setDateError("Нельзя выбрать дату из будущего.");
+              setSelectedDate(today);
+            } else {
+              setDateError("");
+              setSelectedDate(inputDate);
+            }
+          }}
+        />
       </label>
+
+      {dateError && <div className={styles.errorText}>{dateError}</div>}
 
       <table className={styles.requestTable}>
         <thead>
@@ -187,41 +216,76 @@ const PeopleReportPage = () => {
           {requests.map((row, index) => (
             <tr key={index}>
               <td>
-                <select value={row.startTime} onChange={e => handleChange(index, "startTime", e.target.value)}>
+                <select
+                  value={row.startTime}
+                  onChange={e => handleChange(index, "startTime", e.target.value)}
+                  className={isInvalid(index, "startTime") ? styles.invalidField : ""}
+                >
                   <option value="">Выберите</option>
                   {siteOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </td>
               <td>
-                <select value={row.objectCategory} onChange={e => handleChange(index, "objectCategory", e.target.value)}>
+                <select
+                  value={row.objectCategory}
+                  onChange={e => handleChange(index, "objectCategory", e.target.value)}
+                  className={isInvalid(index, "objectCategory") ? styles.invalidField : ""}
+                >
                   <option value="">Выберите</option>
                   {Object.keys(objectCategoryOptions).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </td>
               <td>
-                <select value={row.endTime} onChange={e => handleChange(index, "endTime", e.target.value)} disabled={!row.objectCategory}>
+                <select
+                  value={row.endTime}
+                  onChange={e => handleChange(index, "endTime", e.target.value)}
+                  disabled={!row.objectCategory}
+                  className={isInvalid(index, "endTime") ? styles.invalidField : ""}
+                >
                   <option value="">Выберите</option>
                   {(objectCategoryOptions[row.objectCategory] || []).map(obj => <option key={obj} value={obj}>{obj}</option>)}
                 </select>
               </td>
               <td>
-                <select value={row.object} onChange={e => handleChange(index, "object", e.target.value)} disabled={!row.endTime}>
+                <select
+                  value={row.object}
+                  onChange={e => handleChange(index, "object", e.target.value)}
+                  disabled={!row.endTime}
+                  className={isInvalid(index, "object") ? styles.invalidField : ""}
+                >
                   <option value="">Выберите</option>
                   {(objectPositionOptions[row.endTime] || []).map(pos => <option key={pos} value={pos}>{pos}</option>)}
                 </select>
+
               </td>
               <td>
-                <input value={row.position} onChange={e => handleChange(index, "position", e.target.value)} />
+                <input
+                  value={row.position}
+                  onChange={e => handleChange(index, "position", e.target.value)}
+                  className={isInvalid(index, "position") ? styles.invalidField : ""}
+                />
               </td>
               <td>
-                <select value={row.category} onChange={e => handleChange(index, "category", e.target.value)}>
+                <select
+                  value={row.category}
+                  onChange={e => handleChange(index, "category", e.target.value)}
+                  className={isInvalid(index, "category") ? styles.invalidField : ""}
+                >
                   <option value="">Выберите</option>
                   {professionOptions.map(option => <option key={option} value={option}>{option}</option>)}
                 </select>
+
               </td>
               <td>
-                <input type="number" min="1" step="1" value={row.equipmentName}
-                  onChange={e => /^\d*$/.test(e.target.value) && handleChange(index, "equipmentName", e.target.value)} />
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={row.equipmentName}
+                  onChange={e => /^\d*$/.test(e.target.value) && handleChange(index, "equipmentName", e.target.value)}
+                  className={isInvalid(index, "equipmentName") ? styles.invalidField : ""}
+                />
+
               </td>
               <td>
                 <button className={`${styles.iconButton} ${styles.green}`} onClick={() => addRequest(index)}>＋</button>
