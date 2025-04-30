@@ -13,6 +13,7 @@ const PeopleDashboardPage = () => {
   const [filteredPosition, setFilteredPosition] = useState('');
   const [filteredContractor, setFilteredContractor] = useState('');
   const [filteredProfession, setFilteredProfession] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   const desiredOrder = [
     'Дата', 'Участок', 'Категория объекта', 'Объект',
@@ -83,64 +84,86 @@ const PeopleDashboardPage = () => {
     XLSX.writeFile(workbook, 'people_report.xlsx');
   };
 
+  filteredData.sort((a, b) => new Date(b['Дата']) - new Date(a['Дата']));
+
   return (
     <div style={{ padding: '20px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <h2>Отчётность по людям</h2>
+      <style>{`
+        @media (max-width: 768px) {
+          .hide-mobile { display: none !important; }
+          .filter-bar { flex-direction: column; align-items: stretch; }
+          .filter-bar label, .filter-bar button { width: 100%; }
+          .people-table-container { overflow-x: auto; }
+        }
+        td, th {
+          word-wrap: break-word;
+          white-space: normal;
+          word-break: break-word;
+        }
+      `}</style>
 
+      <h2>Отчётность по людям</h2>
       <div style={{ marginBottom: '10px' }}>
         <button onClick={() => navigate(-1)}>← Назад</button>
       </div>
 
-      <div style={{
-        position: 'sticky', top: 0, background: '#f9f9f9', zIndex: 10,
-        padding: '10px', borderBottom: '1px solid #ccc', display: 'flex', flexWrap: 'wrap', gap: '15px', alignItems: 'center'
-      }}>
-        <label>Участок: <select value={filteredSite} onChange={e => setFilteredSite(e.target.value)}>
-          <option value=''>Все</option>
-          {getUnique('Участок').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
-        <label>Дата: <input type="date" value={filteredDate} onChange={e => setFilteredDate(e.target.value)} /></label>
-        <label>Категория объекта: <select value={filteredCategory} onChange={e => setFilteredCategory(e.target.value)}>
-          <option value=''>Все</option>
-          {getUnique('Категория объекта').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
-        <label>Объект: <select value={filteredObject} onChange={e => setFilteredObject(e.target.value)}>
-          <option value=''>Все</option>
-          {getUnique('Объект').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
-        <label>Позиция: <select value={filteredPosition} onChange={e => setFilteredPosition(e.target.value)}>
-          <option value=''>Все</option>
-          {getUnique('Позиция').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
-        <label>Субподрядчик: <select value={filteredContractor} onChange={e => setFilteredContractor(e.target.value)}>
-          <option value=''>Все</option>
-          {getUnique('Субподрядчик').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
-        <label>Профессия: <select value={filteredProfession} onChange={e => setFilteredProfession(e.target.value)}>
-          <option value=''>Все</option>
-          {getUnique('Профессия').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
-        <button onClick={clearAllFilters} style={{ marginLeft: 'auto' }}>Очистить все фильтры</button>
-        <button onClick={downloadExcel}>Скачать Excel</button>
+      <button onClick={() => setShowFilters(!showFilters)} style={{ marginBottom: '10px' }}>
+        {showFilters ? 'Скрыть фильтры' : 'Показать фильтры'}
+      </button>
 
-        <div style={{ overflowX: 'auto', width: '100%' }}>
-          <table border="1" cellPadding="5" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
-            <colgroup>
-              {desiredOrder.map((col, i) => <col key={i} style={{ width: colWidths[col] || `${100 / desiredOrder.length}%` }} />)}
-            </colgroup>
-            <thead>
-              <tr>{desiredOrder.map(k => <th key={k}>{k}</th>)}</tr>
-              <tr>
-                <td colSpan={7}><strong>Итого</strong></td>
-                <td><strong>{total}</strong></td>
-              </tr>
-            </thead>
-          </table>
+      {showFilters && (
+        <div className="filter-bar" style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', alignItems: 'center' }}>
+          <label>Участок: <select value={filteredSite} onChange={e => setFilteredSite(e.target.value)}>
+            <option value=''>Все</option>
+            {getUnique('Участок').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
+          <label>Дата: <input type="date" value={filteredDate} onChange={e => setFilteredDate(e.target.value)} /></label>
+          <div className="hide-mobile">
+            <label>Категория объекта: <select value={filteredCategory} onChange={e => setFilteredCategory(e.target.value)}>
+              <option value=''>Все</option>
+              {getUnique('Категория объекта').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
+          </div>
+          <label>Объект: <select value={filteredObject} onChange={e => setFilteredObject(e.target.value)}>
+            <option value=''>Все</option>
+            {getUnique('Объект').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
+          <label>Позиция: <select value={filteredPosition} onChange={e => setFilteredPosition(e.target.value)}>
+            <option value=''>Все</option>
+            {getUnique('Позиция').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
+          <label>Субподрядчик: <select value={filteredContractor} onChange={e => setFilteredContractor(e.target.value)}>
+            <option value=''>Все</option>
+            {getUnique('Субподрядчик').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
+          <label>Профессия: <select value={filteredProfession} onChange={e => setFilteredProfession(e.target.value)}>
+            <option value=''>Все</option>
+            {getUnique('Профессия').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
+          <button onClick={clearAllFilters}>Очистить все фильтры</button>
+          <button onClick={downloadExcel}>Скачать Excel</button>
         </div>
-      </div>
+      )}
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <table border="1" cellPadding="5" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+      <div className="people-table-container">
+        <table className="people-table" border="1" cellPadding="5" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
           <colgroup>
-            {desiredOrder.map((col, i) => <col key={i} style={{ width: colWidths[col] || `${100 / desiredOrder.length}%` }} />)}
+            {desiredOrder.map((col, i) => (
+              <col key={i} style={{ width: colWidths[col] || `${100 / desiredOrder.length}%` }} />
+            ))}
           </colgroup>
+          <thead>
+            <tr>
+              {desiredOrder.map((k, i) => (
+                <th key={i} className={k === 'Категория объекта' ? 'hide-mobile' : ''}>{k}</th>
+              ))}
+            </tr>
+            <tr>
+              <td colSpan={7}><strong>Итого</strong></td>
+              <td><strong>{total}</strong></td>
+            </tr>
+          </thead>
           <tbody>
             {filteredData.map((row, i) => (
-              <tr key={i}>{desiredOrder.map((k, j) => <td key={j}>{row[k]}</td>)}</tr>
+              <tr key={i}>
+                {desiredOrder.map((k, j) => (
+                  <td key={j} className={k === 'Категория объекта' ? 'hide-mobile' : ''}>{row[k]}</td>
+                ))}
+              </tr>
             ))}
           </tbody>
         </table>
