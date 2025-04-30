@@ -7,7 +7,8 @@ const PeopleDashboardPage = () => {
   const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [filteredSite, setFilteredSite] = useState('');
-  const [filteredDate, setFilteredDate] = useState('');
+  const [filteredDateFrom, setFilteredDateFrom] = useState('');
+  const [filteredDateTo, setFilteredDateTo] = useState('');
   const [filteredCategory, setFilteredCategory] = useState('');
   const [filteredObject, setFilteredObject] = useState('');
   const [filteredPosition, setFilteredPosition] = useState('');
@@ -51,12 +52,19 @@ const PeopleDashboardPage = () => {
           }
         });
         setData(parsed);
+
+        const today = new Date();
+        const weekAgo = new Date();
+        weekAgo.setDate(today.getDate() - 7);
+        setFilteredDateFrom(weekAgo.toISOString().slice(0, 10));
+        setFilteredDateTo(today.toISOString().slice(0, 10));
       });
   }, []);
 
   const filteredData = data.filter(row =>
     (!filteredSite || row['Участок'] === filteredSite) &&
-    (!filteredDate || row['Дата'] === filteredDate) &&
+    (!filteredDateFrom || row['Дата'] >= filteredDateFrom) &&
+    (!filteredDateTo || row['Дата'] <= filteredDateTo) &&
     (!filteredCategory || row['Категория объекта'] === filteredCategory) &&
     (!filteredObject || row['Объект'] === filteredObject) &&
     (!filteredPosition || row['Позиция'] === filteredPosition) &&
@@ -67,9 +75,14 @@ const PeopleDashboardPage = () => {
   const getUnique = (key, base = filteredData.length ? filteredData : data) => [...new Set(base.map(row => row[key]).filter(Boolean))];
 
   const clearAllFilters = () => {
-    setFilteredSite(''); setFilteredDate(''); setFilteredCategory('');
-    setFilteredObject(''); setFilteredPosition('');
-    setFilteredContractor(''); setFilteredProfession('');
+    setFilteredSite('');
+    setFilteredDateFrom('');
+    setFilteredDateTo('');
+    setFilteredCategory('');
+    setFilteredObject('');
+    setFilteredPosition('');
+    setFilteredContractor('');
+    setFilteredProfession('');
   };
 
   const total = filteredData.reduce((sum, row) => {
@@ -116,7 +129,8 @@ const PeopleDashboardPage = () => {
           <label>Участок: <select value={filteredSite} onChange={e => setFilteredSite(e.target.value)}>
             <option value=''>Все</option>
             {getUnique('Участок').map(v => <option key={v} value={v}>{v}</option>)}</select></label>
-          <label>Дата: <input type="date" value={filteredDate} onChange={e => setFilteredDate(e.target.value)} /></label>
+          <label>С даты: <input type="date" value={filteredDateFrom} onChange={e => setFilteredDateFrom(e.target.value)} /></label>
+          <label>По дату: <input type="date" value={filteredDateTo} onChange={e => setFilteredDateTo(e.target.value)} /></label>
           <div className="hide-mobile">
             <label>Категория объекта: <select value={filteredCategory} onChange={e => setFilteredCategory(e.target.value)}>
               <option value=''>Все</option>
