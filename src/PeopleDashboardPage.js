@@ -69,7 +69,8 @@ const PeopleDashboardPage = () => {
     (!filteredObject || row['Объект'] === filteredObject) &&
     (!filteredPosition || row['Позиция'] === filteredPosition) &&
     (!filteredContractor || row['Субподрядчик'] === filteredContractor) &&
-    (!filteredProfession || row['Профессия'] === filteredProfession)
+    (!filteredProfession || row['Профессия'] === filteredProfession) &&
+    (parseFloat(row['Количество']) > 0)
   );
 
   const getUnique = (key, base = filteredData.length ? filteredData : data) => [...new Set(base.map(row => row[key]).filter(Boolean))];
@@ -175,7 +176,9 @@ const PeopleDashboardPage = () => {
             {filteredData.map((row, i) => (
               <tr key={i}>
                 {desiredOrder.map((k, j) => (
-                  <td key={j} className={k === 'Категория объекта' ? 'hide-mobile' : ''}>{row[k]}</td>
+                  <td key={j} className={k === 'Категория объекта' ? 'hide-mobile' : ''}>
+                    {k === 'Количество' ? Number(row[k]) || 0 : row[k]}
+                  </td>
                 ))}
               </tr>
             ))}
