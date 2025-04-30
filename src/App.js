@@ -6,6 +6,9 @@ import ConcreteRequestPage from './ConcreteRequestPage';
 import ElectricansRequestPage from './ElectricansRequestPage';
 import GeoRequestPage from './GeoRequestPage';
 import PeopleReportPage from './PeopleReportPage';
+import ReportsDashboardPage from './ReportsDashboardPage';
+import PeopleDashboardPage from './PeopleDashboardPage';
+import EquipmentReportPage from './EquipmentReportPage';
 
 const App = () => {
   return (
@@ -17,6 +20,9 @@ const App = () => {
         <Route path="/electricans-request" element={<ElectricansRequestPage />} />
         <Route path="/geo-request" element={<GeoRequestPage />} />
         <Route path="/people-report" element={<PeopleReportPage />} />
+        <Route path="/reports-dashboard" element={<ReportsDashboardPage />} />
+        <Route path="/people-dashboard" element={<PeopleDashboardPage />} />
+        <Route path="/equipment-report" element={<EquipmentReportPage />} />
       </Routes>
     </Router>
   );
