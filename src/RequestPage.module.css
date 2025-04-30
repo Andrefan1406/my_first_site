@@ -297,6 +297,11 @@
   font-size: 14px;
 }
 
+.requestTable tfoot td {
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+
 /* Адаптация для мобильных устройств */
 @media (min-width: 769px) {
   .headerBlock {

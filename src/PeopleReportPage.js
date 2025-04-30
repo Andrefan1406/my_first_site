@@ -83,6 +83,10 @@ const PeopleReportPage = () => {
   const [invalidFields, setInvalidFields] = useState([]);
   const [dateError, setDateError] = useState("");
 
+  const getTotalCount = () => {
+    return requests.reduce((sum, row) => sum + (parseInt(row.equipmentName) || 0), 0);
+  };
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -295,6 +299,13 @@ const PeopleReportPage = () => {
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan="6" style={{ textAlign: 'right', fontWeight: 'bold' }}>Итого:</td>
+            <td style={{ fontWeight: 'bold' }}>{getTotalCount()}</td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
 
       <div className={styles.buttonsContainer}>
