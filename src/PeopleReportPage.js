@@ -9,58 +9,6 @@ const siteOptions = [
   "СПОРТ", "Уч.монтажа м/к", "Фасадчики", "Royal B"
 ];
 
-const objectCategoryOptions = {
-  "Строительство жилых домов": ["Брик таун", "НЖ 3", "СПОРТ 1-2", "Элитка"],
-  "Строительство и ремонт дорог": ["Дороги НЖ 4,5", "Дорога Шале ла Бале", "Развязка"],
-  "Строительство и реконструкция коммерческих, частных и туристических объектов": [
-    "Горная Ульбинка", "Зимовьё", "Коммерческие объекты", "Коммерческие помещения в жилых домах",
-    "Мелада", "Нуртау", "Орлан", "Урунтаева 12/1", "Черемушки"
-  ],
-  "Строительство сетей и благоустройство": ["Сети и благоустройство", "Благоустройство", "Инженерные сети"],
-  "Строительство объектов инфраструктуры (кроме жилых домов)": ["Бизнес центр пр.Победы", "Ветлаборатория", "Резиденция", "Учебные заведения", "Хилтон"],
-  "Производственные объекты": ["База Самарское", "База Эскор", "БРУ", "Кирзавод", "КОС", "Новоявленка", "Парыгино", "Цех брусчатки", "Цех ЖБИ", "Карьеры"],
-  "Гарантийные работы" : [ "Нурлы Жол 1-2", "19 мкр."]
-};
-
-const objectPositionOptions = {
-  "Брик таун": ["Брик Таун 1", "Брик Таун 2"],
-  "НЖ 3": ["поз.56", "поз. 57", "поз. 58", "поз. 59", "поз.60", "поз. 63", "поз. 64", "поз. 65", "поз. 69", "поз. 72", "Стройгородок НЖ3", "Экополис поз.103", "Экополис поз.104", "Экополис паркинг поз.105"],
-  "СПОРТ 1-2": ["поз. 100", "поз. 101", "поз. 73-75", "поз. 74", "поз. 76", "поз.91", "поз.92", "поз. 93"],
-  "Элитка": ["Элитка"],
-  "Дороги НЖ 4,5": ["Дороги НЖ 4,5"],
-  "Дорога Шале ла Бале": ["Дорога Шале ла Бале"],
-  "Развязка": ["Развязка"],
-  "Горная Ульбинка": ["Горная Ульбинка", "Орленок", "Каменный карьер"],
-  "Зимовьё": ["Зимовьё"],
-  "Коммерческие объекты": ["ROYAL B", "Автомойка (АТХ)", "Автомойка (Нурлы Жол)", "Кафе Бистро", "Кренделия"],
-  "Коммерческие помещения в жилых домах": ["Магазин Жибек Жолы 3", "Медцентр Жибек Жолы", "поз. 107 (Детский сад)", "поз. 107 КП", "поз. 13/1 КП", "поз. 49/1 КП", "поз. 50/1 КП (Салон Красоты)", "поз. 53/2 КП"],
-  "Мелада": ["Мелада"],
-  "Нуртау": ["Нуртау"],
-  "Орлан": ["б/о Орлан", "Орлан ИЖД-1", "Орлан ИЖД-1"],
-  "Урунтаева 12/1": ["Урунтаева 12/1"],
-  "Черемушки": ["Черемушки"],
-  "Сети и благоустройство": ["Н.Бухтарма"],
-  "Благоустройство": ["Благоустройство Гребной канал", "Благоустройство НЖ3", "Благоустройство СПОРТ 2"],
-  "Инженерные сети": ["Коллектор", "Сети ОВ ВК НЖ 3", "Сети ОВ ВК НЖ 4,5", "Сети ОВ ВК СПОРТ 2", "Сети Эл НЖ 4,5", "Сети Эл НЖ 3"],
-  "Бизнес центр пр.Победы": ["Бизнес центр пр.Победы"],
-  "Ветлаборатория": ["Ветлаборатория"],
-  "Резиденция": ["Резиденция"],
-  "Учебные заведения": ["Дет.сад НЖ", "Комфортная школа", "Ледовый каток", "Лицей"],
-  "Хилтон": ["Хилтон"],
-  "База Самарское": ["База Самарское"],
-  "База Эскор": ["База Эскор"],
-  "БРУ": ["БРУ"],
-  "Карьеры": ["Карьер Аблакетка", "Карьер Новоявленка"],
-  "Кирзавод": ["Кирзавод"],
-  "КОС": ["КОС"],
-  "Новоявленка": ["Комбинат ПГС"],
-  "Парыгино": ["БСУ"],
-  "Цех брусчатки": ["Цех брусчатки"],
-  "Цех ЖБИ": ["Цех ЖБИ"],
-  "Нурлы Жол 1-2" : [ "Нурлы Жол 1-2"],
-  "19 мкр." : [ "Есенберлина 6/2"]
-};
-
 const professionOptions = [
   "каменщики", "монолитчики", "отделочники",  
   "разнорабочие", "сантехники",  
@@ -83,11 +31,9 @@ const PeopleReportPage = () => {
   const [invalidFields, setInvalidFields] = useState([]);
   const [dateError, setDateError] = useState("");
 
-  const getTotalCount = () => {
-    return requests.reduce((sum, row) => sum + (parseInt(row.equipmentName) || 0), 0);
-  };
-
   const navigate = useNavigate();
+
+  const isAlreadySubmitted = localStorage.getItem(`peopleReportSent_${selectedDate}`) === 'true';
 
   useEffect(() => {
     localStorage.setItem("peopleReportData", JSON.stringify(requests));
@@ -100,13 +46,6 @@ const PeopleReportPage = () => {
   const handleChange = (index, field, value) => {
     const newRequests = [...requests];
     newRequests[index][field] = value;
-    if (field === "objectCategory") {
-      newRequests[index].endTime = "";
-      newRequests[index].object = "";
-    }
-    if (field === "endTime") {
-      newRequests[index].object = "";
-    }
     setRequests(newRequests);
   };
 
@@ -129,7 +68,7 @@ const PeopleReportPage = () => {
 
   const hasEmptyFields = () => {
     const emptyFields = [];
-  
+
     requests.forEach((row, index) => {
       for (const field of ["startTime", "objectCategory", "endTime", "object", "position", "category", "equipmentName"]) {
         if (!row[field]) {
@@ -137,12 +76,20 @@ const PeopleReportPage = () => {
         }
       }
     });
-  
+
     setInvalidFields(emptyFields);
     return emptyFields.length > 0;
   };
 
+  const getTotalCount = () => {
+    return requests.reduce((sum, row) => sum + (parseInt(row.equipmentName) || 0), 0);
+  };
+
   const handleSubmit = () => {
+    if (isAlreadySubmitted) {
+      alert("Отчёт на эту дату уже был отправлен с данного браузера.");
+      return;
+    }
     if (hasEmptyFields()) {
       alert("Пожалуйста, заполните все поля перед отправкой отчёта.");
       return;
@@ -173,6 +120,8 @@ const PeopleReportPage = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedRequests)
       });
+
+      localStorage.setItem(`peopleReportSent_${selectedDate}`, 'true');
       alert("Отчёт успешно отправлен!");
     } catch (e) {
       console.error("Ошибка при отправке", e);
@@ -221,76 +170,31 @@ const PeopleReportPage = () => {
           {requests.map((row, index) => (
             <tr key={index}>
               <td>
-                <select
-                  value={row.startTime}
-                  onChange={e => handleChange(index, "startTime", e.target.value)}
-                  className={isInvalid(index, "startTime") ? styles.invalidField : ""}
-                >
+                <select value={row.startTime} onChange={e => handleChange(index, "startTime", e.target.value)} className={isInvalid(index, "startTime") ? styles.invalidField : ""}>
                   <option value="">Выберите</option>
                   {siteOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </td>
               <td>
-                <select
-                  value={row.objectCategory}
-                  onChange={e => handleChange(index, "objectCategory", e.target.value)}
-                  className={isInvalid(index, "objectCategory") ? styles.invalidField : ""}
-                >
-                  <option value="">Выберите</option>
-                  {Object.keys(objectCategoryOptions).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
+                <input value={row.objectCategory} onChange={e => handleChange(index, "objectCategory", e.target.value)} className={isInvalid(index, "objectCategory") ? styles.invalidField : ""} />
               </td>
               <td>
-                <select
-                  value={row.endTime}
-                  onChange={e => handleChange(index, "endTime", e.target.value)}
-                  disabled={!row.objectCategory}
-                  className={isInvalid(index, "endTime") ? styles.invalidField : ""}
-                >
-                  <option value="">Выберите</option>
-                  {(objectCategoryOptions[row.objectCategory] || []).map(obj => <option key={obj} value={obj}>{obj}</option>)}
-                </select>
+                <input value={row.endTime} onChange={e => handleChange(index, "endTime", e.target.value)} className={isInvalid(index, "endTime") ? styles.invalidField : ""} />
               </td>
               <td>
-                <select
-                  value={row.object}
-                  onChange={e => handleChange(index, "object", e.target.value)}
-                  disabled={!row.endTime}
-                  className={isInvalid(index, "object") ? styles.invalidField : ""}
-                >
-                  <option value="">Выберите</option>
-                  {(objectPositionOptions[row.endTime] || []).map(pos => <option key={pos} value={pos}>{pos}</option>)}
-                </select>
-
+                <input value={row.object} onChange={e => handleChange(index, "object", e.target.value)} className={isInvalid(index, "object") ? styles.invalidField : ""} />
               </td>
               <td>
-                <input
-                  value={row.position}
-                  onChange={e => handleChange(index, "position", e.target.value)}
-                  className={isInvalid(index, "position") ? styles.invalidField : ""}
-                />
+                <input value={row.position} onChange={e => handleChange(index, "position", e.target.value)} className={isInvalid(index, "position") ? styles.invalidField : ""} />
               </td>
               <td>
-                <select
-                  value={row.category}
-                  onChange={e => handleChange(index, "category", e.target.value)}
-                  className={isInvalid(index, "category") ? styles.invalidField : ""}
-                >
+                <select value={row.category} onChange={e => handleChange(index, "category", e.target.value)} className={isInvalid(index, "category") ? styles.invalidField : ""}>
                   <option value="">Выберите</option>
                   {professionOptions.map(option => <option key={option} value={option}>{option}</option>)}
                 </select>
-
               </td>
               <td>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={row.equipmentName}
-                  onChange={e => /^\d*$/.test(e.target.value) && handleChange(index, "equipmentName", e.target.value)}
-                  className={isInvalid(index, "equipmentName") ? styles.invalidField : ""}
-                />
-
+                <input type="number" min="1" step="1" value={row.equipmentName} onChange={e => /^\d*$/.test(e.target.value) && handleChange(index, "equipmentName", e.target.value)} className={isInvalid(index, "equipmentName") ? styles.invalidField : ""} />
               </td>
               <td>
                 <button className={`${styles.iconButton} ${styles.green}`} onClick={() => addRequest(index)}>＋</button>
@@ -309,8 +213,8 @@ const PeopleReportPage = () => {
       </table>
 
       <div className={styles.buttonsContainer}>
-        <button className={styles.submitButton} onClick={handleSubmit} disabled={isSubmitting}>
-          {isSubmitting ? "Отправка..." : "Отправить отчёт"}
+        <button className={styles.submitButton} onClick={handleSubmit} disabled={isSubmitting || isAlreadySubmitted}>
+          {isAlreadySubmitted ? "Отчёт уже отправлен" : isSubmitting ? "Отправка..." : "Отправить отчёт"}
         </button>
         <button className={styles.backButton} onClick={() => navigate("/")}>← Назад</button>
         <button className={styles.removeButton} onClick={() => setRequests([{ startTime: "", objectCategory: "", endTime: "", object: "", position: "", category: "", equipmentName: "" }])}>

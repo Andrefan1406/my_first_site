@@ -9,6 +9,7 @@ import PeopleReportPage from './PeopleReportPage';
 import ReportsDashboardPage from './ReportsDashboardPage';
 import PeopleDashboardPage from './PeopleDashboardPage';
 import EquipmentReportPage from './EquipmentReportPage';
+import PeopleReportCharts from './PeopleReportCharts';
 
 const App = () => {
   return (
@@ -23,6 +24,7 @@ const App = () => {
         <Route path="/reports-dashboard" element={<ReportsDashboardPage />} />
         <Route path="/people-dashboard" element={<PeopleDashboardPage />} />
         <Route path="/equipment-report" element={<EquipmentReportPage />} />
+        <Route path="/people-charts" element={<PeopleReportCharts />} />
       </Routes>
     </Router>
   );

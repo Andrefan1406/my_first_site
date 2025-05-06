@@ -116,7 +116,24 @@ const PeopleDashboardPage = () => {
         }
       `}</style>
 
-      <h2>Отчётность по людям</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <h2>Отчётность по людям</h2>
+        <button
+          onClick={() => navigate('/people-charts')}
+          style={{
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            padding: '10px 20px',
+            fontSize: '14px',
+            cursor: 'pointer',
+            fontWeight: '500'
+          }}
+        >
+          Графики
+        </button>
+      </div>
       <div style={{ marginBottom: '10px' }}>
         <button onClick={() => navigate(-1)}>← Назад</button>
       </div>
