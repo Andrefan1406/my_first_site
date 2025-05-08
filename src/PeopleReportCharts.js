@@ -8,6 +8,31 @@ const PeopleReportCharts = () => {
   const [chartData, setChartData] = useState([]);
   const [professions, setProfessions] = useState([]);
 
+  const formatDateWithWeekday = (dateStr) => {
+    const daysRu = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    const date = new Date(dateStr);
+    const day = daysRu[date.getDay()];
+    return `${dateStr} (${day})`;
+  };
+
+  const renderCustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div style={{ backgroundColor: 'white', padding: 10, border: '1px solid #ccc' }}>
+          <p style={{ margin: 0 }}><strong>{label}</strong></p>
+          <ul style={{ padding: 0, margin: 0, listStyle: 'none' }}>
+            {[...payload].reverse().map((entry, index) => (
+              <li key={index} style={{ color: entry.color }}>
+                {entry.name}: {entry.value}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+    return null;
+  };
+
   useEffect(() => {
     fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vS0qVYHkI9ySfT0LO9SwG36BYrmI-chO09ws7GSjWcnQU2pX4Gzw-R4LXg6tdi44KXa1i5yQYcLF27U/pub?output=csv')
       .then(res => res.text())
@@ -24,7 +49,7 @@ const PeopleReportCharts = () => {
 
         const today = new Date();
         const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(today.getDate() - 6);
+        sevenDaysAgo.setDate(today.getDate() - 7);
 
         const byDate = {};
         const profSet = new Set();
@@ -55,16 +80,30 @@ const PeopleReportCharts = () => {
       });
   }, []);
 
+  const renderCustomLegend = (props) => {
+    const { payload } = props;
+    return (
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {[...payload].reverse().map((entry, index) => (
+          <li key={`item-${index}`} style={{ color: entry.color, marginBottom: 4 }}>
+            <span style={{ marginRight: 8, display: 'inline-block', width: 12, height: 12, backgroundColor: entry.color }}></span>
+            {entry.value}
+          </li>
+        ))}
+      </ul>
+    );
+  };
+  
   return (
     <div style={{ width: '100vw', height: '100vh', padding: '20px', boxSizing: 'border-box' }}>
       <h2>Накопительный график по профессиям за последние 7 дней</h2>
       <ResponsiveContainer width="100%" height="90%">
         <BarChart data={chartData} stackOffset="normal">
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="date" />
+          <XAxis dataKey="date" tickFormatter={formatDateWithWeekday} />
           <YAxis />
-          <Tooltip />
-          <Legend verticalAlign="middle" align="right" layout="vertical" />
+          <Tooltip content={renderCustomTooltip} />
+          <Legend content={renderCustomLegend} verticalAlign="middle" align="right" layout="vertical" />
           
           {professions.map((prof, i) => (
             <Bar
