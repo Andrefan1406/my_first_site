@@ -75,6 +75,7 @@ const PeopleReportPage = () => {
       position: "", category: "", equipmentName: ""
     }];
   });
+  const [isAlreadySubmitted, setIsAlreadySubmitted] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getCurrentDate());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -92,6 +93,11 @@ const PeopleReportPage = () => {
   useEffect(() => {
     localStorage.setItem("peopleReportData", JSON.stringify(requests));
   }, [requests]);
+
+  useEffect(() => {
+    const lastSubmittedDate = localStorage.getItem("lastPeopleReportSubmitDate");
+    setIsAlreadySubmitted(lastSubmittedDate === selectedDate);
+  }, [selectedDate]);
 
   function getCurrentDate() {
     return new Date().toISOString().slice(0, 10);
@@ -182,6 +188,7 @@ const PeopleReportPage = () => {
   
       // сохраняем дату успешной отправки
       localStorage.setItem("lastPeopleReportSubmitDate", selectedDate);
+      setIsAlreadySubmitted(true);
   
       alert("Отчёт успешно отправлен!");
     } catch (e) {
@@ -319,8 +326,16 @@ const PeopleReportPage = () => {
       </table>
 
       <div className={styles.buttonsContainer}>
-        <button className={styles.submitButton} onClick={handleSubmit} disabled={isSubmitting}>
-          {isSubmitting ? "Отправка..." : "Отправить отчёт"}
+        <button
+          className={styles.submitButton}
+          onClick={handleSubmit}
+          disabled={isSubmitting || isAlreadySubmitted}
+        >
+          {isAlreadySubmitted
+            ? "Отчёт уже отправлен"
+            : isSubmitting
+            ? "Отправка..."
+            : "Отправить отчёт"}
         </button>
         <button className={styles.backButton} onClick={() => navigate("/")}>← Назад</button>
         <button className={styles.removeButton} onClick={() => setRequests([{ startTime: "", objectCategory: "", endTime: "", object: "", position: "", category: "", equipmentName: "" }])}>
