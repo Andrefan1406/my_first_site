@@ -97,11 +97,11 @@ const PeopleReportCharts = () => {
   return (
     <div style={{ width: '100vw', height: '100vh', padding: '20px', boxSizing: 'border-box' }}>
       <h2>Накопительный график по профессиям за последние 7 дней</h2>
-      <ResponsiveContainer width="100%" height="90%">
+      <ResponsiveContainer width="100%" height={"90%"}>
         <BarChart data={chartData} stackOffset="normal">
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="date" tickFormatter={formatDateWithWeekday} />
-          <YAxis />
+          <YAxis  domain={[0, (dataMax) => Math.max(1000, Math.ceil(dataMax * 1.2))]}/>
           <Tooltip content={renderCustomTooltip} />
           <Legend content={renderCustomLegend} verticalAlign="middle" align="right" layout="vertical" />
           
