@@ -7,6 +7,8 @@ import {
 const PeopleReportCharts = () => {
   const [chartData, setChartData] = useState([]);
   const [professions, setProfessions] = useState([]);
+  const [monthlyAverages2025, setMonthlyAverages2025] = useState([]);
+  const [monthlyComparison, setMonthlyComparison] = useState([]);
 
   const formatDateWithWeekday = (dateStr) => {
     const daysRu = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
@@ -68,6 +70,8 @@ const PeopleReportCharts = () => {
           }
         });
 
+        
+
         const chart = Object.values(byDate).map(item => {
           const total = Object.entries(item)
             .filter(([k]) => k !== 'date')
@@ -77,6 +81,97 @@ const PeopleReportCharts = () => {
 
         setChartData(chart);
         setProfessions([...profSet]);
+        // Собираем суммы по дням за 2025
+        const dailyTotals = {};
+
+        dataRows.forEach(row => {
+          const dateStr = row['Дата'];
+          const count = parseFloat(row['Количество']) || 0;
+          const dateObj = new Date(dateStr);
+
+          const todayStr = new Date().toISOString().slice(0, 10);
+
+          if (dateObj.getFullYear() === 2025) {
+            const dayKey = dateObj.toISOString().slice(0, 10);
+            
+            if (dayKey !== todayStr) {
+              dailyTotals[dayKey] = (dailyTotals[dayKey] || 0) + count;
+            }
+          }
+        });
+
+        // Группируем по месяцам
+        const monthMap = {};
+
+        Object.entries(dailyTotals).forEach(([dateStr, total]) => {
+          const month = dateStr.slice(0, 7); // 'YYYY-MM'
+          if (!monthMap[month]) {
+            monthMap[month] = { sum: 0, count: 0 };
+          }
+          monthMap[month].sum += total;
+          monthMap[month].count += 1;
+        });
+
+        // Вычисляем среднее по дням
+        const avgPerMonth = Object.entries(monthMap).map(([month, { sum, count }]) => ({
+          month,
+          average: Math.round(sum / count)
+        }));
+
+        // Сортировка по месяцам
+        avgPerMonth.sort((a, b) => a.month.localeCompare(b.month));
+
+        setMonthlyAverages2025(avgPerMonth);
+
+        // Подготовка данных для сравнения 2024 vs 2025
+        const dailyTotalsByYear = {
+          '2024': {},
+          '2025': {}
+        };
+        
+        dataRows.forEach(row => {
+          const dateStr = row['Дата'];
+          const count = parseFloat(row['Количество']) || 0;
+          const dateObj = new Date(dateStr);
+          if (isNaN(dateObj)) return;
+        
+          const year = dateObj.getFullYear();
+          if (year !== 2024 && year !== 2025) return;
+        
+          const dayKey = dateObj.toISOString().slice(0, 10);
+          if (!dailyTotalsByYear[year][dayKey]) {
+            dailyTotalsByYear[year][dayKey] = 0;
+          }
+          dailyTotalsByYear[year][dayKey] += count;
+        });
+        
+        const monthlySums = {
+          '2024': {},
+          '2025': {}
+        };
+        
+        Object.entries(dailyTotalsByYear).forEach(([year, dayMap]) => {
+          Object.entries(dayMap).forEach(([day, total]) => {
+            const monthKey = day.slice(5, 7); // '01'...'12'
+            if (!monthlySums[year][monthKey]) {
+              monthlySums[year][monthKey] = { sum: 0, count: 0 };
+            }
+            monthlySums[year][monthKey].sum += total;
+            monthlySums[year][monthKey].count += 1;
+          });
+        });
+        
+
+        const monthOrder = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+
+        const combinedMonthly = monthOrder.map(month => ({
+          month,
+          avg2024: monthlySums['2024'][month] ? Math.round(monthlySums['2024'][month].sum / monthlySums['2024'][month].count) : 0,
+          avg2025: monthlySums['2025'][month] ? Math.round(monthlySums['2025'][month].sum / monthlySums['2025'][month].count) : 0
+        }));
+
+        setMonthlyComparison(combinedMonthly);
+
       });
   }, []);
 
@@ -120,6 +215,44 @@ const PeopleReportCharts = () => {
           {/* Общее количество над столбиком */}
           <Bar dataKey="total" fill="transparent">
             <LabelList dataKey="total" position="top" fontWeight="bold" />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <h2>Среднее количество людей в день по месяцам (2025)</h2>
+      <ResponsiveContainer width="100%" height={400}>
+        <BarChart data={monthlyAverages2025}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="month" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="average" name="Среднее в день" fill="#6dbb6d">
+            <LabelList dataKey="average" position="center" style={{ fill: 'black', fontSize: 12 }} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <h2>Сравнение среднего количества людей по месяцам: 2024 vs 2025</h2>
+      <ResponsiveContainer width="100%" height={400}>
+        <BarChart data={monthlyComparison}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis
+            dataKey="month"
+            tickFormatter={(m) =>
+              ({
+                '01': 'янв', '02': 'фев', '03': 'мар', '04': 'апр',
+                '05': 'май', '06': 'июн', '07': 'июл', '08': 'авг',
+                '09': 'сен', '10': 'окт', '11': 'ноя', '12': 'дек'
+              }[m] || m)
+            }
+          />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="avg2024" name="2024" fill="#8884d8">
+            <LabelList dataKey="avg2024" position="center" style={{ fill: 'black', fontSize: 12 }} />
+          </Bar>
+          <Bar dataKey="avg2025" name="2025" fill="#6dbb6d">
+            <LabelList dataKey="avg2025" position="" style={{ fill: 'black', fontSize: 12 }} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
