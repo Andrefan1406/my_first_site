@@ -49,6 +49,15 @@ const PeopleReportCharts = () => {
           Object.fromEntries(headers.map((h, i) => [h, row[i] || '']))
         );
 
+        const holidays = new Set([
+          '2025-01-01','2025-01-02','2025-03-10','2025-03-21','2025-03-24','2025-03-25',
+          '2025-05-01','2025-05-07','2025-05-09','2025-06-06','2025-07-07','2025-09-01',
+          '2025-10-27','2025-12-16',
+          '2024-01-01','2024-01-02','2024-03-08','2024-03-21','2024-03-22','2024-03-25',
+          '2024-05-01','2024-05-07','2024-05-08','2024-05-09','2024-07-08','2024-08-30',
+          '2024-10-25','2024-12-16'
+        ]);
+     
         const today = new Date();
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(today.getDate() - 7);
@@ -129,6 +138,8 @@ const PeopleReportCharts = () => {
           '2025': {}
         };
         
+        const todayStr = new Date().toISOString().slice(0, 10);
+
         dataRows.forEach(row => {
           const dateStr = row['Дата'];
           const count = parseFloat(row['Количество']) || 0;
@@ -139,11 +150,19 @@ const PeopleReportCharts = () => {
           if (year !== 2024 && year !== 2025) return;
         
           const dayKey = dateObj.toISOString().slice(0, 10);
+          if (dayKey === todayStr) return; // исключаем сегодняшнюю дату
+          if (holidays.has(dayKey)) return; // исключаем праздничные дни
+        
+          const dayOfWeek = dateObj.getDay();
+          if (dayOfWeek === 0 || dayOfWeek === 6) return; // исключаем выходные (вс и сб)
+        
           if (!dailyTotalsByYear[year][dayKey]) {
             dailyTotalsByYear[year][dayKey] = 0;
           }
           dailyTotalsByYear[year][dayKey] += count;
         });
+        
+        
         
         const monthlySums = {
           '2024': {},
@@ -231,7 +250,7 @@ const PeopleReportCharts = () => {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <h2>Сравнение среднего количества людей по месяцам: 2024 vs 2025</h2>
+      <h2>Сравнение среднего количества людей по месяцам: 2024 vs 2025 (выходные и праздники исключены)</h2>
       <ResponsiveContainer width="100%" height={400}>
         <BarChart data={monthlyComparison}>
           <CartesianGrid strokeDasharray="3 3" />
