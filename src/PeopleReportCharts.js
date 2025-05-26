@@ -57,7 +57,7 @@ const PeopleReportCharts = () => {
           '2024-05-01','2024-05-07','2024-05-08','2024-05-09','2024-07-08','2024-08-30',
           '2024-10-25','2024-12-16'
         ]);
-     
+
         const today = new Date();
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(today.getDate() - 7);
@@ -65,132 +65,106 @@ const PeopleReportCharts = () => {
         const byDate = {};
         const profSet = new Set();
 
+        const dailyTotalsByYear = { '2024': {}, '2025': {} };
+        const dailyProfessionTotals2025 = {};
+        const workingDaysSetByMonth = { '2024': {}, '2025': {} };
+
         dataRows.forEach(row => {
           const dateStr = row['Дата'];
-          const profession = row['Профессия'] || 'Без профессии';
           const count = parseFloat(row['Количество']) || 0;
+          const profession = row['Профессия'] || 'Без профессии';
           const dateObj = new Date(dateStr);
+          const year = dateObj.getFullYear();
+          const dayKey = dateStr.slice(0, 10);
+          const monthKey = dateStr.slice(0, 7);
+          const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+          const isHoliday = holidays.has(dayKey);
 
+          // Для первого графика (7 дней)
           if (!isNaN(dateObj) && dateObj >= sevenDaysAgo && dateObj <= today) {
-            const key = dateObj.toISOString().slice(0, 10);
-            if (!byDate[key]) byDate[key] = { date: key };
-            byDate[key][profession] = (byDate[key][profession] || 0) + count;
+            if (!byDate[dayKey]) byDate[dayKey] = { date: dayKey };
+            byDate[dayKey][profession] = (byDate[dayKey][profession] || 0) + count;
             profSet.add(profession);
+          }
+
+          // Фильтруем только рабочие дни
+          if (!isNaN(dateObj) && !isWeekend && !isHoliday) {
+            // Для сравнения 2024 vs 2025
+            if (year === 2024 || year === 2025) {
+              if (!dailyTotalsByYear[year][dayKey]) dailyTotalsByYear[year][dayKey] = 0;
+              dailyTotalsByYear[year][dayKey] += count;
+
+              if (!workingDaysSetByMonth[year][monthKey]) workingDaysSetByMonth[year][monthKey] = new Set();
+              workingDaysSetByMonth[year][monthKey].add(dayKey);
+            }
+
+            // Для второго графика (по профессиям в 2025)
+            if (year === 2025) {
+              if (!dailyProfessionTotals2025[dayKey]) dailyProfessionTotals2025[dayKey] = {};
+              dailyProfessionTotals2025[dayKey][profession] = (dailyProfessionTotals2025[dayKey][profession] || 0) + count;
+
+              if (!workingDaysSetByMonth['2025'][monthKey]) workingDaysSetByMonth['2025'][monthKey] = new Set();
+              workingDaysSetByMonth['2025'][monthKey].add(dayKey);
+            }
           }
         });
 
-        
-
+        // Первый график
         const chart = Object.values(byDate).map(item => {
           const total = Object.entries(item)
             .filter(([k]) => k !== 'date')
             .reduce((sum, [, val]) => sum + val, 0);
           return { ...item, total };
         });
-
         setChartData(chart);
         setProfessions([...profSet]);
-        // Собираем суммы по дням за 2025
-        const dailyTotals = {};
 
-        dataRows.forEach(row => {
-          const dateStr = row['Дата'];
-          const count = parseFloat(row['Количество']) || 0;
-          const dateObj = new Date(dateStr);
-
-          const todayStr = new Date().toISOString().slice(0, 10);
-
-          if (dateObj.getFullYear() === 2025) {
-            const dayKey = dateObj.toISOString().slice(0, 10);
-            
-            if (dayKey !== todayStr) {
-              dailyTotals[dayKey] = (dailyTotals[dayKey] || 0) + count;
+        // Второй график (stacked bar по месяцам)
+        const monthlyProfessionTotals = {};
+        Object.entries(dailyProfessionTotals2025).forEach(([day, profData]) => {
+          const monthKey = day.slice(0, 7);
+          if (!monthlyProfessionTotals[monthKey]) monthlyProfessionTotals[monthKey] = {};
+          Object.entries(profData).forEach(([prof, val]) => {
+            if (!monthlyProfessionTotals[monthKey][prof]) {
+              monthlyProfessionTotals[monthKey][prof] = 0;
             }
-          }
-        });
-
-        // Группируем по месяцам
-        const monthMap = {};
-
-        Object.entries(dailyTotals).forEach(([dateStr, total]) => {
-          const month = dateStr.slice(0, 7); // 'YYYY-MM'
-          if (!monthMap[month]) {
-            monthMap[month] = { sum: 0, count: 0 };
-          }
-          monthMap[month].sum += total;
-          monthMap[month].count += 1;
-        });
-
-        // Вычисляем среднее по дням
-        const avgPerMonth = Object.entries(monthMap).map(([month, { sum, count }]) => ({
-          month,
-          average: Math.round(sum / count)
-        }));
-
-        // Сортировка по месяцам
-        avgPerMonth.sort((a, b) => a.month.localeCompare(b.month));
-
-        setMonthlyAverages2025(avgPerMonth);
-
-        // Подготовка данных для сравнения 2024 vs 2025
-        const dailyTotalsByYear = {
-          '2024': {},
-          '2025': {}
-        };
-        
-        const todayStr = new Date().toISOString().slice(0, 10);
-
-        dataRows.forEach(row => {
-          const dateStr = row['Дата'];
-          const count = parseFloat(row['Количество']) || 0;
-          const dateObj = new Date(dateStr);
-          if (isNaN(dateObj)) return;
-        
-          const year = dateObj.getFullYear();
-          if (year !== 2024 && year !== 2025) return;
-        
-          const dayKey = dateObj.toISOString().slice(0, 10);
-          if (dayKey === todayStr) return; // исключаем сегодняшнюю дату
-          if (holidays.has(dayKey)) return; // исключаем праздничные дни
-        
-          const dayOfWeek = dateObj.getDay();
-          if (dayOfWeek === 0 || dayOfWeek === 6) return; // исключаем выходные (вс и сб)
-        
-          if (!dailyTotalsByYear[year][dayKey]) {
-            dailyTotalsByYear[year][dayKey] = 0;
-          }
-          dailyTotalsByYear[year][dayKey] += count;
-        });
-        
-        
-        
-        const monthlySums = {
-          '2024': {},
-          '2025': {}
-        };
-        
-        Object.entries(dailyTotalsByYear).forEach(([year, dayMap]) => {
-          Object.entries(dayMap).forEach(([day, total]) => {
-            const monthKey = day.slice(5, 7); // '01'...'12'
-            if (!monthlySums[year][monthKey]) {
-              monthlySums[year][monthKey] = { sum: 0, count: 0 };
-            }
-            monthlySums[year][monthKey].sum += total;
-            monthlySums[year][monthKey].count += 1;
+            monthlyProfessionTotals[monthKey][prof] += val;
           });
         });
-        
+        const avgPerMonthProfession = Object.entries(monthlyProfessionTotals).map(([month, profData]) => {
+          const workingDaysCount = workingDaysSetByMonth['2025'][month]?.size || 1;
+          const result = { month };
+          let total = 0;
+          Object.entries(profData).forEach(([prof, sum]) => {
+            const avg = Math.round(sum / workingDaysCount);
+            result[prof] = avg;
+            total += avg;
+          });
+          result.total = total;
+          return result;
+        });
+        setMonthlyAverages2025(avgPerMonthProfession);
 
+        // Третий график (сравнение годов)
+        const monthlySums = { '2024': {}, '2025': {} };
+        Object.entries(dailyTotalsByYear).forEach(([year, dayMap]) => {
+          Object.entries(dayMap).forEach(([day, total]) => {
+            const monthKey = day.slice(5, 7);
+            if (!monthlySums[year][monthKey]) monthlySums[year][monthKey] = 0;
+            monthlySums[year][monthKey] += total;
+          });
+        });
         const monthOrder = ['01','02','03','04','05','06','07','08','09','10','11','12'];
-
-        const combinedMonthly = monthOrder.map(month => ({
-          month,
-          avg2024: monthlySums['2024'][month] ? Math.round(monthlySums['2024'][month].sum / monthlySums['2024'][month].count) : 0,
-          avg2025: monthlySums['2025'][month] ? Math.round(monthlySums['2025'][month].sum / monthlySums['2025'][month].count) : 0
-        }));
-
+        const combinedMonthly = monthOrder.map(month => {
+          const avg2024 = monthlySums['2024'][month] && workingDaysSetByMonth['2024'][`2024-${month}`]
+            ? Math.round(monthlySums['2024'][month] / workingDaysSetByMonth['2024'][`2024-${month}`].size)
+            : 0;
+          const avg2025 = monthlySums['2025'][month] && workingDaysSetByMonth['2025'][`2025-${month}`]
+            ? Math.round(monthlySums['2025'][month] / workingDaysSetByMonth['2025'][`2025-${month}`].size)
+            : 0;
+          return { month, avg2024, avg2025 };
+        });
         setMonthlyComparison(combinedMonthly);
-
       });
   }, []);
 
@@ -207,49 +181,47 @@ const PeopleReportCharts = () => {
       </ul>
     );
   };
-  
+
   return (
-    <div style={{ width: '100vw', height: '100vh', padding: '20px', boxSizing: 'border-box' }}>
+    <div style={{ width: '100vw', height: '100vh', padding: '20px', boxSizing: 'border-box', overflowY: 'auto' }}>
       <h2>Накопительный график по профессиям за последние 7 дней</h2>
-      <ResponsiveContainer width="100%" height={"90%"}>
+      <ResponsiveContainer width="100%" height={800}>
         <BarChart data={chartData} stackOffset="normal">
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="date" tickFormatter={formatDateWithWeekday} />
-          <YAxis  domain={[0, (dataMax) => Math.max(1000, Math.ceil(dataMax * 1.2))]}/>
+          <YAxis domain={[0, (dataMax) => Math.max(1000, Math.ceil(dataMax * 1.2))]} />
           <Tooltip content={renderCustomTooltip} />
           <Legend content={renderCustomLegend} verticalAlign="middle" align="right" layout="vertical" />
-          
           {professions.map((prof, i) => (
-            <Bar
-              key={prof}
-              dataKey={prof}
-              stackId="people"
-              name={prof}
-              fill={`hsl(${(i * 55) % 360}, 70%, 60%)`}
-            >
+            <Bar key={prof} dataKey={prof} stackId="people" name={prof} fill={`hsl(${(i * 55) % 360}, 70%, 60%)`}>
               <LabelList dataKey={prof} position="center" style={{ fontSize: 10, fontWeight: 'bold', fill: 'black' }} />
             </Bar>
           ))}
-
-          {/* Общее количество над столбиком */}
           <Bar dataKey="total" fill="transparent">
             <LabelList dataKey="total" position="top" fontWeight="bold" />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <h2>Среднее количество людей в день по месяцам (2025)</h2>
-      <ResponsiveContainer width="100%" height={400}>
-        <BarChart data={monthlyAverages2025}>
+
+      <h2>Среднее количество людей в день по месяцам (2025, накопительно по профессиям)</h2>
+      <ResponsiveContainer width="100%" height={800}>
+        <BarChart data={monthlyAverages2025} stackOffset="normal">
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="month" />
           <YAxis />
-          <Tooltip />
-          <Legend />
-          <Bar dataKey="average" name="Среднее в день" fill="#6dbb6d">
-            <LabelList dataKey="average" position="center" style={{ fill: 'black', fontSize: 12 }} />
+          <Tooltip content={renderCustomTooltip} />
+          <Legend content={renderCustomLegend} verticalAlign="middle" align="right" layout="vertical" />
+          {professions.map((prof, i) => (
+            <Bar key={prof} dataKey={prof} stackId="monthly" name={prof} fill={`hsl(${(i * 55) % 360}, 70%, 60%)`}>
+              <LabelList dataKey={prof} position="center" style={{ fill: 'black', fontSize: 10 }} />
+            </Bar>
+          ))}
+          <Bar dataKey="total" fill="transparent">
+            <LabelList dataKey="total" position="top" fontWeight="bold" />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+
       <h2>Сравнение среднего количества людей по месяцам: 2024 vs 2025 (выходные и праздники исключены)</h2>
       <ResponsiveContainer width="100%" height={400}>
         <BarChart data={monthlyComparison}>
@@ -271,7 +243,7 @@ const PeopleReportCharts = () => {
             <LabelList dataKey="avg2024" position="center" style={{ fill: 'black', fontSize: 12 }} />
           </Bar>
           <Bar dataKey="avg2025" name="2025" fill="#6dbb6d">
-            <LabelList dataKey="avg2025" position="" style={{ fill: 'black', fontSize: 12 }} />
+            <LabelList dataKey="avg2025" position="center" style={{ fill: 'black', fontSize: 12 }} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
