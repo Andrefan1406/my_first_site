@@ -55,7 +55,10 @@ const PeopleReportCharts = () => {
           '2025-10-27','2025-12-16',
           '2024-01-01','2024-01-02','2024-03-08','2024-03-21','2024-03-22','2024-03-25',
           '2024-05-01','2024-05-07','2024-05-08','2024-05-09','2024-07-08','2024-08-30',
-          '2024-10-25','2024-12-16'
+          '2024-10-25','2024-12-16',
+          '2023-01-02','2023-01-03','2023-03-08','2023-03-21','2023-03-22','2023-03-23',
+          '2023-05-01','2023-05-08','2023-05-09','2023-06-28','2023-07-06',
+          '2023-08-30','2023-10-25','2023-12-16'
         ]);
 
         const today = new Date();
@@ -65,9 +68,9 @@ const PeopleReportCharts = () => {
         const byDate = {};
         const profSet = new Set();
 
-        const dailyTotalsByYear = { '2024': {}, '2025': {} };
+        const dailyTotalsByYear = { '2023': {}, '2024': {}, '2025': {} };
         const dailyProfessionTotals2025 = {};
-        const workingDaysSetByMonth = { '2024': {}, '2025': {} };
+        const workingDaysSetByMonth = { '2023': {}, '2024': {}, '2025': {} };
 
         dataRows.forEach(row => {
           const dateStr = row['Дата'];
@@ -90,7 +93,7 @@ const PeopleReportCharts = () => {
           // Фильтруем только рабочие дни
           if (!isNaN(dateObj) && !isWeekend && !isHoliday) {
             // Для сравнения 2024 vs 2025
-            if (year === 2024 || year === 2025) {
+            if (year === 2023 || year === 2024 || year === 2025) {
               if (!dailyTotalsByYear[year][dayKey]) dailyTotalsByYear[year][dayKey] = 0;
               dailyTotalsByYear[year][dayKey] += count;
 
@@ -146,7 +149,7 @@ const PeopleReportCharts = () => {
         setMonthlyAverages2025(avgPerMonthProfession);
 
         // Третий график (сравнение годов)
-        const monthlySums = { '2024': {}, '2025': {} };
+        const monthlySums = { '2023': {},'2024': {}, '2025': {} };
         Object.entries(dailyTotalsByYear).forEach(([year, dayMap]) => {
           Object.entries(dayMap).forEach(([day, total]) => {
             const monthKey = day.slice(5, 7);
@@ -156,13 +159,16 @@ const PeopleReportCharts = () => {
         });
         const monthOrder = ['01','02','03','04','05','06','07','08','09','10','11','12'];
         const combinedMonthly = monthOrder.map(month => {
+          const avg2023 = monthlySums['2023'][month] && workingDaysSetByMonth['2023'][`2023-${month}`]
+            ? Math.round(monthlySums['2023'][month] / workingDaysSetByMonth['2023'][`2023-${month}`].size)
+            : 0;
           const avg2024 = monthlySums['2024'][month] && workingDaysSetByMonth['2024'][`2024-${month}`]
             ? Math.round(monthlySums['2024'][month] / workingDaysSetByMonth['2024'][`2024-${month}`].size)
             : 0;
           const avg2025 = monthlySums['2025'][month] && workingDaysSetByMonth['2025'][`2025-${month}`]
             ? Math.round(monthlySums['2025'][month] / workingDaysSetByMonth['2025'][`2025-${month}`].size)
             : 0;
-          return { month, avg2024, avg2025 };
+          return { month, avg2023, avg2024, avg2025 };
         });
         setMonthlyComparison(combinedMonthly);
       });
@@ -222,7 +228,7 @@ const PeopleReportCharts = () => {
         </BarChart>
       </ResponsiveContainer>
 
-      <h2>Сравнение среднего количества людей по месяцам: 2024 vs 2025 (выходные и праздники исключены)</h2>
+      <h2>Сравнение среднего количества людей по месяцам: 2023 vs 2024 vs 2025 (выходные и праздники исключены)</h2>
       <ResponsiveContainer width="100%" height={400}>
         <BarChart data={monthlyComparison}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -239,6 +245,9 @@ const PeopleReportCharts = () => {
           <YAxis />
           <Tooltip />
           <Legend />
+          <Bar dataKey="avg2023" name="2023" fill="#A9A9A9">
+            <LabelList dataKey="avg2023" position="center" style={{ fill: 'black', fontSize: 12 }} />
+          </Bar>
           <Bar dataKey="avg2024" name="2024" fill="#8884d8">
             <LabelList dataKey="avg2024" position="center" style={{ fill: 'black', fontSize: 12 }} />
           </Bar>
