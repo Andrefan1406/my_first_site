@@ -19,7 +19,14 @@ const ReportsDashboardPage = () => {
       >
         Отчётность по технике
       </button>
+      <button 
+        onClick={() => navigate('/concrete-report')} 
+        style={styles.button}
+      >
+        Отчётность БРУ
+      </button>
     </div>
+    
   );
 };
 
