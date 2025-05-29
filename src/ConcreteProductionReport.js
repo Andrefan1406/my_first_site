@@ -93,7 +93,7 @@ const ConcreteProductionReport = () => {
           const rowDateParts = row["Дата отгрузки"]?.split(".");
           if (!rowDateParts || rowDateParts.length !== 3) return false;
 
-          const [_, month, year] = rowDateParts;
+          const [, month, year] = rowDateParts;
           const rowYear = parseInt(year, 10);
           const rowMonth = parseInt(month, 10);
 
@@ -126,7 +126,7 @@ const ConcreteProductionReport = () => {
 
     tableData.forEach((row) => {
       if (row["Материал"]?.trim() === "Бетон" && row["Дата отгрузки"]) {
-        const [_, month, year] = row["Дата отгрузки"].split(".");
+        const [, month, year] = row["Дата отгрузки"].split(".");
         if (year === "2025") {
           const idx = parseInt(month, 10) - 1;
           const shipped = parseFloat((row["Фактический объём"] || "0").replace(",", "."));
