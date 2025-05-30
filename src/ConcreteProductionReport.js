@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import Papa from "papaparse";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend, LabelList
 } from "recharts";
 
 const csvUrl =
@@ -20,7 +21,7 @@ const ConcreteProductionReport = () => {
   const [dailyConcreteTotal, setDailyConcreteTotal] = useState(0);
   const [monthlySolutionTotal, setMonthlySolutionTotal] = useState(0);
   const [dailySolutionTotal, setDailySolutionTotal] = useState(0);
-  const [concreteMonthlyData2025, setConcreteMonthlyData2025] = useState([]);
+  const [concreteMonthlyData, setConcreteMonthlyData] = useState([]);
 
   const excludedColumns = ["Дата отгрузки", "Фактический объём", "Отметка о исполнении", "Категория"];
 
@@ -118,25 +119,28 @@ const ConcreteProductionReport = () => {
     setMonthlySolutionTotal(calcTotal("Раствор", false));
     setDailySolutionTotal(calcTotal("Раствор", true));
 
-    // Данные для графика по месяцам 2025 года
+    // Данные для графика за 2024 и 2025 годы
     const monthlyData = Array.from({ length: 12 }, (_, i) => ({
-      month: `${i + 1}-2025`,
-      volume: 0,
+      month: `${i + 1}`,
+      "2024": 0,
+      "2025": 0,
     }));
 
     tableData.forEach((row) => {
       if (row["Материал"]?.trim() === "Бетон" && row["Дата отгрузки"]) {
         const [, month, year] = row["Дата отгрузки"].split(".");
-        if (year === "2025") {
-          const idx = parseInt(month, 10) - 1;
-          const shipped = parseFloat((row["Фактический объём"] || "0").replace(",", "."));
-          if (!isNaN(shipped)) {
-            monthlyData[idx].volume += shipped;
+        const idx = parseInt(month, 10) - 1;
+        const shipped = parseFloat((row["Фактический объём"] || "0").replace(",", "."));
+        if (!isNaN(shipped)) {
+          if (year === "2024") {
+            monthlyData[idx]["2024"] += shipped;
+          } else if (year === "2025") {
+            monthlyData[idx]["2025"] += shipped;
           }
         }
       }
     });
-    setConcreteMonthlyData2025(monthlyData);
+    setConcreteMonthlyData(monthlyData);
 
   }, [tableData, selectedDate]);
 
@@ -241,11 +245,11 @@ const ConcreteProductionReport = () => {
         </div>
       </div>
 
-      <h2>График отгрузки бетона по месяцам 2025 года</h2>
+      <h2>График отгрузки бетона по месяцам 2024 и 2025 годов</h2>
       <div style={{ width: "100%", height: 400, background: "#f0f0f0", borderRadius: "8px", padding: "20px" }}>
         <ResponsiveContainer>
           <BarChart
-            data={concreteMonthlyData2025}
+            data={concreteMonthlyData}
             margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#ccc" />
@@ -265,12 +269,11 @@ const ConcreteProductionReport = () => {
             />
             <Tooltip formatter={(value) => `${value.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} м3`} />
             <Legend verticalAlign="top" height={36} />
-            <Bar dataKey="volume" name="Отгружено, м3" fill="#4caf50" radius={[4, 4, 0, 0]}>
-              <LabelList
-                dataKey="volume"
-                position="top"
-                formatter={(value) => value.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}
-              />
+            <Bar dataKey="2024" name="2024" fill="#4caf50" radius={[4, 4, 0, 0]}>
+              <LabelList dataKey="2024" position="top" formatter={(value) => value.toLocaleString("ru-RU", { maximumFractionDigits: 0 })} />
+            </Bar>
+            <Bar dataKey="2025" name="2025" fill="#2196f3" radius={[4, 4, 0, 0]}>
+              <LabelList dataKey="2025" position="top" formatter={(value) => value.toLocaleString("ru-RU", { maximumFractionDigits: 0 })} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
