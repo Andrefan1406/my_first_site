@@ -70,9 +70,9 @@ const PeopleReportPage = () => {
   }, [requests, wasSubmitted, hasEmptyFields]);
 
   useEffect(() => {
-    const lastSubmittedDate = localStorage.getItem("lastPeopleReportSubmitDate");
-    setIsAlreadySubmitted(lastSubmittedDate === selectedDate);
-  }, [selectedDate]);
+    const submittedDates = JSON.parse(localStorage.getItem("submittedDates") || "{}");
+    setIsAlreadySubmitted(submittedDates[selectedDate] === true);
+  }, [selectedDate]);  
 
   const handleChange = (index, field, value) => {
     const newRequests = [...requests];
@@ -122,11 +122,12 @@ const PeopleReportPage = () => {
       return;
     }
 
-    const lastSubmittedDate = localStorage.getItem("lastPeopleReportSubmitDate");
-    if (lastSubmittedDate === selectedDate) {
+    const submittedDates = JSON.parse(localStorage.getItem("submittedDates") || "{}");
+    if (submittedDates[selectedDate]) {
       alert("Вы уже отправляли отчёт на эту дату. Повторная отправка запрещена.");
       return;
     }
+
 
     setIsSubmitting(true);
     setShowModal(false);
@@ -146,7 +147,10 @@ const PeopleReportPage = () => {
         body: JSON.stringify(updatedRequests)
       });
 
-      localStorage.setItem("lastPeopleReportSubmitDate", selectedDate);
+      const submittedDates = JSON.parse(localStorage.getItem("submittedDates") || "{}");
+      submittedDates[selectedDate] = true;
+      localStorage.setItem("submittedDates", JSON.stringify(submittedDates));
+
       setIsAlreadySubmitted(true);
       alert("Отчёт успешно отправлен!");
     } catch (e) {
