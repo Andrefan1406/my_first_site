@@ -69,6 +69,9 @@ const RequestPage = () => {
   const [userFullName, setUserFullName] = useState("");
   const [userPhone, setUserPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+  const [confirmedResend, setConfirmedResend] = useState(false);
+
 
   const getCurrentDate = () => {
     const today = new Date();
@@ -136,6 +139,13 @@ const RequestPage = () => {
         return;
       }
     }
+    const lastDate = localStorage.getItem("lastRequestDate");
+    if (lastDate === selectedDate) {
+      if (lastDate === selectedDate && !confirmedResend) {
+        setIsWarningModalOpen(true);
+        return;
+      }
+    }
     setIsModalOpen(true);
   };
 
@@ -167,6 +177,7 @@ const RequestPage = () => {
         body: JSON.stringify(updatedRequests),
       });
       localStorage.setItem("lastRequestData", JSON.stringify(updatedRequests));
+      localStorage.setItem("lastRequestDate", selectedDate);
       alert("Заявка отправлена!");
       setRequests([{ startTime: "", endTime: "", objectCategory: "", object: "", position: "", category: "", equipmentName: "", quantity: "", note: "" }]);
       setSelectedDate(getCurrentDate());
@@ -479,6 +490,34 @@ const RequestPage = () => {
       </div>
 
       {/* Модальное окно остается без изменений */}
+      {isWarningModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalContent}>
+            <span className={styles.modalClose} onClick={() => setIsWarningModalOpen(false)}>&times;</span>
+            <h2>Заявка уже отправлена</h2>
+            <p>На эту дату вы уже отправляли заявку. Вы уверены, что хотите отправить ещё одну?</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button
+                className={styles.removeButton}
+                onClick={() => setIsWarningModalOpen(false)}
+              >
+                Отмена
+              </button>
+              <button
+                className={styles.submitButton}
+                onClick={() => {
+                  setIsWarningModalOpen(false);
+                  setConfirmedResend(true);
+                  setIsModalOpen(true); // показываем основную форму с ФИО и телефоном
+                }}
+              >
+                Отправить ещё одну
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalContent}>
