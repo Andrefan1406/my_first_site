@@ -1,36 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React  from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaEye } from 'react-icons/fa';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const [count, setCount] = useState(null);
-
-  useEffect(() => {
-    const alreadyVisited = sessionStorage.getItem('visited_homepage');
-    const SERVER_URL = "https://visitor-counter-server.onrender.com";
-
-    const fetchCount = () => {
-      fetch(`${SERVER_URL}/api/visitor-count`)
-        .then(res => res.json())
-        .then(data => setCount(data.count))
-        .catch(err => console.error("Ошибка при получении счётчика:", err));
-    };
-
-    if (alreadyVisited) {
-      fetchCount();
-    } else {
-      fetch(`${SERVER_URL}/api/increment-visitor`, {
-        method: "POST"
-      })
-        .then(res => res.json())
-        .then(data => {
-          setCount(data.count);
-          sessionStorage.setItem('visited_homepage', 'true');
-        })
-        .catch(err => console.error("Ошибка при увеличении счётчика:", err));
-    }
-  }, []);
 
   return (
     <div style={styles.container}>
@@ -60,11 +32,6 @@ const HomePage = () => {
       <button onClick={() => navigate('/concrete-request2')} style={styles.button}>
         В разработке
       </button>
-
-      {/* Счётчик просмотров */}
-      <div style={styles.viewCounter}>
-        <FaEye style={{ marginRight: '5px' }} /> {count !== null ? count : '...'}
-      </div>
     </div>
   );
 };
