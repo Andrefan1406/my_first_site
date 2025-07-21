@@ -14,7 +14,7 @@ const HomePage = () => {
       <button onClick={() => navigate('/request')} style={styles.button}>
         Заявка на технику
       </button>
-      <button onClick={() => navigate('/concrete-request')} style={styles.button}>
+      <button onClick={() => navigate('/concrete-request2')} style={styles.button}>
         Заявка на бетон и раствор
       </button>
       <button onClick={() => navigate('/electricans-request')} style={styles.button}>
@@ -33,7 +33,7 @@ const HomePage = () => {
         В разработке
       </button>
       <button onClick={() => navigate('/blbrequest')} style={styles.button}>
-        Заявка на брусчатку
+        Заявка на брусчатку (В разработке)
       </button>
     </div>
   );
