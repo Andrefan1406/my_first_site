@@ -29,9 +29,9 @@ const HomePage = () => {
       <button onClick={() => navigate('/reports-dashboard')} style={{ ...styles.button, background: 'red' }}>
         Графики и отчёты
       </button>
-      <button onClick={() => navigate('/concrete-request2')} style={styles.button}>
-        В разработке
-      </button>
+      {/* <button onClick={() => navigate('/concrete-request2')} style={styles.button}>
+        В разработке */}
+      {/* </button> */}
       <button onClick={() => navigate('/blbrequest')} style={styles.button}>
         Заявка на брусчатку (В разработке)
       </button>

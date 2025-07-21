@@ -8,11 +8,11 @@ const BLBRequestPage = () => {
             <table className={styles.requestTable}>
                 <thead>
                     <tr>
-                        <th>Колонка 1</th>
-                        <th>Колонка 2</th>
-                        <th>Колонка 3</th>
-                        <th>Колонка 4</th>
-                        <th>Колонка 5</th>
+                        <th>Дата</th>
+                        <th>Изделие</th>
+                        <th>Марка</th>
+                        <th>Цвет</th>
+                        <th>Размеры</th>
                     </tr>
                 </thead>
             </table>
