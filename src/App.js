@@ -12,6 +12,7 @@ import EquipmentReportPage from './EquipmentReportPage';
 import PeopleReportCharts from './PeopleReportCharts';
 import ConcreteProductionReport from './ConcreteProductionReport';
 import ConcreteRequestPage2 from './ConcreteRequestPage2'; 
+import BLBRequestPage from './BLBRequestPage';
 
 const App = () => {
   return (
@@ -29,6 +30,7 @@ const App = () => {
         <Route path="/people-charts" element={<PeopleReportCharts />} />
         <Route path="/concrete-report" element={<ConcreteProductionReport />} />
         <Route path="/concrete-request2" element={<ConcreteRequestPage2 />} />
+        <Route path="/blbrequest" element={<BLBRequestPage />} />
       </Routes>
     </Router>
   );
