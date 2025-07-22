@@ -7,6 +7,7 @@ import {
  } from './data/constructionData2';
 import Select from 'react-select';
 
+// eslint-disable-next-line no-unused-vars
 const productBrandOptions = {
     'Брусчатка' : ["Б.1.П.7",  "Б.2.П.7", "Б.3.П.7", "Б.5.П.7", "Б.6.П.7", "Б.7.П.7", "Б.8.П.7", 
         "Б.9.П.7", "Б.10.П.7", "Б.11.П.7", "Б.12.П.7", "Б.13.П.7", "Б.14.П.7", "Б.15.П.7"],
