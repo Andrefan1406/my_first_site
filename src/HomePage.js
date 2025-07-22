@@ -30,7 +30,7 @@ const HomePage = () => {
         Графики и отчёты
       </button>
       <button onClick={() => navigate('/blbrequest')} style={styles.button}>
-        Заявка на брусчатку (В разработке)
+        Заявка на брусчатку (Тестирование)
       </button>
     </div>
   );
