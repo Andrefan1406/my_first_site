@@ -760,6 +760,16 @@ const ConcreteRequestPage2 = () => {
           <button type='submit' className={styles.submitButton}>Отправить заявку</button>
         </div>
       </form>
+      <div style={{ marginTop: '40px' }}>
+        <h3>Текущие заявки</h3>
+        <iframe
+          src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTSu48SFcG0-dZpjkW3Z3uN3jJF0QPkpFUroD1YHWRj_8jy7ZwND096Rgd60fDiQGPHMOY8TDVy-_fl/pubhtml?gid=1030005960&single=true&widget=true&headers=false"
+          width="100%"
+          height="600"
+          style={{ border: 'none', backgroundColor: 'white' }}
+          title="Текущие заявки"
+        ></iframe>
+      </div>
       {showModal && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
