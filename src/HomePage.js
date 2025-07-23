@@ -33,7 +33,7 @@ const HomePage = () => {
         Заявка на брусчатку (Тестирование)
       </button>
       <button onClick={() => navigate('/znbrequest')} style={styles.button}>
-        Заявка на ж/б изделия (Разработка)
+        Заявка на ж/б изделия (Тестирование)
       </button>
     </div>
   );

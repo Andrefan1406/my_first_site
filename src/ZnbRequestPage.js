@@ -131,7 +131,7 @@ const ZnbRequestPage = () => {
   formData.append('data', payload);
 
   try {
-    await fetch('https://script.google.com/macros/s/AKfycbwowotIxoCnGcf24SR8YxHxI8_PeKH0EP9Dmv4Tw9f4Fn14eUsa4TMKOj_TWzpt5PGAyQ/exec', {
+    await fetch('https://script.google.com/macros/s/AKfycbxcWkEmO50NPCIubp2VkZV73QuvNkCMhItjgn1ecy2BxRWglx3l7kGXzIzrBHT5FETuoQ/exec', {
       method: 'POST',
       mode: 'no-cors',
       body: formData
@@ -244,6 +244,7 @@ const ZnbRequestPage = () => {
                     onChange={e => handleChange(e, index)}
                     style={{
                       width: '100%',
+                      height: '36px',
                       border: '1px solid #ccc',
                       borderRadius: 4,
                       fontSize: '12px',

@@ -285,6 +285,7 @@ const BLBRequestPage = () => {
                     onChange={e => handleChange(e, index)}
                     style={{
                       width: '100%',
+                      height: '36px',
                       border: '1px solid #ccc',
                       borderRadius: 4,
                       fontSize: '12px',
