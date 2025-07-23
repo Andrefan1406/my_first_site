@@ -32,6 +32,9 @@ const HomePage = () => {
       <button onClick={() => navigate('/blbrequest')} style={styles.button}>
         Заявка на брусчатку (Тестирование)
       </button>
+      <button onClick={() => navigate('/znbrequest')} style={styles.button}>
+        Заявка на ж/б изделия (Разработка)
+      </button>
     </div>
   );
 };
