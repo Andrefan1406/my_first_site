@@ -7,6 +7,39 @@ import {
 } from './data/constructionData2';
 import Select from 'react-select';
 
+const selectMultiLineStyles = {
+  control: (base) => ({
+    ...base,
+    minHeight: '30px',
+    fontSize: '12px',
+    whiteSpace: 'normal',     // перенос текста в поле
+    wordBreak: 'break-word',
+    lineHeight: '1.2',
+    maxWidth: '140px',        // ограничение ширины, чтобы был перенос
+  }),
+  menu: (base) => ({
+    ...base,
+    fontSize: '12px',
+    whiteSpace: 'normal',     // перенос в выпадающем меню
+    wordBreak: 'break-word',
+    lineHeight: '1.2',
+  }),
+  singleValue: (base) => ({
+    ...base,
+    whiteSpace: 'normal',     // перенос выбранного текста
+    wordBreak: 'break-word',
+    overflow: 'visible',
+    textOverflow: 'clip',
+    lineHeight: '1.2',
+  }),
+  option: (base) => ({
+    ...base,
+    whiteSpace: 'normal',     // перенос длинных опций в списке
+    wordBreak: 'break-word',
+    lineHeight: '1.2',
+  }),
+};
+
 // Справочники для второй группы
 const productBrandOptions = {
     'Брусчатка': ["Б.1.П.7", "Б.2.П.7", "Б.3.П.7", "Б.5.П.7", "Б.6.П.7", "Б.7.П.7", "Б.8.П.7",
@@ -31,12 +64,12 @@ const branColorsOption = {
 };
 
 const branDimensionsOption = {
-    'Б.1.П.7': ['160х160х7', '160х200х7', '160х240х7'], 'Б.10.П.7': ['320х320х7'],
-    'Б.11.П.7': ['320х320х7'], 'Б.12.П.7': ['320х160х7'], 'Б.13.П.7': ['120х120х7', '120х90х7', '180х120х7'],
-    'Б.14.П.7': ['120х120х7', '120х90х7', '180х120х7'], 'Б.15.П.7': ['120х120х7', '120х90х7', '180х120х7'],
-    'Б.2.П.7': ['160х160х7', '160х200х7', '160х240х7'], 'Б.3.П.7': ['160х160х7', '160х200х7', '160х240х7'],
-    'Б.5.П.7': ['100х200х7'], 'Б.6.П.7': ['320х160х7'], 'Б.7.П.7': ['320х160х7'], 'Б.8.П.7': ['320х160х7'],
-    'Б.9.П.7': ['320х320х7']    
+    'Б.1.П.7': ['160*160*7,\n160*200*7,\n160*240*7'], 'Б.10.П.7': ['320*320*7'],
+    'Б.11.П.7': ['320*320*7'], 'Б.12.П.7': ['320*160*7'], 'Б.13.П.7': ['120*120*7,\n120*90*7,\n180*120*7'],
+    'Б.14.П.7': ['120*120*7,\n120*90*7,\n180*120*7'], 'Б.15.П.7': ['120*120*7,\n120*90*7,\n180*120*7'],
+    'Б.2.П.7': ['160*160*7,\n160*200*7,\n160*240*7'], 'Б.3.П.7': ['160*160*7,\n160*200*7,\n160*240*7'],
+    'Б.5.П.7': ['100*200*7'], 'Б.6.П.7': ['320*160*7'], 'Б.7.П.7': ['320*160*7'], 'Б.8.П.7': ['320*160*7'],
+    'Б.9.П.7': ['320*320*7']    
 };
 
 // Готовим общий каталог для фильтрации (один раз)
@@ -296,14 +329,17 @@ const BLBRequestPage = () => {
 
                 {/* Категория */}
                 <td style={{ minWidth: 140 }}>
-                  <Select
-                    options={categoryOptions}
-                    value={row.category ? { value: row.category, label: row.category } : null}
-                    onChange={selected => handleChange({ target: { name: 'category', value: selected?.value || '' } }, index)}
-                    placeholder="Выберите..."
-                    isClearable
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
-                  />
+                <Select
+                  options={categoryOptions}
+                  value={categoryOptions.find(opt => opt.value === row.category) || null}
+                  onChange={selected => {
+                    const e = { target: { name: 'category', value: selected ? selected.value : '' } };
+                    handleChange(e, index);
+                  }}
+                  placeholder="Выберите..."
+                  isClearable
+                  styles={selectMultiLineStyles}
+                />
                 </td>
 
                 {/* Объект */}
@@ -311,40 +347,43 @@ const BLBRequestPage = () => {
                   <Select
                     options={(objectCategoryOptions2[row.category] || []).map(o => ({ value: o, label: o }))}
                     value={row.object ? { value: row.object, label: row.object } : null}
-                    onChange={selected => handleChange({ target: { name: 'object', value: selected?.value || '' } }, index)}
+                    onChange={selected =>
+                      handleChange({ target: { name: 'object', value: selected?.value || '' } }, index)
+                    }
                     placeholder="Выберите..."
                     isClearable
                     isDisabled={!row.category}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
-
                 {/* Позиция */}
                 <td style={{ minWidth: 140 }}>
                   <Select
                     options={(objectPositionOptions2[row.object] || []).map(p => ({ value: p, label: p }))}
                     value={row.position ? { value: row.position, label: row.position } : null}
-                    onChange={selected => handleChange({ target: { name: 'position', value: selected?.value || '' } }, index)}
+                    onChange={selected =>
+                      handleChange({ target: { name: 'position', value: selected?.value || '' } }, index)
+                    }
                     placeholder="Выберите..."
                     isClearable
                     isDisabled={!row.object}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
-
                 {/* Блок */}
                 <td style={{ minWidth: 140 }}>
                   <Select
                     options={(positionBlockOptions[row.position] || []).map(b => ({ value: b, label: b }))}
                     value={row.block ? { value: row.block, label: row.block } : null}
-                    onChange={selected => handleChange({ target: { name: 'block', value: selected?.value || '' } }, index)}
+                    onChange={selected =>
+                      handleChange({ target: { name: 'block', value: selected?.value || '' } }, index)
+                    }
                     placeholder="Выберите..."
                     isClearable
-                    isDisabled={!row.position}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    isDisabled={!row.position || !(positionBlockOptions[row.position] && positionBlockOptions[row.position].length)}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
-
                 {/* Вторая группа (взаимосвязанные поля) */}
                 <td style={{ minWidth: 140 }}>
                   <Select
@@ -354,7 +393,7 @@ const BLBRequestPage = () => {
                     placeholder="Выберите..."
                     isClearable
                     isSearchable={false}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
                 <td style={{ minWidth: 140 }}>
@@ -364,7 +403,7 @@ const BLBRequestPage = () => {
                       value={row.brand ? { value: row.brand, label: row.brand } : null}
                       isDisabled // запрет выбора вручную
                       placeholder="Автозаполняется..."
-                      styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px', backgroundColor: '#f0f0f0' }) }}
+                      styles={selectMultiLineStyles}
                     />
                     {row.brand && (
                       <button
@@ -396,7 +435,7 @@ const BLBRequestPage = () => {
                     placeholder="Выберите..."
                     isClearable
                     isSearchable={false}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
                 <td style={{ minWidth: 120 }}>
@@ -407,7 +446,7 @@ const BLBRequestPage = () => {
                     placeholder="Выберите..."
                     isClearable
                     isSearchable={false}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
                 <td style={{ minWidth: 140 }}>
@@ -418,7 +457,7 @@ const BLBRequestPage = () => {
                     placeholder="Выберите..."
                     isClearable
                     isSearchable={false}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
                 {/* Ед.изм. */}
