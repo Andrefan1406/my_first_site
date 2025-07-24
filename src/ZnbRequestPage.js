@@ -299,7 +299,7 @@ const ZnbRequestPage = () => {
                     onChange={selected => handleChange({ target: { name: 'block', value: selected?.value || '' } }, index)}
                     placeholder="Выберите..."
                     isClearable
-                    isDisabled={!row.position}
+                    isDisabled={!row.position || !(positionBlockOptions[row.position] && positionBlockOptions[row.position].length)}
                     styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
                   />
                 </td>
