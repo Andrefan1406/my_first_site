@@ -152,10 +152,19 @@
 
 .modalClose {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  font-size: 20px;
+  top: 8px;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
   cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.modalClose:hover {
+  color: #d00;
 }
 
 .modalContent form {
@@ -268,6 +277,7 @@
 }
 
 .modal {
+  position: relative;
   background: white;
   padding: 20px;
   border-radius: 12px;
@@ -276,6 +286,16 @@
   flex-direction: column;
   gap: 12px;
 }
+
+/* .modal {
+  position: relative;
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  width: 400px;
+  max-width: 90%;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+} */
 
 .modal input {
   padding: 8px;
