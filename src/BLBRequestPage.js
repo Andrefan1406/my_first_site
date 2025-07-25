@@ -529,6 +529,12 @@ const BLBRequestPage = () => {
       </table>
       <div className={styles.buttonsContainer}>
         <button type="button" onClick={addRow} className={styles.addButton}>Добавить строку</button>
+        <div className={styles.centerButtons}>
+          <button type="button" onClick={() => window.location.href = '/'} className={styles.homeButton}>На главную</button>
+          <button type="button" onClick={() => setFormRows([{date: '', category: '', object: '', position: '', block: '',
+              product: '', brand: '', series: '', quantity: '', note: ''}])} 
+            className={styles.clearButton}>Очистить заявку</button>
+        </div>
         <button type="button" onClick={handleSubmit} className={styles.submitButton}>Отправить заявку</button>
       </div>
       {/* Модальное окно */}
