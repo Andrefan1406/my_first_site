@@ -33,7 +33,7 @@ const App = () => {
         <Route path="/concrete-report" element={<ConcreteProductionReport />} />
         <Route path="/concrete-request2" element={<ConcreteRequestPage2 />} />        
         <Route path="/blbrequest" element={<BLBRequestPage />} />
-        <Route path="/znbrequest" element={<ZnbRequestPage />} />        
+        <Route path="/znbrequest" element={<ZnbRequestPage />} />             
       </Routes>
     </Router>
   );

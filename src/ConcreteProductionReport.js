@@ -22,6 +22,7 @@ const ConcreteProductionReport = () => {
   const [monthlySolutionTotal, setMonthlySolutionTotal] = useState(0);
   const [dailySolutionTotal, setDailySolutionTotal] = useState(0);
   const [concreteMonthlyData, setConcreteMonthlyData] = useState([]);
+  const [solutionMonthlyData, setSolutionMonthlyData] = useState([]);
 
   const excludedColumns = ["Дата отгрузки", "Фактический объём", "Отметка о исполнении", "Категория"];
 
@@ -119,13 +120,12 @@ const ConcreteProductionReport = () => {
     setMonthlySolutionTotal(calcTotal("Раствор", false));
     setDailySolutionTotal(calcTotal("Раствор", true));
 
-    // Данные для графика за 2024 и 2025 годы
     const monthlyData = Array.from({ length: 12 }, (_, i) => ({
       month: `${i + 1}`,
       "2024": 0,
       "2025": 0,
     }));
-
+    
     tableData.forEach((row) => {
       if (row["Материал"]?.trim() === "Бетон" && row["Дата отгрузки"]) {
         const [, month, year] = row["Дата отгрузки"].split(".");
@@ -140,8 +140,57 @@ const ConcreteProductionReport = () => {
         }
       }
     });
+    
+    // Итоговая строка (два столбика рядом)
+    const scaleFactor = 3;
+    const total2024 = monthlyData.reduce((sum, m) => sum + m["2024"], 0);
+    const total2025 = monthlyData.reduce((sum, m) => sum + m["2025"], 0);
+    
+    monthlyData.push({
+      month: "Итого",
+      "2024": total2024 / scaleFactor, // уменьшаем только визуальную высоту
+      "2025": total2025 / scaleFactor,
+      display2024: total2024,          // сохраняем для отображения реальной цифры
+      display2025: total2025
+    });
+    
     setConcreteMonthlyData(monthlyData);
 
+    const monthlySolution = Array.from({ length: 12 }, (_, i) => ({
+      month: `${i + 1}`,
+      "2024": 0,
+      "2025": 0,
+    }));
+    
+    tableData.forEach((row) => {
+      if (row["Материал"]?.trim() === "Раствор" && row["Дата отгрузки"]) {
+        const [, month, year] = row["Дата отгрузки"].split(".");
+        const idx = parseInt(month, 10) - 1;
+        const shipped = parseFloat((row["Фактический объём"] || "0").replace(",", "."));
+        if (!isNaN(shipped)) {
+          if (year === "2024") {
+            monthlySolution[idx]["2024"] += shipped;
+          } else if (year === "2025") {
+            monthlySolution[idx]["2025"] += shipped;
+          }
+        }
+      }
+    });
+    
+    // Добавляем "Итого" (с тем же scaleFactor, чтобы не перегружать)
+    const totalSol2024 = monthlySolution.reduce((sum, m) => sum + m["2024"], 0);
+    const totalSol2025 = monthlySolution.reduce((sum, m) => sum + m["2025"], 0);
+    
+    monthlySolution.push({
+      month: "Итого",
+      "2024": totalSol2024 / scaleFactor,
+      "2025": totalSol2025 / scaleFactor,
+      display2024: totalSol2024,
+      display2025: totalSol2025
+    });
+    
+    setSolutionMonthlyData(monthlySolution);
+    
   }, [tableData, selectedDate]);
 
   const commonColumns = ["Объект", "Блок, позиция", "Марка, класс", "заявлено; м3", "отгружено; м3"];
@@ -269,11 +318,60 @@ const ConcreteProductionReport = () => {
             />
             <Tooltip formatter={(value) => `${value.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} м3`} />
             <Legend verticalAlign="top" height={36} />
-            <Bar dataKey="2024" name="2024" fill="#4caf50" radius={[4, 4, 0, 0]}>
-              <LabelList dataKey="2024" position="top" formatter={(value) => value.toLocaleString("ru-RU", { maximumFractionDigits: 0 })} />
+            <Bar dataKey="2024" name="2024" fill="#4caf50" radius={[4,4,0,0]}>
+              <LabelList
+                dataKey={(entry) => entry.month === "Итого" ? entry.display2024 : entry["2024"]}
+                position="top"
+                formatter={(value) => value.toLocaleString("ru-RU", { maximumFractionDigits: 0 })}
+              />
             </Bar>
-            <Bar dataKey="2025" name="2025" fill="#2196f3" radius={[4, 4, 0, 0]}>
-              <LabelList dataKey="2025" position="top" formatter={(value) => value.toLocaleString("ru-RU", { maximumFractionDigits: 0 })} />
+            <Bar dataKey="2025" name="2025" fill="#2196f3" radius={[4,4,0,0]}>
+              <LabelList
+                dataKey={(entry) => entry.month === "Итого" ? entry.display2025 : entry["2025"]}
+                position="top"
+                formatter={(value) => value.toLocaleString("ru-RU", { maximumFractionDigits: 0 })}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <h2>График отгрузки раствора по месяцам 2024 и 2025 годов</h2>
+      <div style={{ width: "100%", height: 400, background: "#f0f0f0", borderRadius: "8px", padding: "20px" }}>
+        <ResponsiveContainer>
+          <BarChart
+            data={solutionMonthlyData}
+            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#ccc" />
+            <XAxis
+              dataKey="month"
+              label={{ value: "Месяц", position: "insideBottom", offset: -5 }}
+              tick={{ fontSize: 12 }}
+            />
+            <YAxis
+              label={{
+                value: "Объем отгрузки, м3",
+                angle: -90,
+                position: "insideLeft",
+                offset: 10,
+              }}
+              tick={{ fontSize: 12 }}
+            />
+            <Tooltip formatter={(value) => `${value.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} м3`} />
+            <Legend verticalAlign="top" height={36} />
+            <Bar dataKey="2024" name="2024" fill="#FF9800" radius={[4, 4, 0, 0]}>
+              <LabelList
+                dataKey={(entry) => entry.month === "Итого" ? entry.display2024 : entry["2024"]}
+                position="top"
+                formatter={(value) => value.toLocaleString("ru-RU", { maximumFractionDigits: 0 })}
+              />
+            </Bar>
+            <Bar dataKey="2025" name="2025" fill="#9C27B0" radius={[4, 4, 0, 0]}>
+              <LabelList
+                dataKey={(entry) => entry.month === "Итого" ? entry.display2025 : entry["2025"]}
+                position="top"
+                formatter={(value) => value.toLocaleString("ru-RU", { maximumFractionDigits: 0 })}
+              />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
