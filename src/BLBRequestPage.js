@@ -122,15 +122,34 @@ const BLBRequestPage = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
+  
     const requiredFields = ['date', 'category', 'object', 'position', 'quantity'];
-    const hasEmpty = formRows.some(row => requiredFields.some(f => !row[f]?.toString().trim()));
-
+  
+    const hasEmpty = formRows.some(row =>
+      requiredFields.some(f => !row[f]?.toString().trim())
+    );
+  
     if (hasEmpty) {
       alert('Пожалуйста, заполните все обязательные поля.');
       return;
     }
-
+  
+    // Проверка, что дата не раньше чем через 14 дней от текущей даты
+    const minDateObj = new Date();
+    minDateObj.setHours(0, 0, 0, 0); // Обнуляем время
+    minDateObj.setDate(minDateObj.getDate() + 14);
+  
+    const hasInvalidDate = formRows.some(row => {
+      const rowDate = new Date(row.date);
+      rowDate.setHours(0, 0, 0, 0); // Обнуляем время для корректного сравнения
+      return isNaN(rowDate) || rowDate < minDateObj;
+    });
+  
+    if (hasInvalidDate) {
+      alert('Дата не может быть раньше чем через 14 дней от текущей.');
+      return;
+    }
+  
     setShowModal(true);
   };
 
