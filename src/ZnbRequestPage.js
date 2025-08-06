@@ -97,35 +97,27 @@ const ZnbRequestPage = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-  
-    // Проверка: дата не должна быть раньше чем через 14 дней
-    const today = new Date();
-    const minAllowedDate = new Date();
-    minAllowedDate.setDate(today.getDate() + 14);
-  
-    const invalidDate = formRows.some(row => {
-      if (!row.date) return true;
-      const selectedDate = new Date(row.date);
-      return selectedDate < minAllowedDate;
-    });
-  
-    if (invalidDate) {
-      alert('Нельзя выбирать дату раньше чем через 14 дней от сегодняшнего дня.');
-      return;
-    }
-  
+
     const hasEmpty = formRows.some(row => {
-      const baseRequired = ['date', 'category', 'object', 'position', 'block', 'product', 'brand', 'quantity'];
+      // базовые обязательные поля (все кроме note и series)
+      const baseRequired = ['date', 'category', 'object', 'position', 'product', 'brand', 'quantity'];
       const missingBase = baseRequired.some(f => !row[f]?.toString().trim());
+
+      // Проверка на необходимость выбора блока
+      const hasBlockOptions = row.position && positionBlockOptions[row.position]?.length > 0;
+      const blockMissing = hasBlockOptions && !row.block?.toString().trim();
+
+      // если выбрано "Другое" в product или brand, примечание становится обязательным
       const noteRequired = (row.product === 'Другое' || row.brand === 'другое') && !row.note.trim();
-      return missingBase || noteRequired;
+
+      return missingBase || blockMissing || noteRequired;
     });
-  
+
     if (hasEmpty) {
-      alert('Пожалуйста, заполните все обязательные поля. Если выбрано "Другое", укажите примечание.');
+      alert('Заполните все обязательные поля. Если выбрано "Другое", укажите примечание. Укажите дату не ранее 14 дней от текущей');
       return;
     }
-  
+
     setShowModal(true);
   };
 
