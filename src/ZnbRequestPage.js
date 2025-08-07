@@ -7,6 +7,39 @@ import {
 } from './data/constructionData2';
 import Select from 'react-select';
 
+const selectMultiLineStyles = {
+  control: (base) => ({
+    ...base,
+    minHeight: '30px',
+    fontSize: '12px',
+    whiteSpace: 'normal',     // перенос текста в поле
+    wordBreak: 'break-word',
+    lineHeight: '1.2',
+    maxWidth: '140px',        // ограничение ширины, чтобы был перенос
+  }),
+  menu: (base) => ({
+    ...base,
+    fontSize: '12px',
+    whiteSpace: 'normal',     // перенос в выпадающем меню
+    wordBreak: 'break-word',
+    lineHeight: '1.2',
+  }),
+  singleValue: (base) => ({
+    ...base,
+    whiteSpace: 'normal',     // перенос выбранного текста
+    wordBreak: 'break-word',
+    overflow: 'visible',
+    textOverflow: 'clip',
+    lineHeight: '1.2',
+  }),
+  option: (base) => ({
+    ...base,
+    whiteSpace: 'normal',     // перенос длинных опций в списке
+    wordBreak: 'break-word',
+    lineHeight: '1.2',
+  }),
+};
+
 // Справочники для второй группы
 const znbBrandOptions = {
     'Балка': ['Б-6', 'Б-7', 'Б-8', 'другое'],
@@ -276,7 +309,8 @@ const ZnbRequestPage = () => {
                     onChange={selected => handleChange({ target: { name: 'category', value: selected?.value || '' } }, index)}
                     placeholder="Выберите..."
                     isClearable
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    /* styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }} */
+                    styles={selectMultiLineStyles}
                   />
                 </td>
 
@@ -289,7 +323,7 @@ const ZnbRequestPage = () => {
                     placeholder="Выберите..."
                     isClearable
                     isDisabled={!row.category}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
 
@@ -302,7 +336,7 @@ const ZnbRequestPage = () => {
                     placeholder="Выберите..."
                     isClearable
                     isDisabled={!row.object}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
 
@@ -315,7 +349,7 @@ const ZnbRequestPage = () => {
                     placeholder="Выберите..."
                     isClearable
                     isDisabled={!row.position || !(positionBlockOptions[row.position] && positionBlockOptions[row.position].length)}
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
 
@@ -327,7 +361,7 @@ const ZnbRequestPage = () => {
                     onChange={selected => handleChange({ target: { name: 'product', value: selected?.value || '' } }, index)}
                     placeholder="Выберите..."
                     isClearable
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
                 <td style={{ minWidth: 140 }}>
@@ -338,7 +372,7 @@ const ZnbRequestPage = () => {
                     placeholder="Выберите..."
                     isClearable
                     isDisabled={row.product === 'Другое' || !row.product} // Блокируем если другое
-                    styles={{ control: base => ({ ...base, minHeight: '30px', fontSize: '12px' }) }}
+                    styles={selectMultiLineStyles}
                   />
                 </td>
                 <td style={{ minWidth: 140 }}>
