@@ -30,10 +30,10 @@ const HomePage = () => {
         Графики и отчёты
       </button>
       <button onClick={() => navigate('/blbrequest')} style={styles.button}>
-        Заявка на брусчатку (Тестирование)
+        Заявка на брусчатку
       </button>
       <button onClick={() => navigate('/znbrequest')} style={styles.button}>
-        Заявка на ж/б изделия (Тестирование)
+        Заявка на ж/б изделия
       </button>
     </div>
   );
