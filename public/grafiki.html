@@ -1,19 +1,56 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <title>Открыть графики</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            display: inline-block;
+            margin: 10px 0;
+            padding: 12px 20px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background-color: #005fcc;
+        }
+
+        .container {
+            max-width: 400px;
+        }
+    </style>
 </head>
 <body>
 
-<button onclick="openTabs()">Открыть 3 таблицы</button>
+<div class="container">
+    <h2>Открыть графики</h2>
 
-<script>
-function openTabs() {
-    setTimeout(() => window.open('https://docs.google.com/spreadsheets/d/1WcB1F8B8vdth1DHwa6UkKSfMag1UmDzRWcuHik9kUEA/edit?gid=1442365195#gid=1442365195', '_blank'), 100);
-    setTimeout(() => window.open('https://docs.google.com/spreadsheets/d/17AI7UxLpSTciFxWusMrYAVhH88ljbV7sR8mw_Deuq6I/edit?gid=715655887#gid=715655887', '_blank'), 300);
-    setTimeout(() => window.open('https://docs.google.com/spreadsheets/d/1eC80R11Hp26IVfLLa4M-_wnYGqTRHEi6k2_XG5Goqf0/edit?gid=1442365195#gid=1442365195', '_blank'), 500);
-}
-</script>
+    <button class="btn" onclick="window.open('https://docs.google.com/spreadsheets/d/1WcB1F8B8vdth1DHwa6UkKSfMag1UmDzRWcuHik9kUEA/edit?gid=1442365195#gid=1442365195', '_blank')">
+        ГПР фасады
+    </button>
+
+    <button class="btn" onclick="window.open('https://docs.google.com/spreadsheets/d/17AI7UxLpSTciFxWusMrYAVhH88ljbV7sR8mw_Deuq6I/edit?gid=715655887#gid=715655887', '_blank')">
+        ГПР 56
+    </button>
+
+    <button class="btn" onclick="window.open('https://docs.google.com/spreadsheets/d/1eC80R11Hp26IVfLLa4M-_wnYGqTRHEi6k2_XG5Goqf0/edit?gid=1442365195#gid=1442365195', '_blank')">
+        ГПР 64, 72
+    </button>
+</div>
 
 </body>
 </html>
