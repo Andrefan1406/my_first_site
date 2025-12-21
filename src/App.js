@@ -14,6 +14,7 @@ import ConcreteProductionReport from './ConcreteProductionReport';
 import ConcreteRequestPage2 from './ConcreteRequestPage2';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
+import RagPage from './RagPage';
 
 
 const App = () => {
@@ -33,7 +34,8 @@ const App = () => {
         <Route path="/concrete-report" element={<ConcreteProductionReport />} />
         <Route path="/concrete-request2" element={<ConcreteRequestPage2 />} />        
         <Route path="/blbrequest" element={<BLBRequestPage />} />
-        <Route path="/znbrequest" element={<ZnbRequestPage />} />             
+        <Route path="/znbrequest" element={<ZnbRequestPage />} />
+        <Route path="/rag" element={<RagPage />} />             
       </Routes>
     </Router>
   );
