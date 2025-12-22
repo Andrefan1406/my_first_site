@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 
-const API_URL = `${process.env.REACT_APP_RAG_API_URL}/chat`;
+const BASE_URL =
+  process.env.REACT_APP_RAG_API_URL || "https://rag-agent-v0ap.onrender.com";
+
+const API_URL = `${BASE_URL}/chat`;
 
 const RagPage = () => {
   const [question, setQuestion] = useState("");
