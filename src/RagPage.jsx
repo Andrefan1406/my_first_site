@@ -230,12 +230,18 @@ const styles = {
     backdropFilter: "blur(10px)",
   },
   grid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 280px",
+    display: "flex",
     gap: 14,
-  },
-  left: {},
+    flexWrap: "wrap",      // ✅ главное — разрешаем перенос
+    alignItems: "stretch",
+  },  
+  left: {
+    flex: "1 1 520px",     // ✅ растягивается, но может сжиматься и переноситься
+    minWidth: 0,           // ✅ важно! иначе textarea может “вылезать”
+  },  
   right: {
+    flex: "0 0 260px",     // ✅ фикс-ширина справа
+    width: 260,
     display: "flex",
     flexDirection: "column",
     gap: 10,
@@ -293,14 +299,14 @@ const styles = {
   button: {
     border: 0,
     cursor: "pointer",
-    padding: "9px 12px",
-    borderRadius: 10,
+    padding: "8px 10px",
+    borderRadius: 8,
     fontWeight: 600,
-    fontSize: 14,
+    fontSize: 13,
     color: "#06101a",
     background: "linear-gradient(90deg, #6ee7ff, #a78bfa)",
     boxShadow: "0 10px 20px rgba(110,231,255,0.15)",
-    transition: "transform .08s ease, filter .08s ease",
+    //transition: "transform .08s ease, filter .08s ease",
   },
   buttonDisabled: {
     opacity: 0.55,
@@ -310,8 +316,9 @@ const styles = {
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(255,255,255,0.08)",
     color: "rgba(255,255,255,0.92)",
-    padding: "12px 14px",
-    borderRadius: 12,
+    padding: "8px 10px",
+    borderRadius: 8,
+    fontSize: 13,
     cursor: "pointer",
   },
   buttonGhostDisabled: {
