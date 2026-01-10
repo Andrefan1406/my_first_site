@@ -101,9 +101,9 @@ const RagPage = () => {
               />
 
               <div style={styles.hintRow}>
-                <span style={styles.hint}>
+                {/*<span style={styles.hint}>
                   API: <span style={styles.mono}>{API_URL}</span>
-                </span>
+                </span>*/}
                 {ms !== null && !error && (
                   <span style={styles.pill}>{ms} ms</span>
                 )}
@@ -267,7 +267,7 @@ const styles = {
   },
   hintRow: {
     display: "flex",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",  // ✅ прижимаем элементы вправо
     alignItems: "center",
     gap: 10,
     marginTop: 10,
