@@ -1,0 +1,91 @@
+.remarks-page {
+    min-height: 100vh;
+    background: #f5f5f5;
+    padding: 16px;
+  }
+  
+  .remarks-container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  
+  .remark-form,
+  .remarks-list {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  }
+  
+  .remark-textarea {
+    width: 100%;
+    min-height: 110px;
+    padding: 12px;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    font-size: 16px;
+    resize: vertical;
+  }
+  
+  .remark-file-input {
+    margin-bottom: 12px;
+  }
+  
+  .remark-preview {
+    margin-bottom: 12px;
+  }
+  
+  .remark-preview-image,
+  .remark-card-image {
+    width: 100%;
+    max-width: 320px;
+    border-radius: 12px;
+    display: block;
+  }
+  
+  .remark-button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: #111827;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  
+  .remark-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 16px;
+    background: white;
+  }
+  
+  .remark-text {
+    margin-top: 0;
+    margin-bottom: 12px;
+  }
+  
+  .remarks-empty {
+    color: #6b7280;
+  }
+  
+  @media (max-width: 768px) {
+    .remarks-page {
+      padding: 12px;
+    }
+  
+    .remark-form,
+    .remarks-list {
+      padding: 14px;
+    }
+  
+    .remark-preview-image,
+    .remark-card-image {
+      max-width: 100%;
+    }
+  }
