@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './HomePage';
 import RequestPage from './RequestPage';
-import ConcreteRequestPage from './ConcreteRequestPage'; 
+//import ConcreteRequestPage from './ConcreteRequestPage'; 
 import ElectricansRequestPage from './ElectricansRequestPage';
 import GeoRequestPage from './GeoRequestPage';
 import PeopleReportPage from './PeopleReportPage';
@@ -15,6 +15,7 @@ import ConcreteRequestPage2 from './ConcreteRequestPage2';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
 import RagPage from './RagPage';
+import RemarksPage from "./remarks/RemarksPage";
 
 
 const App = () => {
@@ -23,7 +24,7 @@ const App = () => {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/request" element={<RequestPage />} />
-        <Route path="/concrete-request" element={<ConcreteRequestPage />} />
+        {/* <Route path="/concrete-request" element={<ConcreteRequestPage />} /> */}
         <Route path="/electricans-request" element={<ElectricansRequestPage />} />
         <Route path="/geo-request" element={<GeoRequestPage />} />
         <Route path="/people-report" element={<PeopleReportPage />} />
@@ -35,7 +36,8 @@ const App = () => {
         <Route path="/concrete-request2" element={<ConcreteRequestPage2 />} />        
         <Route path="/blbrequest" element={<BLBRequestPage />} />
         <Route path="/znbrequest" element={<ZnbRequestPage />} />
-        <Route path="/rag" element={<RagPage />} />             
+        <Route path="/rag" element={<RagPage />} /> 
+        <Route path="/remarks" element={<RemarksPage />} />            
       </Routes>
     </Router>
   );

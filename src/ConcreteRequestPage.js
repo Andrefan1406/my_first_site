@@ -1,4 +1,4 @@
-import React from 'react';
+/* import React from 'react';
 
 const ConcreteRequestPage = () => {
   return (
@@ -47,3 +47,4 @@ const styles = {
 };
 
 export default ConcreteRequestPage;
+ */

@@ -14,15 +14,15 @@
         }
 
         .btn {
-            display: inline-block;
-            margin: 10px 0;
-            padding: 12px 20px;
-            font-size: 16px;
+            width: 100%;            
+            padding: 12px 10px;
+            font-size: 14px;
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 6px;
             cursor: pointer;
+            text-align: center;
         }
 
         .btn:hover {
@@ -30,17 +30,24 @@
         }
 
         .container {
-            max-width: 400px;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 10px;
         }
     </style>
 </head>
 <body>
+  <h2>Открыть графики</h2>
 
 <div class="container">
-    <h2>Открыть графики</h2>
+    
 
     <button class="btn" onclick="window.open('https://docs.google.com/spreadsheets/d/1WcB1F8B8vdth1DHwa6UkKSfMag1UmDzRWcuHik9kUEA/edit?gid=1442365195#gid=1442365195', '_blank')">
         ГПР фасады
+    </button>
+
+    <button class="btn" onclick="window.open('https://docs.google.com/spreadsheets/d/15E7jdK310ydLtpFyo8M90C9vZGgK5zOb2NQNbb6iXx4/edit?gid=312064548#gid=312064548', '_blank')">
+      ГПР окна
     </button>
 
     <button class="btn" onclick="window.open('https://docs.google.com/spreadsheets/d/17AI7UxLpSTciFxWusMrYAVhH88ljbV7sR8mw_Deuq6I/edit?gid=715655887#gid=715655887', '_blank')">
