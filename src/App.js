@@ -16,6 +16,7 @@ import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
 import RagPage from './RagPage';
 import RemarksPage from "./remarks/RemarksPage";
+import LabTestRequestPaje from "./LabTestRequestPaje";
 
 
 const App = () => {
@@ -37,7 +38,8 @@ const App = () => {
         <Route path="/blbrequest" element={<BLBRequestPage />} />
         <Route path="/znbrequest" element={<ZnbRequestPage />} />
         <Route path="/rag" element={<RagPage />} /> 
-        <Route path="/remarks" element={<RemarksPage />} />            
+        <Route path="/remarks" element={<RemarksPage />} />  
+        <Route path="/lab-request" element={<LabTestRequestPaje />} />           
       </Routes>
     </Router>
   );
