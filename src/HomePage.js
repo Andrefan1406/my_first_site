@@ -23,17 +23,20 @@ const HomePage = () => {
       <button onClick={() => navigate('/geo-request')} style={styles.button}>
         Заявка геодезистов
       </button>
-      <button onClick={() => navigate('/people-report')} style={styles.button}>
-        Отчёты по людям
-      </button>
-      <button onClick={() => navigate('/reports-dashboard')} style={{ ...styles.button, background: 'red' }}>
-        Графики и отчёты
-      </button>
+      <button onClick={() => navigate('/lab-request')} style={styles.button}>
+        Лабораторные испытания
+      </button>       
       <button onClick={() => navigate('/blbrequest')} style={styles.button}>
         Заявка на брусчатку
       </button>
       <button onClick={() => navigate('/znbrequest')} style={styles.button}>
         Заявка на ж/б изделия
+      </button>
+      <button onClick={() => navigate('/people-report')} style={styles.button}>
+        Отчёты по людям
+      </button>     
+      <button onClick={() => navigate('/reports-dashboard')} style={{ ...styles.button, background: 'red' }}>
+        Графики и отчёты
       </button>
     </div>
   );
