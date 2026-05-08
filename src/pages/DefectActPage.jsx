@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { defectsDictionary } from "../data/defect";
 
 const emptyRow = {
   defect: "",
@@ -12,6 +13,12 @@ const emptyRow = {
   price: "",
   total: "",
 };
+
+const today = new Date();
+
+const currentDay = today.getDate();
+const currentMonth = today.toLocaleString("ru-RU", { month: "long" });
+const currentYear = today.getFullYear();
 
 export default function DefectActPage() {
   const [rows, setRows] = useState([emptyRow]);
@@ -35,28 +42,62 @@ export default function DefectActPage() {
 
   return (
     <div style={styles.page}>
+      <style>{`
+        @media print {
+          .no-print {
+            display: none;
+          }
+        }
+      `}</style>
       <div style={styles.sheet}>
         <div style={styles.topRow}>
           <label style={styles.label}>Организация</label>
-          <input style={styles.input} />
+          <label style={styles.label}>ТОО "VK INVEST COMPANY"</label>
         </div>
-
+        
         <h1 style={styles.title}>Дефектная ведомость (дефектный акт)</h1>
 
         <div style={styles.subtitle}>
           № <input style={styles.numberInput} /> от "
-          <input style={styles.dayInput} />"{" "}
-          <input style={styles.monthInput} /> 2024 г.
+          
+          <input
+            style={styles.dayInput}
+            value={currentDay}
+            readOnly
+          />
+
+          "{" "}
+
+          <input
+            style={styles.monthInput}
+            value={currentMonth}
+            readOnly
+          />
+
+          {" "}
+          {currentYear} г.
         </div>
 
         <div style={styles.objectRow}>
           <label style={styles.label}>ОБЪЕКТ:</label>
-          <input style={styles.input} placeholder="Наименование" />
+          <label style={styles.label}>Нурлы жол 4</label>
         </div>
 
         <div style={styles.objectRow}>
           <label></label>
-          <input style={styles.input} placeholder="Позиция" />
+
+          <select style={styles.select}>
+            <option value="">Выберите позицию</option>
+            <option value="поз.1.1">поз.1.1</option>
+            <option value="поз.1.2">поз.1.2</option>
+            <option value="поз.1.3">поз.1.3</option>
+            <option value="поз.1.4">поз.1.4</option>
+            <option value="поз.1.5">поз.1.5</option>
+            <option value="поз.1.6">поз.1.6</option>
+            <option value="поз.1.7">поз.1.7</option>
+            <option value="поз.1.8">поз.1.8</option>
+            <option value="поз.1.9">поз.1.9</option>
+          </select>
         </div>
 
         <div style={styles.tableWrapper}>
@@ -94,32 +135,52 @@ export default function DefectActPage() {
             <tbody>
               {rows.map((row, index) => (
                 <tr key={index}>
+                  {/* Поле выбора дефекта */}
                   <td style={styles.td}>
-                    <textarea
-                      style={styles.textarea}
+                    <select
+                      className="no-print"
+                      style={styles.defectSelect}
                       value={row.defect}
-                      onChange={(e) => handleChange(index, "defect", e.target.value)}
-                    />
-                  </td>
+                      onChange={(e) => {
+                        const selectedDefect = e.target.value;
+                        handleChange(index, "defect", selectedDefect);
+                        handleChange(index, "reason", defectsDictionary[selectedDefect] || "");
+                      }}
+                    >
+                      
+                      <option value="">Выберите дефект</option>
+                      {Object.keys(defectsDictionary).map((defect) => (
+                        <option key={defect} value={defect}>
+                          {defect}
+                        </option>
+                      ))}
+                    </select>
 
-                  <td style={styles.td}>
-                    <textarea
-                      style={styles.textarea}
-                      value={row.reason}
-                      onChange={(e) => handleChange(index, "reason", e.target.value)}
-                    />
+                    {row.defect && (
+                      <div style={styles.defectDisplay}>
+                        {row.defect}
+                      </div>
+                    )}
                   </td>
-
-                  <td style={styles.td}>
-                    <input
-                      style={styles.cellInput}
-                      value={row.responsibleDefect}
-                      onChange={(e) =>
-                        handleChange(index, "responsibleDefect", e.target.value)
-                      }
-                    />
+                  {/* Поле причины дефекта */}
+                  <td style={styles.centerTd}>
+                    <div style={styles.centerText}>
+                      {row.reason}
+                    </div>
                   </td>
-
+                  {/* Ответственный за возникновение */}
+                  <td style={styles.centerSelectTd}>
+                    <select style={styles.responseSelect}>
+                      <option value="">Выберите ответственного</option>
+                      <option value="Худабердиев Ш.">Худабердиев Ш.</option>
+                      <option value="Раджапов А.">Раджапов А.</option>
+                      <option value="Тайлиев Б.">Тайлиев Б.</option>
+                      <option value="Нурматов С.">Нурматов С.</option>
+                      <option value="Курбанмухамедов О.">Курбанмухамедов О.</option>
+                      <option value="---">---</option>                      
+                    </select>
+                  </td>
+                  {/* Ответственный за устранение */}
                   <td style={styles.td}>
                     <input
                       style={styles.cellInput}
@@ -301,6 +362,7 @@ const styles = {
   label: {
     fontWeight: "bold",
     fontSize: 16,
+    borderBottom: "1px solid #000",
   },
 
   input: {
@@ -367,8 +429,7 @@ const styles = {
 
   td: {
     border: "1px solid #000",
-    padding: 0,
-    height: 66,
+    padding: 0,    
     verticalAlign: "top",
   },
 
@@ -392,7 +453,7 @@ const styles = {
     border: "none",
     padding: 5,
     boxSizing: "border-box",
-    textAlign: "center",
+    textAlign: "left",
     fontFamily: "Times New Roman, serif",
     fontSize: 14,
     outline: "none",
@@ -465,4 +526,78 @@ const styles = {
     borderBottom: "1px solid #000",
     height: 26,
   },
+
+  select: {
+    border: "none",
+    borderBottom: "1px solid #000",
+    padding: "4px 6px",
+    fontSize: 16,
+    fontFamily: "Times New Roman, serif",
+    outline: "none",
+    background: "transparent",
+  },
+
+  centerTd: {
+    border: "1px solid #000",
+    padding: 0,
+    height: 66,
+    verticalAlign: "middle",
+  },
+  
+  centerText: {
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    padding: "0 5px",
+    fontFamily: "Times New Roman, serif",
+    fontSize: 14,
+  },
+  
+  defectSelect: {
+    width: "100%",
+    border: "none",
+    borderBottom: "1px solid #ccc",
+    padding: "4px 5px",
+    boxSizing: "border-box",
+    fontFamily: "Times New Roman, serif",
+    fontSize: 14,
+    outline: "none",
+    background: "transparent",
+    cursor: "pointer",
+  },
+
+  responseSelect: {
+    width: "100%",
+    border: "none",
+    borderBottom: "1px solid #ccc",
+    padding: "4px 5px",
+    boxSizing: "border-box",
+    fontFamily: "Times New Roman, serif",
+    fontSize: 14,
+    outline: "none",
+    background: "transparent",
+    cursor: "pointer",
+    verticalAlign: "middle"
+  },
+
+  defectDisplay: {
+    padding: "5px 5px 6px",
+    fontFamily: "Times New Roman, serif",
+    fontSize: 14,
+    whiteSpace: "normal",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
+    lineHeight: 1.4,
+    minHeight: 24,
+  },
+
+  centerSelectTd: {
+    border: "1px solid #000",
+    padding: 0,
+    verticalAlign: "middle",
+  
+    /* display: "flex", */
+    alignItems: "center",
+  },
+
 };
