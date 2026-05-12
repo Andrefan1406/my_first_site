@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { defectsDictionary } from "../data/defect";
 
-const FIRST_PAGE_ROWS = 7;
-const MIDDLE_PAGE_ROWS = 10;
-const LAST_PAGE_ROWS = 7;
+const FIRST_PAGE_WITH_SUMMARY_ROWS = 3;
+const FIRST_PAGE_ONLY_TABLE_ROWS = 9;
+const MIDDLE_PAGE_ROWS = 12;
+const LAST_PAGE_WITH_SUMMARY_ROWS = 6;
 
 const createEmptyRow = () => ({
   defect: "",
@@ -44,6 +45,23 @@ export default function DefectActPage() {
 
   const addRow = () => {
     setRows([...rows, createEmptyRow()]);
+  };
+
+  const deleteLastRow = () => {
+    setRows((prevRows) => {
+      if (prevRows.length <= 1) {
+        return [createEmptyRow()];
+      }
+
+      const lastRow = prevRows[prevRows.length - 1];
+
+      if (lastRow.isMaterial) {
+        const lastGroupId = lastRow.groupId;
+        return prevRows.filter((row) => row.groupId !== lastGroupId);
+      }
+
+      return prevRows.slice(0, -1);
+    });
   };
 
   const recalculateMaterialRows = (updatedRows, groupId, workQuantity) => {
@@ -151,7 +169,6 @@ export default function DefectActPage() {
     });
 
     updatedRows.splice(index + 1, 0, ...materialRows);
-
     setRows(updatedRows);
   };
 
@@ -182,65 +199,86 @@ export default function DefectActPage() {
     return blocks.reduce((sum, block) => sum + block.length, 0);
   };
 
+  const takeBlocksByLimit = (blocks, limit) => {
+    const pageBlocks = [];
+    let rowsCount = 0;
+    let index = 0;
+
+    while (index < blocks.length) {
+      const block = blocks[index];
+      const blockSize = block.length;
+
+      if (rowsCount + blockSize <= limit || pageBlocks.length === 0) {
+        pageBlocks.push(block);
+        rowsCount += blockSize;
+        index += 1;
+      } else {
+        break;
+      }
+    }
+
+    return {
+      pageBlocks,
+      restBlocks: blocks.slice(index),
+    };
+  };
+
   const splitBlocksToPages = (rows) => {
     const blocks = groupRowsIntoBlocks(rows);
+    const totalRowsCount = getBlocksRowsCount(blocks);
 
-    if (getBlocksRowsCount(blocks) <= FIRST_PAGE_ROWS) {
-      return [blocks];
+    if (totalRowsCount <= FIRST_PAGE_WITH_SUMMARY_ROWS) {
+      return [
+        {
+          blocks,
+          showDocumentHeader: true,
+          showSummary: true,
+        },
+      ];
     }
 
     const pages = [];
-    let currentPage = [];
-    let currentPageRowsCount = 0;
-    let pageLimit = FIRST_PAGE_ROWS;
 
-    let i = 0;
+    const firstPageResult = takeBlocksByLimit(
+      blocks,
+      FIRST_PAGE_ONLY_TABLE_ROWS
+    );
 
-    while (i < blocks.length) {
-      const block = blocks[i];
-      const blockSize = block.length;
+    pages.push({
+      blocks: firstPageResult.pageBlocks,
+      showDocumentHeader: true,
+      showSummary: false,
+    });
 
-      const remainingBlocks = blocks.slice(i);
-      const remainingRowsCount = getBlocksRowsCount(remainingBlocks);
+    let restBlocks = firstPageResult.restBlocks;
 
-      if (
-        pages.length > 0 &&
-        remainingRowsCount <= LAST_PAGE_ROWS &&
-        currentPage.length === 0
-      ) {
-        pages.push(remainingBlocks);
-        break;
-      }
+    if (restBlocks.length === 0) {
+      pages.push({
+        blocks: [],
+        showDocumentHeader: false,
+        showSummary: true,
+      });
 
-      if (
-        currentPageRowsCount + blockSize <= pageLimit ||
-        currentPage.length === 0
-      ) {
-        currentPage.push(block);
-        currentPageRowsCount += blockSize;
-        i += 1;
-      } else {
-        pages.push(currentPage);
-        currentPage = [];
-        currentPageRowsCount = 0;
-        pageLimit = MIDDLE_PAGE_ROWS;
-      }
-
-      const rowsLeft = getBlocksRowsCount(blocks.slice(i));
-
-      if (rowsLeft > 0 && rowsLeft <= LAST_PAGE_ROWS) {
-        if (currentPage.length > 0) {
-          pages.push(currentPage);
-        }
-
-        pages.push(blocks.slice(i));
-        break;
-      }
+      return pages;
     }
 
-    if (currentPage.length > 0 && i >= blocks.length) {
-      pages.push(currentPage);
+    while (getBlocksRowsCount(restBlocks) > LAST_PAGE_WITH_SUMMARY_ROWS) {
+      const middlePageResult = takeBlocksByLimit(restBlocks, MIDDLE_PAGE_ROWS);
+
+      pages.push({
+        blocks: middlePageResult.pageBlocks,
+        showDocumentHeader: false,
+        showSummary: false,
+      });
+
+      restBlocks = middlePageResult.restBlocks;
     }
+
+    pages.push({
+      blocks: restBlocks,
+      showDocumentHeader: false,
+      showSummary: true,
+    });
 
     return pages;
   };
@@ -254,6 +292,48 @@ export default function DefectActPage() {
   const totalMaterials = rows
     .filter((row) => row.workMaterial === "материал")
     .reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+
+  const renderDocumentHeader = () => {
+    return (
+      <>
+        <div style={styles.topRow}>
+          <label style={styles.label}>Организация</label>
+          <label style={styles.label}>ТОО "VK INVEST COMPANY"</label>
+        </div>
+
+        <h1 style={styles.title}>Дефектная ведомость (дефектный акт)</h1>
+
+        <div style={styles.subtitle}>
+          № <input style={styles.numberInput} /> от "
+          <input style={styles.dayInput} value={currentDay} readOnly />"{" "}
+          <input style={styles.monthInput} value={currentMonth} readOnly />{" "}
+          {currentYear} г.
+        </div>
+
+        <div style={styles.objectRow}>
+          <label style={styles.label}>ОБЪЕКТ:</label>
+          <label style={styles.label}>Нурлы жол 4</label>
+        </div>
+
+        <div style={styles.objectRow}>
+          <label></label>
+
+          <select style={styles.select}>
+            <option value="">Выберите позицию</option>
+            <option value="поз.1.1">поз.1.1</option>
+            <option value="поз.1.2">поз.1.2</option>
+            <option value="поз.1.3">поз.1.3</option>
+            <option value="поз.1.4">поз.1.4</option>
+            <option value="поз.1.5">поз.1.5</option>
+            <option value="поз.1.6">поз.1.6</option>
+            <option value="поз.1.7">поз.1.7</option>
+            <option value="поз.1.8">поз.1.8</option>
+            <option value="поз.1.9">поз.1.9</option>
+          </select>
+        </div>
+      </>
+    );
+  };
 
   const renderTable = (pageBlocks) => {
     return (
@@ -482,6 +562,127 @@ export default function DefectActPage() {
     );
   };
 
+  const renderSummaryBlock = () => {
+    return (
+      <>
+        <div className="no-print" style={styles.buttonBlock}>
+          <button type="button" style={styles.button} onClick={addRow}>
+            Добавить строку
+          </button>
+
+          <button type="button" style={styles.button} onClick={deleteLastRow}>
+            Удалить строку
+          </button>
+
+          <button
+            type="button"
+            style={styles.button}
+            onClick={() => window.print()}
+          >
+            Сохранить в PDF
+          </button>
+        </div>
+
+        <div style={styles.costRow}>
+          <label style={styles.label}>Стоимость работ составит:</label>
+
+          <input style={styles.input} value={totalWorks.toFixed(2)} readOnly />
+        </div>
+
+        <div style={styles.costRow}>
+          <label style={styles.label}>Стоимость материалов составит:</label>
+
+          <input
+            style={styles.input}
+            value={totalMaterials.toFixed(2)}
+            readOnly
+          />
+        </div>
+
+        <div style={styles.costRow}>
+          <label style={styles.label}>Общая стоимость составит:</label>
+
+          <input
+            style={styles.input}
+            value={(totalWorks + totalMaterials).toFixed(2)}
+            readOnly
+          />
+        </div>
+
+        <div style={styles.conclusionBlock}>
+          <label style={styles.label}>Заключение комиссии</label>
+
+          <textarea style={styles.conclusionTextarea} />
+        </div>
+
+        <div style={styles.signatures}>
+          <div style={styles.signLeft}>
+            <label style={styles.label}>Председатель комиссии</label>
+          </div>
+
+          <input
+            style={styles.signatureInput}
+            value="Главный инженер"
+            readOnly
+          />
+
+          <div style={styles.signatureLine}></div>
+
+          <input
+            style={styles.signatureInput}
+            value="Титаренко В.С."
+            readOnly
+          />
+
+          <div style={styles.signLeft}>
+            <label style={styles.label}>Члены комиссии</label>
+          </div>
+
+          <input
+            style={styles.signatureInput}
+            value="Начальник строительного участка"
+            readOnly
+          />
+
+          <div style={styles.signatureLine}></div>
+
+          <input
+            style={styles.signatureInput}
+            value="Адаменко О.Ю."
+            readOnly
+          />
+
+          <div></div>
+
+          <input style={styles.signatureInput} value="Инженер ПТО" readOnly />
+
+          <div style={styles.signatureLine}></div>
+
+          <input
+            style={styles.signatureInput}
+            value="Төлеуғалиқызы Г."
+            readOnly
+          />
+
+          <div></div>
+
+          <input style={styles.signatureInput} value="Субподрядчик" readOnly />
+
+          <div style={styles.signatureLine}></div>
+
+          <select style={styles.responseSelect}>
+            <option value="">Выберите</option>
+            <option>Худабердиев Ш.</option>
+            <option>Раджапов А.</option>
+            <option>Тайлиев Б.</option>
+            <option>Нурматов С.</option>
+            <option>Курбанмухамедов О.</option>
+          </select>
+        </div>
+      </>
+    );
+  };
+
   return (
     <div style={styles.page}>
       <style>{`
@@ -519,186 +720,13 @@ export default function DefectActPage() {
         }
       `}</style>
 
-      {pages.map((pageBlocks, pageIndex) => (
+      {pages.map((page, pageIndex) => (
         <div className="a4-page" style={styles.sheet} key={pageIndex}>
-          {pageIndex === 0 && (
-            <>
-              <div style={styles.topRow}>
-                <label style={styles.label}>Организация</label>
+          {page.showDocumentHeader && renderDocumentHeader()}
 
-                <label style={styles.label}>ТОО "VK INVEST COMPANY"</label>
-              </div>
+          {page.blocks.length > 0 && renderTable(page.blocks)}
 
-              <h1 style={styles.title}>
-                Дефектная ведомость (дефектный акт)
-              </h1>
-
-              <div style={styles.subtitle}>
-                № <input style={styles.numberInput} /> от "
-                <input style={styles.dayInput} value={currentDay} readOnly />"{" "}
-                <input
-                  style={styles.monthInput}
-                  value={currentMonth}
-                  readOnly
-                />{" "}
-                {currentYear} г.
-              </div>
-
-              <div style={styles.objectRow}>
-                <label style={styles.label}>ОБЪЕКТ:</label>
-
-                <label style={styles.label}>Нурлы жол 4</label>
-              </div>
-
-              <div style={styles.objectRow}>
-                <label></label>
-
-                <select style={styles.select}>
-                  <option value="">Выберите позицию</option>
-                  <option value="поз.1.1">поз.1.1</option>
-                  <option value="поз.1.2">поз.1.2</option>
-                  <option value="поз.1.3">поз.1.3</option>
-                  <option value="поз.1.4">поз.1.4</option>
-                  <option value="поз.1.5">поз.1.5</option>
-                  <option value="поз.1.6">поз.1.6</option>
-                  <option value="поз.1.7">поз.1.7</option>
-                  <option value="поз.1.8">поз.1.8</option>
-                  <option value="поз.1.9">поз.1.9</option>
-                </select>
-              </div>
-            </>
-          )}
-
-          {renderTable(pageBlocks)}
-
-          {pageIndex === pages.length - 1 && (
-            <>
-              <div className="no-print" style={styles.buttonBlock}>
-                <button type="button" style={styles.button} onClick={addRow}>
-                  Добавить строку
-                </button>
-
-                <button
-                  type="button"
-                  style={styles.button}
-                  onClick={() => window.print()}
-                >
-                  Сохранить в PDF
-                </button>
-              </div>
-
-              <div style={styles.costRow}>
-                <label style={styles.label}>Стоимость работ составит:</label>
-
-                <input
-                  style={styles.input}
-                  value={totalWorks.toFixed(2)}
-                  readOnly
-                />
-              </div>
-
-              <div style={styles.costRow}>
-                <label style={styles.label}>
-                  Стоимость материалов составит:
-                </label>
-
-                <input
-                  style={styles.input}
-                  value={totalMaterials.toFixed(2)}
-                  readOnly
-                />
-              </div>
-
-              <div style={styles.costRow}>
-                <label style={styles.label}>Общая стоимость составит:</label>
-
-                <input
-                  style={styles.input}
-                  value={(totalWorks + totalMaterials).toFixed(2)}
-                  readOnly
-                />
-              </div>
-
-              <div style={styles.conclusionBlock}>
-                <label style={styles.label}>Заключение комиссии</label>
-
-                <textarea style={styles.conclusionTextarea} />
-              </div>
-
-              <div style={styles.signatures}>
-                <div style={styles.signLeft}>
-                  <label style={styles.label}>Председатель комиссии</label>
-                </div>
-
-                <input
-                  style={styles.signatureInput}
-                  value="Главный инженер"
-                  readOnly
-                />
-
-                <div style={styles.signatureLine}></div>
-
-                <input
-                  style={styles.signatureInput}
-                  value="Титаренко В.С."
-                  readOnly
-                />
-
-                <div style={styles.signLeft}>
-                  <label style={styles.label}>Члены комиссии</label>
-                </div>
-
-                <input
-                  style={styles.signatureInput}
-                  value="Начальник строительного участка"
-                  readOnly
-                />
-
-                <div style={styles.signatureLine}></div>
-
-                <input
-                  style={styles.signatureInput}
-                  value="Адаменко О.Ю."
-                  readOnly
-                />
-
-                <div></div>
-
-                <input
-                  style={styles.signatureInput}
-                  value="Инженер ПТО"
-                  readOnly
-                />
-
-                <div style={styles.signatureLine}></div>
-
-                <input
-                  style={styles.signatureInput}
-                  value="Төлеуғалиқызы Г."
-                  readOnly
-                />
-
-                <div></div>
-
-                <input
-                  style={styles.signatureInput}
-                  value="Субподрядчик"
-                  readOnly
-                />
-
-                <div style={styles.signatureLine}></div>
-
-                <select style={styles.responseSelect}>
-                  <option value="">Выберите</option>
-                  <option>Худабердиев Ш.</option>
-                  <option>Раджапов А.</option>
-                  <option>Тайлиев Б.</option>
-                  <option>Нурматов С.</option>
-                  <option>Курбанмухамедов О.</option>
-                </select>
-              </div>
-            </>
-          )}
+          {page.showSummary && renderSummaryBlock()}
         </div>
       ))}
     </div>
