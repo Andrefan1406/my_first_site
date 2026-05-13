@@ -579,7 +579,7 @@ export default function DefectActPage() {
             style={styles.button}
             onClick={() => window.print()}
           >
-            Сохранить в PDF
+            Печать
           </button>
         </div>
 
