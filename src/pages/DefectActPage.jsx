@@ -571,7 +571,7 @@ export default function DefectActPage() {
           </button>
 
           <button type="button" style={styles.button} onClick={deleteLastRow}>
-            Удалить строку
+            Удалить строкуgit 
           </button>
 
           <button
