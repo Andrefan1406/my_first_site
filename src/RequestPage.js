@@ -1,3 +1,6 @@
+// =========================
+//     ЗАЯВКА НА ТЕХНИКУ
+// =========================
 import React, { useState, useEffect } from "react";
 import styles from './RequestPage.module.css';
 import { objectCategoryOptions, objectPositionOptions } from "./data/constructionData";
@@ -106,9 +109,19 @@ const RequestPage = () => {
 
     setRequests(newRequests);
   };  
+
+  const isNoteRequired = (category) => {
+    return category === "Манипуляторы" || category === "Длинномеры";
+  };
+
   
   const isRequestComplete = (request) => {
-    return Object.entries(request).every(([key, value]) => key === "note" || value !== "");
+    return Object.entries(request).every(([key, value]) => {
+      if (key === "note") {
+        return !isNoteRequired(request.category) || value.trim() !== "";
+      }
+      return value !== "";
+    });
   };
 
   const addRequest = () => {
@@ -132,20 +145,56 @@ const RequestPage = () => {
       alert("Пожалуйста, выберите дату.");
       return;
     }
-
+  
     for (let request of requests) {
       if (!isRequestComplete(request)) {
         alert("Пожалуйста, заполните все обязательные поля.");
         return;
       }
     }
+  
+    const now = new Date();
+  
+    const today = getCurrentDate();
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentTimeInMinutes = currentHour * 60 + currentMinutes;
+  
+    const isToday = selectedDate === today;
+  
+    if (isToday) {
+      if (currentTimeInMinutes < 7 * 60 || currentTimeInMinutes > 10 * 60) {
+        alert("Заявку на технику на сегодня можно подать в период с 07:00 до 10:00.");
+        return;
+      }
+    } else {
+      if (currentTimeInMinutes < 12 * 60 || currentTimeInMinutes > 21 * 60) {
+        alert("Заявку на технику на следующий и последующие дни можно подать в период с 12:00 до 21:00.");
+        return;
+      }
+    }
+  
+    const selectedDay = new Date(selectedDate).getDay();
+  
+    if (selectedDay === 0) {
+      const confirmed = window.confirm(
+        "Вы пытаетесь подать заявку на выходной день. Вы уверены?"
+      );
+  
+      if (!confirmed) {
+        return;
+      }
+    }
+  
     const lastDate = localStorage.getItem("lastRequestDate");
+  
     if (lastDate === selectedDate) {
       if (lastDate === selectedDate && !confirmedResend) {
         setIsWarningModalOpen(true);
         return;
       }
     }
+  
     setIsModalOpen(true);
   };
 
@@ -307,11 +356,18 @@ const RequestPage = () => {
               ))}
             </select>
             
-            <label>Примечание (необязательно):</label>
+            <label>
+              Примечание {isNoteRequired(request.category) ? "(обязательно):" : "(необязательно):"}
+            </label>
             <textarea 
               value={request.note} 
-              onChange={e => handleChange(index, "note", e.target.value)} 
-              placeholder="Введите примечание..." 
+              onChange={e => handleChange(index, "note", e.target.value)}
+              required={isNoteRequired(request.category)}
+              placeholder={
+                isNoteRequired(request.category)
+                  ? "Укажите наименование, вес и местоположение груза"
+                  : "Введите примечание..."
+              }
             />
 
             {requests.length > 1 && (
@@ -440,18 +496,23 @@ const RequestPage = () => {
                     </select>
                   </td>
                   <td>
-                    <textarea 
-                      value={request.note} 
-                      onChange={e => handleChange(index, "note", e.target.value)} 
-                      placeholder="Примечание"
-                      rows={2} // Количество строк
-                      className={styles.tableTextarea}
-                      style={{
-                        minHeight: '40px',
-                        maxHeight: '120px',
-                        overflowY: 'auto'
-                      }}
-                    />
+                  <textarea 
+                    value={request.note} 
+                    onChange={e => handleChange(index, "note", e.target.value)}
+                    required={isNoteRequired(request.category)}
+                    placeholder={
+                      isNoteRequired(request.category)
+                        ? "Укажите наименование, вес и местоположение груза"
+                        : "Примечание"
+                    }
+                    rows={2}
+                    className={styles.tableTextarea}
+                    style={{
+                      minHeight: '40px',
+                      maxHeight: '120px',
+                      overflowY: 'auto'
+                    }}
+                  />
                   </td>
                   <td>
                     {requests.length > 1 && (
