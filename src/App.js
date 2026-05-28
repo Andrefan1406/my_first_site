@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './HomePage';
 import RequestPage from './RequestPage';
-//import ConcreteRequestPage from './ConcreteRequestPage'; 
 import ElectricansRequestPage from './ElectricansRequestPage';
 import GeoRequestPage from './GeoRequestPage';
 import PeopleReportPage from './PeopleReportPage';
@@ -19,14 +18,12 @@ import RemarksPage from "./remarks/RemarksPage";
 import LabTestRequestPaje from "./LabTestRequestPaje";
 import DefectActPage from "./pages/DefectActPage";
 
-
 const App = () => {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/request" element={<RequestPage />} />
-        {/* <Route path="/concrete-request" element={<ConcreteRequestPage />} /> */}
+        <Route path="/request" element={<RequestPage />} />       
         <Route path="/electricans-request" element={<ElectricansRequestPage />} />
         <Route path="/geo-request" element={<GeoRequestPage />} />
         <Route path="/people-report" element={<PeopleReportPage />} />
@@ -42,7 +39,7 @@ const App = () => {
         <Route path="/remarks" element={<RemarksPage />} />  
         <Route path="/lab-request" element={<LabTestRequestPaje />} />
         <Route path="/def-act" element={<DefectActPage />} />           
-      </Routes>
+      </Routes>      
     </Router>
   );
 };
