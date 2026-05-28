@@ -71,6 +71,8 @@ const RequestPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userFullName, setUserFullName] = useState("");
   const [userPhone, setUserPhone] = useState("");
+  const positionOptions = ["Начальник участка", "Производитель работ", "Мастер"];
+  const [userPosition, setUserPosition] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
   const [confirmedResend, setConfirmedResend] = useState(false);
@@ -202,17 +204,16 @@ const RequestPage = () => {
     e.preventDefault();
 
     if (isSubmitting) return;
-    if (!userFullName || !userPhone) {
-      alert("Пожалуйста, заполните ФИО и номер телефона.");
+    if (!userFullName || !userPhone || !userPosition) {
+      alert("Пожалуйста, заполните ФИО, должность и номер телефона.");
       return;
     }
-
     setIsSubmitting(true);
 
     const updatedRequests = requests.map(request => ({
       ...request,
       date: selectedDate,
-      fullName: userFullName,
+      fullName: `${userFullName} - ${userPosition}`,
       phone: userPhone
     }));
 
@@ -232,6 +233,7 @@ const RequestPage = () => {
       setSelectedDate(getCurrentDate());
       setUserFullName("");
       setUserPhone("");
+      setUserPosition("");
       setIsModalOpen(false);
       window.location.href = "https://docs.google.com/spreadsheets/d/1nd1AxUUgxLcd6GYlnY5ZJZ0WYr-qmvrP67CGe1Ut4i8/edit?pli=1&gid=0#gid=0";
     } catch (error) {
@@ -592,7 +594,27 @@ const RequestPage = () => {
                 onChange={e => setUserFullName(e.target.value)}
                 required
               />
+
               <br />
+
+              <label>Должность:</label>
+              <input
+                type="text"
+                list="positionOptions"
+                value={userPosition}
+                onChange={e => setUserPosition(e.target.value)}
+                placeholder="Выберите или введите должность"
+                required
+              />
+
+              <datalist id="positionOptions">
+                {positionOptions.map(position => (
+                  <option key={position} value={position} />
+                ))}
+              </datalist>
+
+              <br />
+
               <label>Номер телефона:</label>
               <input
                 type="tel"
