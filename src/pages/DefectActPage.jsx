@@ -79,6 +79,7 @@ export default function DefectActPage() {
 
   const [selectedObject, setSelectedObject] = useState("");
   const [selectedPosition, setSelectedPosition] = useState("");
+  const [selectedSubcontractor, setSelectedSubcontractor] = useState("");
 
   const calculateTotal = (quantity, price) => {
     const q = parseFloat(quantity) || 0;
@@ -359,9 +360,18 @@ export default function DefectActPage() {
   const showBlockSelect = selectedObject === "Нурлы Жол 4";
 
   const subcontractor =
-    selectedObject === "Экополис"
+    selectedPosition === "поз.103"
       ? "Курбанмухамедов О."
-      : "";
+      : selectedPosition === "поз.104"
+      ? "Худабердиев Ш."
+      : selectedSubcontractor;
+
+  const isFixedSubcontractor =
+    selectedPosition === "поз.103" ||
+    selectedPosition === "поз.104";
+  
+  const isLimitedSubcontractorList =
+    selectedPosition === "поз.105";
 
   const renderDocumentHeader = () => {
     return (
@@ -388,6 +398,7 @@ export default function DefectActPage() {
             onChange={(e) => {
               setSelectedObject(e.target.value);
               setSelectedPosition("");
+              setSelectedSubcontractor("");
             }}
           >
             <option value="">Выберите объект</option>
@@ -401,7 +412,10 @@ export default function DefectActPage() {
           <select
             style={styles.select}
             value={selectedPosition}
-            onChange={(e) => setSelectedPosition(e.target.value)}
+            onChange={(e) => {
+              setSelectedPosition(e.target.value);
+              setSelectedSubcontractor("");
+            }}
             disabled={!selectedObject}
           >
             <option value="">Выберите позицию</option>
@@ -765,14 +779,39 @@ export default function DefectActPage() {
           <select
             style={styles.responseSelect}
             value={subcontractor}
-            disabled={selectedObject === "Экополис"}
+            disabled={isFixedSubcontractor}
+            onChange={(e) => setSelectedSubcontractor(e.target.value)}
           >
             <option value="">Выберите</option>
-            <option value="Худабердиев Ш.">Худабердиев Ш.</option>
-            <option value="Раджапов А.">Раджапов А.</option>
-            <option value="Тайлиев Б.">Тайлиев Б.</option>
-            <option value="Нурматов С.">Нурматов С.</option>
-            <option value="Курбанмухамедов О.">Курбанмухамедов О.</option>
+
+            {isLimitedSubcontractorList ? (
+              <>
+                <option value="Курбанмухамедов О.">
+                  Курбанмухамедов О.
+                </option>
+                <option value="Худабердиев Ш.">
+                  Худабердиев Ш.
+                </option>
+              </>
+            ) : (
+              <>
+                <option value="Худабердиев Ш.">
+                  Худабердиев Ш.
+                </option>
+                <option value="Раджапов А.">
+                  Раджапов А.
+                </option>
+                <option value="Тайлиев Б.">
+                  Тайлиев Б.
+                </option>
+                <option value="Нурматов С.">
+                  Нурматов С.
+                </option>
+                <option value="Курбанмухамедов О.">
+                  Курбанмухамедов О.
+                </option>
+              </>
+            )}
           </select>
         </div>
       </>
@@ -1004,7 +1043,7 @@ const styles = {
     fontFamily: "Times New Roman, serif",
     background: "transparent",
   },
-
+  /* расположение */
   locationSelect: {
     width: "100%",
     border: "none",
@@ -1089,7 +1128,6 @@ const styles = {
   locationPlaceholder: {
     padding: 4,
     fontSize: 11,
-    color: "#777",
-    fontStyle: "italic",
+    color: "#777",    
   },
 };
