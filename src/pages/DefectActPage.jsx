@@ -33,8 +33,52 @@ const currentMonth = today.toLocaleString("ru-RU", {
 });
 const currentYear = today.getFullYear();
 
+const objectPositions = {
+  "Нурлы Жол 4" : ["поз.1.1", "поз.1.2", "поз.1.3", "поз.1.4", "поз.1.5", "поз.1.6", "поз.1.7", "поз.1.8", "поз.1.9"],
+  "Экополис" : ["поз.103", "поз.104", "поз.105"],
+};
+
+const objectStaff = {
+  "Экополис": {
+    chief: "Макажанов Е.С.",
+    pto: "Гончар П.Н.",
+  },
+  "Нурлы Жол 4": {
+    chief: "Адаменко О.Ю.",
+    pto: "Төлеуғалиқызы Г.",
+  },
+};
+
+const getFloors = (selectedObject, selectedPosition) => {
+  if (!selectedObject || !selectedPosition) return [];
+
+  if (selectedObject === "Нурлы Жол 4") {
+    return [
+      "1 этаж", "2 этаж", "3 этаж", "4 этаж", "5 этаж",
+      "6 этаж", "7 этаж", "8 этаж", "9 этаж",
+      "тех.этаж", "тех.подполье", "кровля"
+    ];
+  }
+
+  if (
+    selectedObject === "Экополис" &&
+    (selectedPosition === "поз.103" || selectedPosition === "поз.104")
+  ) {
+    return [
+      "тех.подполье",
+      ...Array.from({ length: 17 }, (_, i) => `${i + 1} этаж`),
+      "кровля",
+    ];
+  }
+
+  return [];
+};
+
 export default function DefectActPage() {
   const [rows, setRows] = useState([createEmptyRow()]);
+
+  const [selectedObject, setSelectedObject] = useState("");
+  const [selectedPosition, setSelectedPosition] = useState("");
 
   const calculateTotal = (quantity, price) => {
     const q = parseFloat(quantity) || 0;
@@ -138,6 +182,12 @@ export default function DefectActPage() {
       locationBlock: updatedRows[index].locationBlock || "",
       locationFloor: updatedRows[index].locationFloor || "",
       reason: defectData.reason || "",
+    
+      responsibleDefect:
+        defectData.reason === "Износ фанеры"
+          ? "---"
+          : updatedRows[index].responsibleDefect || "",
+    
       workMaterial: "работа",
       requiredWorks: defectData.work?.name || "",
       unit: defectData.work?.unit || "",
@@ -293,6 +343,26 @@ export default function DefectActPage() {
     .filter((row) => row.workMaterial === "материал")
     .reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
 
+  const currentChief =
+    objectStaff[selectedObject]?.chief || "";
+  
+  const currentPto =
+    objectStaff[selectedObject]?.pto || "";
+  
+  const locationFloors = getFloors(selectedObject, selectedPosition);
+
+  const isLocationAvailable = Boolean(selectedObject && selectedPosition);
+  
+  const isManualLocation =
+    selectedObject === "Экополис" && selectedPosition === "поз.105";
+  
+  const showBlockSelect = selectedObject === "Нурлы Жол 4";
+
+  const subcontractor =
+    selectedObject === "Экополис"
+      ? "Курбанмухамедов О."
+      : "";
+
   const renderDocumentHeader = () => {
     return (
       <>
@@ -311,24 +381,36 @@ export default function DefectActPage() {
         </div>
 
         <div style={styles.objectRow}>
-          <label style={styles.label}>ОБЪЕКТ:</label>
-          <label style={styles.label}>Нурлы жол 4</label>
+          <label style={styles.label}>ОБЪЕКТ:</label>        
+          <select
+            style={styles.select}
+            value={selectedObject}
+            onChange={(e) => {
+              setSelectedObject(e.target.value);
+              setSelectedPosition("");
+            }}
+          >
+            <option value="">Выберите объект</option>
+            <option value="Нурлы Жол 4">Нурлы Жол 4</option>
+            <option value="Экополис">Экополис</option>         
+          </select>
         </div>
-
         <div style={styles.objectRow}>
           <label></label>
 
-          <select style={styles.select}>
+          <select
+            style={styles.select}
+            value={selectedPosition}
+            onChange={(e) => setSelectedPosition(e.target.value)}
+            disabled={!selectedObject}
+          >
             <option value="">Выберите позицию</option>
-            <option value="поз.1.1">поз.1.1</option>
-            <option value="поз.1.2">поз.1.2</option>
-            <option value="поз.1.3">поз.1.3</option>
-            <option value="поз.1.4">поз.1.4</option>
-            <option value="поз.1.5">поз.1.5</option>
-            <option value="поз.1.6">поз.1.6</option>
-            <option value="поз.1.7">поз.1.7</option>
-            <option value="поз.1.8">поз.1.8</option>
-            <option value="поз.1.9">поз.1.9</option>
+
+            {(objectPositions[selectedObject] || []).map((position) => (
+              <option key={position} value={position}>
+                {position}
+              </option>
+            ))}
           </select>
         </div>
       </>
@@ -378,45 +460,54 @@ export default function DefectActPage() {
                   {!row.isMaterial && (
                     <>
                       <td style={styles.td} rowSpan={row.rowSpan}>
+                      {!isLocationAvailable && (
+                        <div style={styles.locationPlaceholder}>
+                          Выберите объект и позицию
+                        </div>
+                      )}
+
+                      {isLocationAvailable && showBlockSelect && (
                         <select
                           style={styles.locationSelect}
                           value={row.locationBlock}
                           onChange={(e) =>
-                            handleChange(
-                              globalIndex,
-                              "locationBlock",
-                              e.target.value
-                            )
+                            handleChange(globalIndex, "locationBlock", e.target.value)
                           }
                         >
                           <option value="">Блок</option>
                           <option value="Блок 1">Блок 1</option>
                           <option value="Блок 2">Блок 2</option>
                         </select>
+                      )}
 
+                      {isLocationAvailable && !isManualLocation && (
                         <select
                           style={styles.locationSelect}
                           value={row.locationFloor}
                           onChange={(e) =>
-                            handleChange(
-                              globalIndex,
-                              "locationFloor",
-                              e.target.value
-                            )
+                            handleChange(globalIndex, "locationFloor", e.target.value)
                           }
                         >
                           <option value="">Этаж</option>
 
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((floor) => (
-                            <option key={floor} value={`${floor} этаж`}>
-                              {floor} этаж
+                          {locationFloors.map((floor) => (
+                            <option key={floor} value={floor}>
+                              {floor}
                             </option>
                           ))}
-
-                          <option value="тех.этаж">тех.этаж</option>
-                          <option value="тех.подполье">тех.подполье</option>
-                          <option value="кровля">кровля</option>
                         </select>
+                      )}
+
+                      {isLocationAvailable && isManualLocation && (
+                        <input
+                          style={styles.locationSelect}
+                          value={row.locationFloor}
+                          placeholder="Введите расположение"
+                          onChange={(e) =>
+                            handleChange(globalIndex, "locationFloor", e.target.value)
+                          }
+                        />
+                      )}
                       </td>
 
                       <td style={styles.td} rowSpan={row.rowSpan}>
@@ -450,6 +541,7 @@ export default function DefectActPage() {
                         <select
                           style={styles.responseSelect}
                           value={row.responsibleDefect}
+                          disabled={row.reason === "Износ фанеры"}
                           onChange={(e) =>
                             handleChange(
                               globalIndex,
@@ -648,7 +740,7 @@ export default function DefectActPage() {
 
           <input
             style={styles.signatureInput}
-            value="Адаменко О.Ю."
+            value={currentChief}
             readOnly
           />
 
@@ -660,7 +752,7 @@ export default function DefectActPage() {
 
           <input
             style={styles.signatureInput}
-            value="Төлеуғалиқызы Г."
+            value={currentPto}
             readOnly
           />
 
@@ -670,13 +762,17 @@ export default function DefectActPage() {
 
           <div style={styles.signatureLine}></div>
 
-          <select style={styles.responseSelect}>
+          <select
+            style={styles.responseSelect}
+            value={subcontractor}
+            disabled={selectedObject === "Экополис"}
+          >
             <option value="">Выберите</option>
-            <option>Худабердиев Ш.</option>
-            <option>Раджапов А.</option>
-            <option>Тайлиев Б.</option>
-            <option>Нурматов С.</option>
-            <option>Курбанмухамедов О.</option>
+            <option value="Худабердиев Ш.">Худабердиев Ш.</option>
+            <option value="Раджапов А.">Раджапов А.</option>
+            <option value="Тайлиев Б.">Тайлиев Б.</option>
+            <option value="Нурматов С.">Нурматов С.</option>
+            <option value="Курбанмухамедов О.">Курбанмухамедов О.</option>
           </select>
         </div>
       </>
@@ -988,5 +1084,12 @@ const styles = {
     fontFamily: "Times New Roman, serif",
     background: "transparent",
     textAlign: "center",
+  },
+
+  locationPlaceholder: {
+    padding: 4,
+    fontSize: 11,
+    color: "#777",
+    fontStyle: "italic",
   },
 };
