@@ -1,41 +1,67 @@
-import React  from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { signOut } from "firebase/auth";
+import { auth } from "./firebase";
 
 const HomePage = () => {
   const navigate = useNavigate();
 
+  const handleLogout = async () => {
+    await signOut(auth);
+    navigate("/login");
+  };
+
   return (
     <div style={styles.container}>
-      {/* Логотип вверху страницы */}
-      <img src="/Логотип.png" alt="Логотип" style={styles.logo} />
+      <div style={styles.headerWrapper}>
+        <img src="/Логотип.png" alt="Логотип" style={styles.logo} />
+
+        <span
+          onClick={handleLogout}
+          style={styles.logoutLink}
+        >
+          Выход
+        </span>
+      </div>
 
       <h1>Добро пожаловать!</h1>
 
       <button onClick={() => navigate('/request')} style={styles.button}>
         Заявка на технику
       </button>
+
       <button onClick={() => navigate('/concrete-request2')} style={styles.button}>
         Заявка на бетон и раствор
       </button>
+
       <button onClick={() => navigate('/electricans-request')} style={styles.button}>
         Заявка электриков
       </button>
+
       <button onClick={() => navigate('/geo-request')} style={styles.button}>
         Заявка геодезистов
       </button>
+
       <button onClick={() => navigate('/lab-request')} style={styles.button}>
         Лабораторные испытания
-      </button>       
+      </button>
+
       <button onClick={() => navigate('/blbrequest')} style={styles.button}>
         Заявка на брусчатку
       </button>
+
       <button onClick={() => navigate('/znbrequest')} style={styles.button}>
         Заявка на ж/б изделия
       </button>
+
       <button onClick={() => navigate('/people-report')} style={styles.button}>
         Отчёты по людям
-      </button>     
-      <button onClick={() => navigate('/reports-dashboard')} style={{ ...styles.button, background: 'red' }}>
+      </button>
+
+      <button
+        onClick={() => navigate('/reports-dashboard')}
+        style={{ ...styles.button, background: 'red' }}
+      >
         Графики и отчёты
       </button>
     </div>
@@ -47,16 +73,38 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
-    height: '100vh',
+    minHeight: '100vh',
     textAlign: 'center',
     gap: '20px',
+    paddingTop: '40px',
     position: 'relative'
   },
+
+  headerWrapper: {
+    position: 'relative',
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center'
+  },
+
   logo: {
     width: '300px',
     marginBottom: '20px'
   },
+
+  logoutLink: {
+    position: 'absolute',
+    top: '0',
+    right: '40px',
+    color: '#007bff',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '500',
+    borderBottom: '2px solid #007bff',
+    lineHeight: '1.0',
+    paddingBottom: '1px'
+  },
+
   button: {
     padding: '10px 20px',
     background: '#007bff',
@@ -66,15 +114,6 @@ const styles = {
     cursor: 'pointer',
     fontSize: '16px',
     width: '300px'
-  },
-  viewCounter: {
-    position: 'absolute',
-    bottom: '10px',
-    left: '10px',
-    fontSize: '16px',
-    opacity: 0.7,
-    display: 'flex',
-    alignItems: 'center'
   }
 };
 

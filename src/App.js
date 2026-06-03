@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
 import HomePage from './HomePage';
 import RequestPage from './RequestPage';
 import ElectricansRequestPage from './ElectricansRequestPage';
@@ -17,29 +18,191 @@ import RagPage from './RagPage';
 import RemarksPage from "./remarks/RemarksPage";
 import LabTestRequestPaje from "./LabTestRequestPaje";
 import DefectActPage from "./pages/DefectActPage";
+import GrafikiPage from "./pages/GrafikiPage";
+
+import LoginPage from './LoginPage';
+import PrivateRoute from './components/PrivateRoute';
+
+
+const Protected = ({ children }) => (
+  <PrivateRoute>
+    {children}
+  </PrivateRoute>
+);
 
 const App = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/request" element={<RequestPage />} />       
-        <Route path="/electricans-request" element={<ElectricansRequestPage />} />
-        <Route path="/geo-request" element={<GeoRequestPage />} />
-        <Route path="/people-report" element={<PeopleReportPage />} />
-        <Route path="/reports-dashboard" element={<ReportsDashboardPage />} />
-        <Route path="/people-dashboard" element={<PeopleDashboardPage />} />
-        <Route path="/equipment-report" element={<EquipmentReportPage />} />
-        <Route path="/people-charts" element={<PeopleReportCharts />} />
-        <Route path="/concrete-report" element={<ConcreteProductionReport />} />
-        <Route path="/concrete-request2" element={<ConcreteRequestPage2 />} />        
-        <Route path="/blbrequest" element={<BLBRequestPage />} />
-        <Route path="/znbrequest" element={<ZnbRequestPage />} />
-        <Route path="/rag" element={<RagPage />} /> 
-        <Route path="/remarks" element={<RemarksPage />} />  
-        <Route path="/lab-request" element={<LabTestRequestPaje />} />
-        <Route path="/def-act" element={<DefectActPage />} />           
-      </Routes>      
+
+        {/* Авторизация */}
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* Главная */}
+        <Route
+          path="/"
+          element={
+            <Protected>
+              <HomePage />
+            </Protected>
+          }
+        />
+
+        {/* Заявки */}
+        <Route
+          path="/request"
+          element={
+            <Protected>
+              <RequestPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/electricans-request"
+          element={
+            <Protected>
+              <ElectricansRequestPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/geo-request"
+          element={
+            <Protected>
+              <GeoRequestPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/concrete-request2"
+          element={
+            <Protected>
+              <ConcreteRequestPage2 />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/blbrequest"
+          element={
+            <Protected>
+              <BLBRequestPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/znbrequest"
+          element={
+            <Protected>
+              <ZnbRequestPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/lab-request"
+          element={
+            <Protected>
+              <LabTestRequestPaje />
+            </Protected>
+          }
+        />
+
+        {/* Отчёты */}
+        <Route
+          path="/people-report"
+          element={
+            <Protected>
+              <PeopleReportPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/reports-dashboard"
+          element={
+            <Protected>
+              <ReportsDashboardPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/people-dashboard"
+          element={
+            <Protected>
+              <PeopleDashboardPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/equipment-report"
+          element={
+            <Protected>
+              <EquipmentReportPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/people-charts"
+          element={
+            <Protected>
+              <PeopleReportCharts />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/concrete-report"
+          element={
+            <Protected>
+              <ConcreteProductionReport />
+            </Protected>
+          }
+        />
+
+        {/* Прочее */}
+        <Route
+          path="/rag"
+          element={
+            <Protected>
+              <RagPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/remarks"
+          element={
+            <Protected>
+              <RemarksPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/def-act"
+          element={
+            <Protected>
+              <DefectActPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/grafiki"
+          element={
+            <Protected>
+              <GrafikiPage />
+            </Protected>
+          }
+        />
+      </Routes>
     </Router>
   );
 };
