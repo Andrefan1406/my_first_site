@@ -7,7 +7,8 @@ import {
 const PeopleReportCharts = () => {
   const [chartData, setChartData] = useState([]);
   const [professions, setProfessions] = useState([]);
-  const [monthlyAverages2025, setMonthlyAverages2025] = useState([]);
+  /* const [monthlyAverages2025, setMonthlyAverages2025] = useState([]); */
+  const [monthlyAverages2026, setMonthlyAverages2026] = useState([]);
   const [monthlyComparison, setMonthlyComparison] = useState([]);
 
   const formatDateWithWeekday = (dateStr) => {
@@ -45,11 +46,28 @@ const PeopleReportCharts = () => {
         });
 
         const headers = rows[0];
-        const dataRows = rows.slice(1).map(row =>
+        const rawDataRows = rows.slice(1).map(row =>
           Object.fromEntries(headers.map((h, i) => [h, row[i] || '']))
         );
+        
+        // Удаляем полностью одинаковые строки-дубликаты
+        const dataRows = Array.from(
+          new Map(
+            rawDataRows.map(row => [
+              JSON.stringify(row),
+              row
+            ])
+          ).values()
+        );
+        
+        console.log('Строк всего:', rawDataRows.length);
+        console.log('Строк после удаления дубликатов:', dataRows.length);
 
         const holidays = new Set([
+          '2026-01-01', '2026-01-02', '2026-01-07', '2026-03-09', '2026-03-21', '2026-03-22',
+          '2026-03-23', '2026-03-24', '2026-03-25', '2026-05-01', '2026-05-07', '2026-05-09',
+          '2026-05-11', '2026-05-27', '2026-07-06', '2026-08-31', '2026-10-25', '2026-10-26',
+          '2026-12-16',
           '2025-01-01','2025-01-02','2025-03-10','2025-03-21','2025-03-24','2025-03-25',
           '2025-05-01','2025-05-07','2025-05-09','2025-06-06','2025-07-07','2025-09-01',
           '2025-10-27','2025-12-16',
@@ -68,9 +86,10 @@ const PeopleReportCharts = () => {
         const byDate = {};
         const profSet = new Set();
 
-        const dailyTotalsByYear = { '2023': {}, '2024': {}, '2025': {} };
+        const dailyTotalsByYear = { '2023': {}, '2024': {}, '2025': {}, '2026': {}};
         const dailyProfessionTotals2025 = {};
-        const workingDaysSetByMonth = { '2023': {}, '2024': {}, '2025': {} };
+        const dailyProfessionTotals2026 = {};
+        const workingDaysSetByMonth = { '2023': {}, '2024': {}, '2025': {}, '2026': {}};
 
         dataRows.forEach(row => {
           const dateStr = row['Дата'];
@@ -93,7 +112,7 @@ const PeopleReportCharts = () => {
           // Фильтруем только рабочие дни
           if (!isNaN(dateObj) && !isWeekend && !isHoliday) {
             // Для сравнения 2024 vs 2025
-            if (year === 2023 || year === 2024 || year === 2025) {
+            if (year === 2023 || year === 2024 || year === 2025 || year === 2026) {
               if (!dailyTotalsByYear[year][dayKey]) dailyTotalsByYear[year][dayKey] = 0;
               dailyTotalsByYear[year][dayKey] += count;
 
@@ -108,6 +127,13 @@ const PeopleReportCharts = () => {
 
               if (!workingDaysSetByMonth['2025'][monthKey]) workingDaysSetByMonth['2025'][monthKey] = new Set();
               workingDaysSetByMonth['2025'][monthKey].add(dayKey);
+            }
+            if (year === 2026) {
+              if (!dailyProfessionTotals2026[dayKey]) dailyProfessionTotals2026[dayKey] = {};
+              dailyProfessionTotals2026[dayKey][profession] = (dailyProfessionTotals2026[dayKey][profession] || 0) + count;
+
+              if (!workingDaysSetByMonth['2026'][monthKey]) workingDaysSetByMonth['2026'][monthKey] = new Set();
+              workingDaysSetByMonth['2026'][monthKey].add(dayKey);
             }
           }
         });
@@ -124,7 +150,7 @@ const PeopleReportCharts = () => {
 
         // Второй график (stacked bar по месяцам)
         const monthlyProfessionTotals = {};
-        Object.entries(dailyProfessionTotals2025).forEach(([day, profData]) => {
+        Object.entries(dailyProfessionTotals2026).forEach(([day, profData]) => {
           const monthKey = day.slice(0, 7);
           if (!monthlyProfessionTotals[monthKey]) monthlyProfessionTotals[monthKey] = {};
           Object.entries(profData).forEach(([prof, val]) => {
@@ -135,7 +161,7 @@ const PeopleReportCharts = () => {
           });
         });
         const avgPerMonthProfession = Object.entries(monthlyProfessionTotals).map(([month, profData]) => {
-          const workingDaysCount = workingDaysSetByMonth['2025'][month]?.size || 1;
+          const workingDaysCount = workingDaysSetByMonth['2026'][month]?.size || 1;
           const result = { month };
           let total = 0;
           Object.entries(profData).forEach(([prof, sum]) => {
@@ -146,10 +172,10 @@ const PeopleReportCharts = () => {
           result.total = total;
           return result;
         });
-        setMonthlyAverages2025(avgPerMonthProfession);
+        setMonthlyAverages2026(avgPerMonthProfession);
 
         // Третий график (сравнение годов)
-        const monthlySums = { '2023': {},'2024': {}, '2025': {} };
+        const monthlySums = { '2023': {},'2024': {}, '2025': {}, '2026': {}};
         Object.entries(dailyTotalsByYear).forEach(([year, dayMap]) => {
           Object.entries(dayMap).forEach(([day, total]) => {
             const monthKey = day.slice(5, 7);
@@ -168,7 +194,10 @@ const PeopleReportCharts = () => {
           const avg2025 = monthlySums['2025'][month] && workingDaysSetByMonth['2025'][`2025-${month}`]
             ? Math.round(monthlySums['2025'][month] / workingDaysSetByMonth['2025'][`2025-${month}`].size)
             : 0;
-          return { month, avg2023, avg2024, avg2025 };
+          const avg2026 = monthlySums['2026'][month] && workingDaysSetByMonth['2026'][`2026-${month}`]
+            ? Math.round(monthlySums['2026'][month] / workingDaysSetByMonth['2026'][`2026-${month}`].size)
+            : 0;          
+          return { month, avg2023, avg2024, avg2025, avg2026};
         });
         setMonthlyComparison(combinedMonthly);
       });
@@ -209,9 +238,9 @@ const PeopleReportCharts = () => {
         </BarChart>
       </ResponsiveContainer>
 
-      <h2>Среднее количество людей в день по месяцам (2025, накопительно по профессиям)</h2>
+      <h2>Среднее количество людей в день по месяцам (2026, накопительно по профессиям)</h2>
       <ResponsiveContainer width="100%" height={800}>
-        <BarChart data={monthlyAverages2025} stackOffset="normal">
+        <BarChart data={monthlyAverages2026} stackOffset="normal">
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="month" />
           <YAxis />
@@ -228,7 +257,7 @@ const PeopleReportCharts = () => {
         </BarChart>
       </ResponsiveContainer>
 
-      <h2>Сравнение среднего количества людей по месяцам: 2023 vs 2024 vs 2025 (выходные и праздники исключены)</h2>
+      <h2>Сравнение среднего количества людей по месяцам: 2023 vs 2024 vs 2025 vs 2026 (выходные и праздники исключены)</h2>
       <ResponsiveContainer width="100%" height={400}>
         <BarChart data={monthlyComparison}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -253,6 +282,9 @@ const PeopleReportCharts = () => {
           </Bar>
           <Bar dataKey="avg2025" name="2025" fill="#6dbb6d">
             <LabelList dataKey="avg2025" position="center" style={{ fill: 'black', fontSize: 12 }} />
+          </Bar>
+          <Bar dataKey="avg2026" name="2026" fill="#4e79a7">
+            <LabelList dataKey="avg2026" position="center" style={{ fill: 'black', fontSize: 12 }} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>

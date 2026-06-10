@@ -22,6 +22,8 @@ import GrafikiPage from "./pages/GrafikiPage";
 
 import LoginPage from './LoginPage';
 import PrivateRoute from './components/PrivateRoute';
+import PageTracker from './components/PageTracker';
+import AdminStatistics from "./pages/AdminStatistics";
 
 
 const Protected = ({ children }) => (
@@ -33,6 +35,7 @@ const Protected = ({ children }) => (
 const App = () => {
   return (
     <Router>
+      <PageTracker />
       <Routes>
 
         {/* Авторизация */}
@@ -199,6 +202,14 @@ const App = () => {
           element={
             <Protected>
               <GrafikiPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin/statistics"
+          element={
+            <Protected>
+              <AdminStatistics />
             </Protected>
           }
         />
