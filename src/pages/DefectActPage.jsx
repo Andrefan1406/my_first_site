@@ -20,6 +20,7 @@ const createEmptyRow = () => ({
   price: "",
   total: "",
   isMaterial: false,
+  isChildRow: false,
   groupId: crypto.randomUUID(),
   materialRate: "",
   rowSpan: 1,
@@ -111,18 +112,29 @@ export default function DefectActPage() {
 
   const recalculateMaterialRows = (updatedRows, groupId, workQuantity) => {
     return updatedRows.map((row) => {
-      if (row.isMaterial && row.groupId === groupId) {
-        const rate = parseFloat(row.materialRate) || 0;
+      if (row.groupId === groupId && row.isChildRow) {
         const price = parseFloat(row.price) || 0;
-        const quantity = workQuantity * rate;
-
-        return {
-          ...row,
-          quantity: quantity ? quantity.toFixed(2) : "",
-          total: quantity && price ? (quantity * price).toFixed(2) : "",
-        };
+  
+        if (row.workMaterial === "работа") {
+          return {
+            ...row,
+            quantity: workQuantity,
+            total: calculateTotal(workQuantity, price),
+          };
+        }
+  
+        if (row.workMaterial === "материал") {
+          const rate = parseFloat(row.materialRate) || 0;
+          const quantity = workQuantity * rate;
+  
+          return {
+            ...row,
+            quantity: quantity ? quantity.toFixed(2) : "",
+            total: quantity && price ? (quantity * price).toFixed(2) : "",
+          };
+        }
       }
-
+  
       return row;
     });
   };
@@ -177,28 +189,42 @@ export default function DefectActPage() {
     const workQuantity = 1;
     const groupId = crypto.randomUUID();
 
+    const works = defectData.works || (defectData.work ? [defectData.work] : []);
+
     updatedRows[index] = {
       ...updatedRows[index],
       defect: selectedDefect,
       locationBlock: updatedRows[index].locationBlock || "",
       locationFloor: updatedRows[index].locationFloor || "",
       reason: defectData.reason || "",
-    
       responsibleDefect:
         defectData.reason === "Износ фанеры"
           ? "---"
           : updatedRows[index].responsibleDefect || "",
-    
       workMaterial: "работа",
-      requiredWorks: defectData.work?.name || "",
-      unit: defectData.work?.unit || "",
+      requiredWorks: works[0]?.name || "",
+      unit: works[0]?.unit || "",
       quantity: workQuantity,
-      price: defectData.work?.price || "",
-      total: calculateTotal(workQuantity, defectData.work?.price || ""),
+      price: works[0]?.price || "",
+      total: calculateTotal(workQuantity, works[0]?.price || ""),
       isMaterial: false,
       groupId,
-      rowSpan: materials.length + 1,
+      rowSpan: works.length + materials.length,
     };
+
+    const additionalWorkRows = works.slice(1).map((work) => ({
+      ...createEmptyRow(),
+      workMaterial: "работа",
+      requiredWorks: work.name,
+      unit: work.unit,
+      quantity: workQuantity,
+      price: work.price,
+      total: calculateTotal(workQuantity, work.price),
+      isMaterial: false,
+      isChildRow: true,
+      groupId,
+      rowSpan: 1,
+    }));
 
     const materialRows = materials.map((material) => {
       const materialQuantity =
@@ -213,13 +239,19 @@ export default function DefectActPage() {
         price: material.price || "",
         total: calculateTotal(materialQuantity, material.price),
         isMaterial: true,
+        isChildRow: true,
         groupId,
         materialRate: material.quantity || "",
         rowSpan: 1,
       };
     });
 
-    updatedRows.splice(index + 1, 0, ...materialRows);
+    updatedRows.splice(
+      index + 1,
+      0,
+      ...additionalWorkRows,
+      ...materialRows
+    );
     setRows(updatedRows);
   };
 
@@ -436,17 +468,17 @@ export default function DefectActPage() {
       <div style={styles.tableWrapper}>
         <table style={styles.table}>
           <colgroup>
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "15%" }} />
-            <col style={{ width: "5%" }} />
-            <col style={{ width: "5%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "9%" }} />
+            <col style={{ width: "8%" }} />  {/* Расположение  */}
+            <col style={{ width: "12%" }} /> {/* Перечень дефектов */}
+            <col style={{ width: "10%" }} /> {/* Причина дефекта */}
+            <col style={{ width: "10%" }} /> {/* Ответственный за возникновение */}
+            <col style={{ width: "10%" }} /> {/* Ответственный за устранение */}
+            <col style={{ width: "7%" }} />  {/* Работа/материал */}
+            <col style={{ width: "17%" }} /> {/* Перечень работ/материалов */}
+            <col style={{ width: "5%" }} />  {/* Ед.изм */}
+            <col style={{ width: "7%" }} />  {/* Кол-во */}
+            <col style={{ width: "7%" }} />  {/* Стоимость за ед */}
+            <col style={{ width: "7%" }} />  {/* Всего */}
           </colgroup>
 
           <thead>
@@ -471,7 +503,7 @@ export default function DefectActPage() {
             {pageBlocks.map((block) =>
               block.map(({ row, globalIndex }) => (
                 <tr key={globalIndex}>
-                  {!row.isMaterial && (
+                  {!row.isChildRow && (
                     <>
                       <td style={styles.td} rowSpan={row.rowSpan}>
                       {!isLocationAvailable && (
