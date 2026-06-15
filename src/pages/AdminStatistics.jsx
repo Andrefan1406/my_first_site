@@ -11,14 +11,14 @@ import { db } from "../firebase";
 
 const PAGE_NAMES = {
   "/": "Главная",
-  "/request": "Заявка на материалы",
+  "/request": "Заявка на технику",
   "/electricans-request": "Заявка электриков",
   "/geo-request": "Заявка геодезистов",
   "/concrete-request2": "Заявка на бетон",
-  "/blbrequest": "Заявка брусчатку",
-  "/znbrequest": "Заявка жби",
-  "/lab-request": "Лаборатория",
-  "/people-report": "Отчет по людям",
+  "/blbrequest": "Заявка на брусчатку, лотки, бордюры",
+  "/znbrequest": "Заявка на жби",
+  "/lab-request": "Заявка на лабораторные испытания",
+  "/people-report": "Ежедневный отчет по людям",
   "/reports-dashboard": "Панель отчетов",
   "/people-dashboard": "Панель по людям",
   "/equipment-report": "Отчет по технике",
@@ -30,6 +30,13 @@ const PAGE_NAMES = {
   "/grafiki": "Графики",
   "/admin/statistics": "Статистика администратора",
 };
+
+const EXCLUDED_EMAILS = ["admin@vkdev.kz"];
+const EXCLUDED_TOP_PAGES = [
+  "/",
+  "/admin/statistics",
+  "/login"
+];
 
 function getPageName(page) {
   return PAGE_NAMES[page] || page || "Неизвестная страница";
@@ -86,16 +93,18 @@ export default function AdminStatistics() {
   }
 
   const visitsWithDate = visits
-    .map((visit) => {
-      const date = visit.timestamp?.toDate ? visit.timestamp.toDate() : null;
+  .map((visit) => {
+    const date = visit.timestamp?.toDate ? visit.timestamp.toDate() : null;
 
-      return {
-        ...visit,
-        date,
-        pageValue: visit.page || visit.path || "unknown",
-      };
-    })
-    .filter((visit) => visit.date);
+    return {
+      ...visit,
+      date,
+      pageValue: visit.page || visit.path || "unknown",
+    };
+  })
+  .filter((visit) => visit.date)
+  .filter((visit) => !EXCLUDED_EMAILS.includes(visit.email))
+  .filter((visit) => visit.pageValue !== "/admin/statistics");
 
   const todayVisits = visitsWithDate.filter((visit) => isToday(visit.date));
 
@@ -120,13 +129,14 @@ export default function AdminStatistics() {
   }, {});
 
   const topPagesToday = Object.entries(pageCountsToday)
-    .map(([page, count]) => ({
-      page,
-      name: getPageName(page),
-      count,
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+  .filter(([page]) => !EXCLUDED_TOP_PAGES.includes(page))
+  .map(([page, count]) => ({
+    page,
+    name: getPageName(page),
+    count,
+  }))
+  .sort((a, b) => b.count - a.count)
+  .slice(0, 10);
 
   const mostPopularPage = topPagesToday[0];
 
@@ -144,9 +154,16 @@ export default function AdminStatistics() {
       count,
     }))
     .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+    .slice(0, 10);
 
-  const latestVisits = visitsWithDate.slice(0, 20);
+    const latestVisits = visitsWithDate
+    .filter(
+      (visit) =>
+        visit.pageValue !== "/" &&
+        visit.pageValue !== "/login" &&
+        visit.pageValue !== "/admin/statistics"
+    )
+    .slice(0, 20);
 
   if (loading) {
     return (
@@ -188,7 +205,7 @@ export default function AdminStatistics() {
       </div>
 
       <div style={styles.section}>
-        <h2>ТОП-5 страниц за сегодня</h2>
+        <h2>ТОП страниц за сегодня</h2>
 
         {topPagesToday.length === 0 ? (
           <p>Сегодня посещений пока нет.</p>
@@ -218,7 +235,7 @@ export default function AdminStatistics() {
       </div>
 
       <div style={styles.section}>
-        <h2>ТОП-5 пользователей за сегодня</h2>
+        <h2>ТОП-10 пользователей за сегодня</h2>
 
         {topUsersToday.length === 0 ? (
           <p>Сегодня пользователей пока нет.</p>
