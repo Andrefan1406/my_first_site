@@ -405,6 +405,35 @@ export default function DefectActPage() {
   const isLimitedSubcontractorList =
     selectedPosition === "поз.105";
 
+  const requiredRows = rows.filter((row) => !row.isChildRow);
+
+  const canPrint =
+    Boolean(selectedObject) &&
+    Boolean(selectedPosition) &&
+    Boolean(subcontractor) &&
+    requiredRows.every((row) => {
+      const hasMainFields =
+        Boolean(row.defect) &&
+        Boolean(row.locationFloor) &&
+        Boolean(row.responsibleDefect) &&
+        Boolean(row.responsibleFix);
+
+      const hasBlock = showBlockSelect ? Boolean(row.locationBlock) : true;
+
+      return hasMainFields && hasBlock;
+    });
+
+  const handlePrint = () => {
+    if (!canPrint) {
+      alert(
+        "Заполните объект, позицию, расположение, дефект, ответственных и субподрядчика."
+      );
+      return;
+    }
+
+    window.print();
+  };
+
   const renderDocumentHeader = () => {
     return (
       <>
@@ -425,6 +454,7 @@ export default function DefectActPage() {
         <div style={styles.objectRow}>
           <label style={styles.label}>ОБЪЕКТ:</label>        
           <select
+            className="no-print"
             style={styles.select}
             value={selectedObject}
             onChange={(e) => {
@@ -437,11 +467,16 @@ export default function DefectActPage() {
             <option value="Нурлы Жол 4">Нурлы Жол 4</option>
             <option value="Экополис">Экополис</option>         
           </select>
+
+          <div className="print-only" style={styles.printField}>
+            {selectedObject}
+          </div>
         </div>
         <div style={styles.objectRow}>
           <label></label>
 
           <select
+            className="no-print"
             style={styles.select}
             value={selectedPosition}
             onChange={(e) => {
@@ -458,6 +493,10 @@ export default function DefectActPage() {
               </option>
             ))}
           </select>
+
+          <div className="print-only" style={styles.printField}>
+            {selectedPosition}
+          </div>
         </div>
       </>
     );
@@ -507,13 +546,14 @@ export default function DefectActPage() {
                     <>
                       <td style={styles.td} rowSpan={row.rowSpan}>
                       {!isLocationAvailable && (
-                        <div style={styles.locationPlaceholder}>
+                        <div className="no-print" style={styles.locationPlaceholder}>
                           Выберите объект и позицию
                         </div>
                       )}
 
                       {isLocationAvailable && showBlockSelect && (
                         <select
+                          className="no-print"
                           style={styles.locationSelect}
                           value={row.locationBlock}
                           onChange={(e) =>
@@ -528,6 +568,7 @@ export default function DefectActPage() {
 
                       {isLocationAvailable && !isManualLocation && (
                         <select
+                          className="no-print"
                           style={styles.locationSelect}
                           value={row.locationFloor}
                           onChange={(e) =>
@@ -546,6 +587,7 @@ export default function DefectActPage() {
 
                       {isLocationAvailable && isManualLocation && (
                         <input
+                          className="no-print"
                           style={styles.locationSelect}
                           value={row.locationFloor}
                           placeholder="Введите расположение"
@@ -554,6 +596,12 @@ export default function DefectActPage() {
                           }
                         />
                       )}
+
+                      <div className="print-only" style={styles.printCellText}>
+                        {[row.locationBlock, row.locationFloor]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </div>
                       </td>
 
                       <td style={styles.td} rowSpan={row.rowSpan}>
@@ -585,6 +633,7 @@ export default function DefectActPage() {
 
                       <td style={styles.centerSelectTd} rowSpan={row.rowSpan}>
                         <select
+                          className="no-print"
                           style={styles.responseSelect}
                           value={row.responsibleDefect}
                           disabled={row.reason === "Износ фанеры"}
@@ -606,10 +655,15 @@ export default function DefectActPage() {
                           </option>
                           <option value="---">---</option>
                         </select>
+
+                        <div className="print-only" style={styles.printCellText}>
+                          {row.responsibleDefect}
+                        </div>
                       </td>
 
                       <td style={styles.centerSelectTd} rowSpan={row.rowSpan}>
                         <select
+                          className="no-print"
                           style={styles.responseSelect}
                           value={row.responsibleFix}
                           onChange={(e) =>
@@ -629,6 +683,10 @@ export default function DefectActPage() {
                             Курбанмухамедов О.
                           </option>
                         </select>
+
+                        <div className="print-only" style={styles.printCellText}>
+                          {row.responsibleFix}
+                        </div>
                       </td>
                     </>
                   )}
@@ -714,8 +772,18 @@ export default function DefectActPage() {
 
           <button
             type="button"
-            style={styles.button}
-            onClick={() => window.print()}
+            style={{
+              ...styles.button,
+              opacity: canPrint ? 1 : 0.5,
+              cursor: canPrint ? "pointer" : "not-allowed",
+            }}
+            disabled={!canPrint}
+            onClick={handlePrint}
+            title={
+              canPrint
+                ? "Печать"
+                : "Заполните обязательные поля перед печатью"
+            }
           >
             Печать
           </button>
@@ -809,6 +877,7 @@ export default function DefectActPage() {
           <div style={styles.signatureLine}></div>
 
           <select
+            className="no-print"
             style={styles.responseSelect}
             value={subcontractor}
             disabled={isFixedSubcontractor}
@@ -845,13 +914,20 @@ export default function DefectActPage() {
               </>
             )}
           </select>
+
+          <div className="print-only" style={styles.printField}>
+            {subcontractor}
+          </div>
         </div>
       </>
     );
   };
 
   return (
-    <div style={styles.page}>
+    <div
+      className={canPrint ? "print-ready" : "print-not-ready"}
+      style={styles.page}
+    >
       <style>{`
         body {
           background: #d9d9d9;
@@ -862,6 +938,14 @@ export default function DefectActPage() {
           margin: 0;
         }
 
+        .print-only {
+          display: none;
+        }
+
+        .print-warning {
+          display: none;
+        }
+
         @media print {
           body {
             background: white;
@@ -870,6 +954,22 @@ export default function DefectActPage() {
 
           .no-print {
             display: none !important;
+          }
+
+          .print-only {
+            display: block !important;
+          }
+
+          .print-not-ready .a4-page {
+            display: none !important;
+          }
+
+          .print-not-ready .print-warning {
+            display: block !important;
+            padding: 30mm;
+            font-size: 18px;
+            font-weight: bold;
+            font-family: "Times New Roman", serif;
           }
 
           .a4-page {
@@ -886,6 +986,10 @@ export default function DefectActPage() {
           }
         }
       `}</style>
+
+      <div className="print-warning">
+        Документ заполнен не полностью. Печать запрещена.
+      </div>
 
       {pages.map((page, pageIndex) => (
         <div className="a4-page" style={styles.sheet} key={pageIndex}>
@@ -1161,5 +1265,22 @@ const styles = {
     padding: 4,
     fontSize: 11,
     color: "#777",    
+  },
+
+  printField: {
+    borderBottom: "1px solid #000",
+    padding: 4,
+    minHeight: 18,
+    fontFamily: "Times New Roman, serif",
+    fontSize: 11,
+    boxSizing: "border-box",
+  },
+
+  printCellText: {
+    padding: 4,
+    lineHeight: 1.25,
+    fontSize: 11,
+    minHeight: 18,
+    boxSizing: "border-box",
   },
 };
