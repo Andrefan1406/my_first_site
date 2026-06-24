@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import styles from './RequestPage.module.css';
 import { objectCategoryOptions, objectPositionOptions } from "./data/constructionData";
+import { getAuth } from "firebase/auth";
 
 // Списки категорий техники, объектов, позиций
 const categoryOptions = {
@@ -163,10 +164,21 @@ const RequestPage = () => {
     const currentTimeInMinutes = currentHour * 60 + currentMinutes;
   
     const isToday = selectedDate === today;
+
+    const auth = getAuth();
+    const currentUserEmail = auth.currentUser?.email?.toLowerCase();
+
+    const isSamat = currentUserEmail === "samat88877@gmail.com";
   
     if (isToday) {
-      if (currentTimeInMinutes < 7 * 60 || currentTimeInMinutes > 10 * 60) {
-        alert("Заявку на технику на сегодня можно подать в период с 07:00 до 10:00.");
+      const endTime = isSamat ? 20 * 60 : 10 * 60;
+    
+      if (currentTimeInMinutes < 7 * 60 || currentTimeInMinutes > endTime) {
+        alert(
+          isSamat
+            ? "Заявку на технику на сегодня можно подать в период с 07:00 до 20:00."
+            : "Заявку на технику на сегодня можно подать в период с 07:00 до 10:00."
+        );
         return;
       }
     } else {
