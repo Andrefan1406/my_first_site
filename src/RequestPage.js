@@ -171,12 +171,12 @@ const RequestPage = () => {
     const isSamat = currentUserEmail === "samat88877@gmail.com";
   
     if (isToday) {
-      const endTime = isSamat ? 20 * 60 : 10 * 60;
+      const endTime = isSamat ? 12 * 60 : 10 * 60;
     
       if (currentTimeInMinutes < 7 * 60 || currentTimeInMinutes > endTime) {
         alert(
           isSamat
-            ? "Заявку на технику на сегодня можно подать в период с 07:00 до 20:00."
+            ? "Заявку на технику на сегодня можно подать в период с 07:00 до 12:00."
             : "Заявку на технику на сегодня можно подать в период с 07:00 до 10:00."
         );
         return;
