@@ -20,6 +20,7 @@ import LabTestRequestPaje from "./LabTestRequestPaje";
 import DefectActPage from "./pages/DefectActPage";
 import GrafikiPage from "./pages/GrafikiPage";
 
+import SmartRequestPage from './SmartRequestPage';
 import LoginPage from './LoginPage';
 import PrivateRoute from './components/PrivateRoute';
 import PageTracker from './components/PageTracker';
@@ -210,6 +211,14 @@ const App = () => {
           element={
             <Protected>
               <AdminStatistics />
+            </Protected>
+          }
+        />
+        <Route
+          path="/smart-request"
+          element={
+            <Protected>
+              <SmartRequestPage />
             </Protected>
           }
         />

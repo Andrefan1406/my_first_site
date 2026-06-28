@@ -26,6 +26,10 @@ const HomePage = () => {
 
       <h1>Добро пожаловать!</h1>
 
+      <button onClick={() => navigate('/smart-request')} style={styles.smartButton}>
+        ✦ Умная заявка (AI)
+      </button>
+
       <button onClick={() => navigate('/request')} style={styles.button}>
         Заявка на технику
       </button>
@@ -114,6 +118,18 @@ const styles = {
     cursor: 'pointer',
     fontSize: '16px',
     width: '300px'
+  },
+  smartButton: {
+    padding: '12px 20px',
+    background: 'linear-gradient(135deg, #6610f2, #007bff)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: '700',
+    width: '300px',
+    boxShadow: '0 4px 12px rgba(102,16,242,0.35)',
   }
 };
 

@@ -6,8 +6,7 @@ const API_URL = `${BASE_URL}/chat`;
 
 const RagPage = () => {
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [attachments, setAttachments] = useState([]);
+  const [answer, setAnswer] = useState("");  
   const [loading, setLoading] = useState(false);
   const [ms, setMs] = useState(null);
   const [error, setError] = useState("");
@@ -20,7 +19,6 @@ const RagPage = () => {
     setLoading(true);
     setError("");
     setAnswer("");
-    setAttachments([]);
     setMs(null);
 
     const t0 = performance.now();
@@ -41,8 +39,7 @@ const RagPage = () => {
 
       const t1 = performance.now();
       setMs(Math.round(t1 - t0));
-
-      setAttachments(Array.isArray(data.attachments) ? data.attachments : []);
+      
       setAnswer(data.answer || "Нет ответа");
     } catch (e) {
       setError(e?.message || "Ошибка запроса к серверу");
@@ -55,7 +52,6 @@ const RagPage = () => {
     setQuestion("");
     setAnswer("");
     setError("");
-    setAttachments([]);
     setMs(null);
   };
 
@@ -172,37 +168,7 @@ const RagPage = () => {
             ) : (
               <div style={styles.placeholder}>Здесь появится ответ…</div>
             )}
-          </div>
-          {!error && attachments.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8, color: "rgba(255,255,255,0.78)" }}>
-                📎 Приложения
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {attachments.map((a, i) => (
-                  <a
-                    key={i}
-                    href={a.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: "inline-block",
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      border: "1px solid rgba(255,255,255,0.14)",
-                      background: "rgba(0,0,0,0.18)",
-                      color: "rgba(255,255,255,0.92)",
-                      textDecoration: "none",
-                      fontWeight: 600,
-                    }}
-                  >
-                    📄 {a.title}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
+          </div>          
         </section>
       </div>
     </div>

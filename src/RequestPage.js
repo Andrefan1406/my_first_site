@@ -87,7 +87,11 @@ const RequestPage = () => {
     return `${year}-${month}-${day}`;
   };
 
-  const [selectedDate, setSelectedDate] = useState(getCurrentDate());
+  const smartDate = localStorage.getItem("smartRequestDate");
+  localStorage.removeItem("smartRequestDate");
+  const [selectedDate, setSelectedDate] = useState(
+    smartDate && smartDate >= getCurrentDate() ? smartDate : getCurrentDate()
+  );
   
   const handleDateChange = (e) => {
     const newDate = e.target.value;
