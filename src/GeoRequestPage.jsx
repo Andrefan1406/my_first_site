@@ -1,50 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styles from './RequestPage.module.css';
 import { getAuth } from 'firebase/auth';
-
-// ─── Справочники ────────────────────────────────────────────────────────────
-
-const objectOptions = [
-  'Нурлы Жол 3',
-  'Нурлы Жол 4',
-  'Нурлы Жол 5',
-  'Brick Town',
-  'СПОРТ',
-  'Благоустройство',
-  'Сети',
-  'Школа',
-  'КОС',
-  'Другое',
-];
-
-// Блок / Позиция — по объекту
-const blockPositionForObject = {
-  'Нурлы Жол 3': [
-    'поз.56', 'поз.57', 'поз.58', 'поз.59', 'поз.60',
-    'поз.63', 'поз.64', 'поз.65', 'поз.69', 'поз.72', 'Другое',
-  ],
-  'Нурлы Жол 4': [
-    'поз.1.1', 'поз.1.2', 'поз.1.3', 'поз.1.4', 'поз.1.5',
-    'поз.1.6', 'поз.1.7', 'поз.1.8', 'поз.1.9', 'Другое',
-  ],
-  'Нурлы Жол 5': [
-    'поз.4.1', 'поз.4.2', 'поз.4.3', 'поз.4.4', 'поз.4.5',
-    'поз.4.6', 'поз.4.7', 'поз.4.8', 'поз.4.10-4.12', 'поз.4.11', 'Другое',
-  ],
-  'Brick Town': [
-    'блок 1', 'блок 2', 'блок 3', 'блок 4', 'блок 5', 'блок 6', 'блок 7',
-    'блок 8', 'блок 8/1', 'блок 9', 'блок 9/1', 'блок 10', 'блок 11',
-    'блок 11/1', 'блок 12', 'блок 13', 'блок 14', 'Другое',
-  ],
-  'СПОРТ': [
-    'поз.73-75', 'поз.74', 'поз.76', 'поз.91',
-    'поз.92', 'поз.93', 'поз.100', 'поз.101', 'Другое',
-  ],
-  'Школа': ['поз.85', 'Нурлы Жол', 'Другое'],
-  // Благоустройство и Сети — уточняющий под-объект
-  'Благоустройство': ['Нурлы Жол 3', 'Brick Town', 'Развязка', 'Спорт', 'Школа', 'Другое'],
-  'Сети':            ['Нурлы Жол 3', 'Brick Town', 'Развязка', 'Спорт', 'Школа', 'Другое'],
-};
+import { objectCategoryOptions, objectPositionOptions } from './data/constructionData';
 
 const konstruktivOptions = [
   'Монолит',
@@ -101,8 +58,9 @@ const getCurrentDate = () => {
 };
 
 const emptyRow = () => ({
+  objectCategory: '',
   object: '',
-  blockPosition: '',
+  position: '',
   konstruktiv: '',
   workType: '',
   workDescription: '',
@@ -147,12 +105,9 @@ const GeoRequestPage = () => {
     setRows(prev => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
-      if (field === 'object') {
-        next[index].blockPosition = '';
-      }
-      if (field === 'konstruktiv') {
-        next[index].workType = '';
-      }
+      if (field === 'objectCategory') { next[index].object = ''; next[index].position = ''; }
+      if (field === 'object')         { next[index].position = ''; }
+      if (field === 'konstruktiv')    { next[index].workType = ''; }
       return next;
     });
   };
@@ -160,14 +115,14 @@ const GeoRequestPage = () => {
   const addRow = () => setRows(prev => [...prev, emptyRow()]);
   const removeRow = (i) => setRows(prev => prev.filter((_, idx) => idx !== i));
 
-  const isRowComplete = (row) => row.object && row.konstruktiv;
+  const isRowComplete = (row) => row.objectCategory && row.object && row.konstruktiv;
 
   const handleSubmitClick = () => {
     const auth = getAuth();
     const user = auth.currentUser;
     if (!user) { alert('Пожалуйста, войдите в систему.'); return; }
     if (rows.some(r => !isRowComplete(r))) {
-      alert('Заполните обязательные поля: Объект и Конструктив.');
+      alert('Заполните обязательные поля: Категория объекта, Объект и Конструктив.');
       return;
     }
     setIsModalOpen(true);
@@ -184,8 +139,9 @@ const GeoRequestPage = () => {
 
     const payload = rows.map(row => ({
       date: selectedDate,
+      objectCategory: row.objectCategory,
       object: row.object,
-      blockPosition: row.blockPosition,
+      position: row.position,
       konstruktiv: row.konstruktiv,
       workType: row.workType,
       workDescription: row.workDescription,
@@ -221,29 +177,6 @@ const GeoRequestPage = () => {
   };
 
   // ─── Render helpers ───────────────────────────────────────────────────────
-
-  const renderBlockPosition = (row, i, asSelect = true) => {
-    const options = blockPositionForObject[row.object];
-    if (!options) return <span style={{ color: '#bbb', fontSize: 13 }}>—</span>;
-    const label = row.object === 'Brick Town' ? 'Блок' : 'Позиция / Объект';
-    if (!asSelect) {
-      return (
-        <>
-          <label>{label}</label>
-          <select value={row.blockPosition} onChange={e => handleChange(i, 'blockPosition', e.target.value)}>
-            <option value="">Выберите</option>
-            {options.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </>
-      );
-    }
-    return (
-      <select value={row.blockPosition} onChange={e => handleChange(i, 'blockPosition', e.target.value)}>
-        <option value="">—</option>
-        {options.map(o => <option key={o}>{o}</option>)}
-      </select>
-    );
-  };
 
   const renderWorkType = (row, i, asSelect = true) => {
     const options = workTypeForKonstruktiv[row.konstruktiv];
@@ -289,13 +222,23 @@ const GeoRequestPage = () => {
         /* ── Мобильная версия ─────────────────────────────────────────── */
         rows.map((row, i) => (
           <div key={i} className={styles.formBlock}>
-            <label>Объект *</label>
-            <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)}>
-              <option value="">Выберите объект</option>
-              {objectOptions.map(o => <option key={o}>{o}</option>)}
+            <label>Категория объекта *</label>
+            <select value={row.objectCategory} onChange={e => handleChange(i, 'objectCategory', e.target.value)}>
+              <option value="">Выберите категорию</option>
+              {Object.keys(objectCategoryOptions).map(c => <option key={c}>{c}</option>)}
             </select>
 
-            {blockPositionForObject[row.object] && renderBlockPosition(row, i, false)}
+            <label>Объект *</label>
+            <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)} disabled={!row.objectCategory}>
+              <option value="">Выберите объект</option>
+              {(objectCategoryOptions[row.objectCategory] || []).map(o => <option key={o}>{o}</option>)}
+            </select>
+
+            <label>Позиция / строение</label>
+            <select value={row.position} onChange={e => handleChange(i, 'position', e.target.value)} disabled={!row.object}>
+              <option value="">Выберите позицию</option>
+              {(objectPositionOptions[row.object] || []).map(p => <option key={p}>{p}</option>)}
+            </select>
 
             <label>Конструктив *</label>
             <select value={row.konstruktiv} onChange={e => handleChange(i, 'konstruktiv', e.target.value)}>
@@ -327,8 +270,9 @@ const GeoRequestPage = () => {
           <table className={styles.requestTable}>
             <thead>
               <tr>
+                <th>Категория объекта</th>
                 <th>Объект</th>
-                <th>Блок / Позиция</th>
+                <th>Позиция</th>
                 <th>Конструктив</th>
                 <th>Вид работы</th>
                 <th>Описание работ</th>
@@ -339,13 +283,22 @@ const GeoRequestPage = () => {
               {rows.map((row, i) => (
                 <tr key={i}>
                   <td>
-                    <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)}>
+                    <select value={row.objectCategory} onChange={e => handleChange(i, 'objectCategory', e.target.value)}>
                       <option value="">Выберите</option>
-                      {objectOptions.map(o => <option key={o}>{o}</option>)}
+                      {Object.keys(objectCategoryOptions).map(c => <option key={c}>{c}</option>)}
                     </select>
                   </td>
                   <td>
-                    {renderBlockPosition(row, i, true)}
+                    <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)} disabled={!row.objectCategory}>
+                      <option value="">Выберите</option>
+                      {(objectCategoryOptions[row.objectCategory] || []).map(o => <option key={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select value={row.position} onChange={e => handleChange(i, 'position', e.target.value)} disabled={!row.object}>
+                      <option value="">—</option>
+                      {(objectPositionOptions[row.object] || []).map(p => <option key={p}>{p}</option>)}
+                    </select>
                   </td>
                   <td>
                     <select value={row.konstruktiv} onChange={e => handleChange(i, 'konstruktiv', e.target.value)}>

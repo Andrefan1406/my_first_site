@@ -1,68 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styles from './RequestPage.module.css';
 import { getAuth } from 'firebase/auth';
-
-// ─── Справочники ────────────────────────────────────────────────────────────
-
-const buildingTypeOptions = [
-  'Здания',
-  'Благоустройство',
-  'Инженерные сети',
-  'Коммерческие объекты',
-  'Производственные объекты',
-  'Штаб №1',
-];
-
-const objectOptions = {
-  'Здания': [
-    'Brick Town', 'Brick Town 2', 'Ветеринарная лаборатория', 'Есенберлина 6/2',
-    'Комфортная школа', 'Ледовый каток', 'Лицей', 'НЖ 4,5', 'Нурлы Жол 3',
-    'Орлёнок', 'Поз 107', 'СПОРТ', 'Транспортная развязка', 'Штаб №1',
-    'Экополис', 'Энтузиастов 7Б', 'Другой',
-  ],
-  'Коммерческие объекты': [
-    'ROYAL B', 'Автомойка', 'Автомойка (Нурлы Жол)', 'Аптека',
-    'Б.О Мелада', 'Б/О Мелада', 'Б/О Орлан', 'Базовая 2/4 кофейня',
-    'Ветеринарная лаборатория', 'Иртыш Сити', 'Каменный карьер',
-    'Кренделия', 'Магазин', 'Орлёнок', 'Сатпаева 55 А', 'Энтузиастов 7Б', 'Другой',
-  ],
-  'Производственные объекты': [
-    'База Эскор', 'Есенберлина 6/2', 'ЖБИ', 'КОС',
-    'Магазин автозапчастей (Эскор)', 'Нурлы Жол 3', 'Центральная база (Сам.ш.29)', 'Другой',
-  ],
-  'Инженерные сети': [
-    'Инженерные сети Брик Таун',
-    'Инженерные сети Школа (Нурлы Жол)',
-    'Инженерные сети Комфортная школа (Самрук)',
-    'Квартальные инженерные сети (Нурлы Жол 1-2)',
-    'Квартальные инженерные сети (Нурлы Жол 3)',
-    'Квартальные инженерные сети (Спорт)',
-    'Нурлы Жол 3', 'Транспортная развязка',
-    'УТ 14, УТ 15, УТ 16, УТ 10 поз.69,65,63', 'Другой',
-  ],
-  'Благоустройство': [
-    'Благоустройство Brick Town',
-    'Благоустройство Нурлы Жол 1,2',
-    'Благоустройство Нурлы Жол 3',
-    'Благоустройство Комфортная школа (Самрук)',
-    'Благоустройство Школа (Нурлы Жол)',
-    'Благоустройство 12-16 этажки',
-    'Транспортная развязка', 'Другой',
-  ],
-  'Штаб №1': ['Штаб №1'],
-};
-
-// Блоки — для объектов, у которых есть корпусная структура
-const blocksForObject = {
-  'Brick Town':   ['Блок 1','Блок 2','Блок 3','Блок 4','Блок 5','Блок 6','Блок 7','Блок 8','Блок 8/1','Блок 9','Блок 9/1','Блок 10','Блок 11','Блок 11/1','Блок 12','Блок 13','Блок 14'],
-  'Brick Town 2': ['Блок 1','Блок 2','Блок 3','Блок 4','Блок 5','Блок 6'],
-};
-
-// Позиции — для НЖ 3
-const positionsForObject = {
-  'Нурлы Жол 3': ['поз.56','поз.57','поз.58','поз.59','поз.60','поз.63','поз.64','поз.65','поз.69','поз.72'],
-  'СПОРТ':       ['поз.73-75','поз.74','поз.76','поз.91','поз.92','поз.93','поз.100','поз.101'],
-};
+import { objectCategoryOptions, objectPositionOptions } from './data/constructionData';
 
 const workCategoryOptions = [
   'Подключение',
@@ -89,7 +28,7 @@ const getCurrentDate = () => {
 const hoursOptions = Array.from({ length: 17 }, (_, i) => i + 6); // 6..22
 
 const emptyRow = () => ({
-  buildingType: '', object: '', block: '', position: '',
+  objectCategory: '', object: '', position: '',
   workCategory: '', workDescription: '', startTime: '',
 });
 
@@ -126,8 +65,8 @@ const ElectricansRequestPage = () => {
     setRows(prev => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
-      if (field === 'buildingType') { next[index].object = ''; next[index].block = ''; next[index].position = ''; }
-      if (field === 'object')       { next[index].block = ''; next[index].position = ''; }
+      if (field === 'objectCategory') { next[index].object = ''; next[index].position = ''; }
+      if (field === 'object')         { next[index].position = ''; }
       return next;
     });
   };
@@ -136,14 +75,14 @@ const ElectricansRequestPage = () => {
   const removeRow = (i) => setRows(prev => prev.filter((_, idx) => idx !== i));
 
   const isRowComplete = (row) =>
-    row.buildingType && row.object && row.workCategory;
+    row.objectCategory && row.object && row.workCategory;
 
   const handleSubmitClick = () => {
     const auth = getAuth();
     const user = auth.currentUser;
     if (!user) { alert('Пожалуйста, войдите в систему.'); return; }
     if (rows.some(r => !isRowComplete(r))) {
-      alert('Заполните обязательные поля: Тип строительства, Объект, Категория работ.');
+      alert('Заполните обязательные поля: Категория объекта, Объект, Категория работ.');
       return;
     }
     setIsModalOpen(true);
@@ -161,9 +100,8 @@ const ElectricansRequestPage = () => {
     const payload = rows.map(row => ({
       date: selectedDate,
       startTime: row.startTime ? `${row.startTime}:00` : '',
-      buildingType: row.buildingType,
+      objectCategory: row.objectCategory,
       object: row.object,
-      block: row.block,
       position: row.position,
       workCategory: row.workCategory,
       workDescription: row.workDescription,
@@ -218,37 +156,23 @@ const ElectricansRequestPage = () => {
         /* ── Мобильная версия ─────────────────────────────────────────── */
         rows.map((row, i) => (
           <div key={i} className={styles.formBlock}>
-            <label>Тип строительства *</label>
-            <select value={row.buildingType} onChange={e => handleChange(i, 'buildingType', e.target.value)}>
-              <option value="">Выберите тип</option>
-              {buildingTypeOptions.map(t => <option key={t}>{t}</option>)}
+            <label>Категория объекта *</label>
+            <select value={row.objectCategory} onChange={e => handleChange(i, 'objectCategory', e.target.value)}>
+              <option value="">Выберите категорию</option>
+              {Object.keys(objectCategoryOptions).map(c => <option key={c}>{c}</option>)}
             </select>
 
             <label>Объект *</label>
-            <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)} disabled={!row.buildingType}>
+            <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)} disabled={!row.objectCategory}>
               <option value="">Выберите объект</option>
-              {(objectOptions[row.buildingType] || []).map(o => <option key={o}>{o}</option>)}
+              {(objectCategoryOptions[row.objectCategory] || []).map(o => <option key={o}>{o}</option>)}
             </select>
 
-            {blocksForObject[row.object] && (
-              <>
-                <label>Блок</label>
-                <select value={row.block} onChange={e => handleChange(i, 'block', e.target.value)}>
-                  <option value="">Выберите блок</option>
-                  {blocksForObject[row.object].map(b => <option key={b}>{b}</option>)}
-                </select>
-              </>
-            )}
-
-            {positionsForObject[row.object] && (
-              <>
-                <label>Позиция</label>
-                <select value={row.position} onChange={e => handleChange(i, 'position', e.target.value)}>
-                  <option value="">Выберите позицию</option>
-                  {positionsForObject[row.object].map(p => <option key={p}>{p}</option>)}
-                </select>
-              </>
-            )}
+            <label>Позиция / строение</label>
+            <select value={row.position} onChange={e => handleChange(i, 'position', e.target.value)} disabled={!row.object}>
+              <option value="">Выберите позицию</option>
+              {(objectPositionOptions[row.object] || []).map(p => <option key={p}>{p}</option>)}
+            </select>
 
             <label>Время начала</label>
             <select value={row.startTime} onChange={e => handleChange(i, 'startTime', e.target.value)}>
@@ -282,9 +206,8 @@ const ElectricansRequestPage = () => {
           <table className={styles.requestTable}>
             <thead>
               <tr>
-                <th>Тип строительства</th>
+                <th>Категория объекта</th>
                 <th>Объект</th>
-                <th>Блок</th>
                 <th>Позиция</th>
                 <th>Время начала</th>
                 <th>Категория работ</th>
@@ -293,42 +216,25 @@ const ElectricansRequestPage = () => {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => {
-                const blocks    = blocksForObject[row.object];
-                const positions = positionsForObject[row.object];
-                return (
+              {rows.map((row, i) => (
                   <tr key={i}>
                     <td>
-                      <select value={row.buildingType} onChange={e => handleChange(i, 'buildingType', e.target.value)}>
+                      <select value={row.objectCategory} onChange={e => handleChange(i, 'objectCategory', e.target.value)}>
                         <option value="">Выберите</option>
-                        {buildingTypeOptions.map(t => <option key={t}>{t}</option>)}
+                        {Object.keys(objectCategoryOptions).map(c => <option key={c}>{c}</option>)}
                       </select>
                     </td>
                     <td>
-                      <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)} disabled={!row.buildingType}>
+                      <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)} disabled={!row.objectCategory}>
                         <option value="">Выберите</option>
-                        {(objectOptions[row.buildingType] || []).map(o => <option key={o}>{o}</option>)}
+                        {(objectCategoryOptions[row.objectCategory] || []).map(o => <option key={o}>{o}</option>)}
                       </select>
                     </td>
                     <td>
-                      {blocks ? (
-                        <select value={row.block} onChange={e => handleChange(i, 'block', e.target.value)}>
-                          <option value="">—</option>
-                          {blocks.map(b => <option key={b}>{b}</option>)}
-                        </select>
-                      ) : (
-                        <span style={{ color: '#bbb', fontSize: 13 }}>—</span>
-                      )}
-                    </td>
-                    <td>
-                      {positions ? (
-                        <select value={row.position} onChange={e => handleChange(i, 'position', e.target.value)}>
-                          <option value="">—</option>
-                          {positions.map(p => <option key={p}>{p}</option>)}
-                        </select>
-                      ) : (
-                        <span style={{ color: '#bbb', fontSize: 13 }}>—</span>
-                      )}
+                      <select value={row.position} onChange={e => handleChange(i, 'position', e.target.value)} disabled={!row.object}>
+                        <option value="">—</option>
+                        {(objectPositionOptions[row.object] || []).map(p => <option key={p}>{p}</option>)}
+                      </select>
                     </td>
                     <td>
                       <select value={row.startTime} onChange={e => handleChange(i, 'startTime', e.target.value)}>
@@ -357,8 +263,7 @@ const ElectricansRequestPage = () => {
                       )}
                     </td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>
