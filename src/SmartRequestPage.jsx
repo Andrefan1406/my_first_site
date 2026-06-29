@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { objectCategoryOptions, objectPositionOptions } from "./data/constructionData";
 
 const GROQ_API_KEY = process.env.REACT_APP_GROQ_API_KEY;
-console.log("GROQ KEY:", GROQ_API_KEY);
 
 const equipmentCategories = {
   "Автобетононасосы": ["Автобетононасос (стрела 37м)", "Автобетононасос (стрела 42м)", "Автобетононасос (стрела 50м)"],
