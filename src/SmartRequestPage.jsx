@@ -45,6 +45,7 @@ const SYSTEM_PROMPT = `Ты — помощник диспетчера строи
 ${objectsList.join(", ")}
 
 === ПОЗИЦИИ ПО ОБЪЕКТАМ ===
+ВАЖНО: значение поля "position" бери ТОЧНО из справочника ниже, слово в слово. Не сокращай и не переформулируй (например "Экополис поз.103", а не "поз.103").
 ${positionsList}
 
 === ТЕХНИКА (категория: наименования) ===
@@ -70,9 +71,16 @@ ${blocksList}
 ${constructivesList}
 
 === МАРКИ БЕТОНА ===
-Бетон: В 7,5 / В 12,5 / В 15 / В 20 / В 22,5 / В 25 / В 30 / В 7,5 СС / В 12,5 СС / В 15 СС / В 20 СС / В 22,5 СС / В 25 СС / В 30 СС / В 40 F 300 / Пескобетон М100 / Пескобетон М150 / Пескобетон М200 / Пескобетон М250 / Пескобетон М350 / Пескобетон М400
+Бетон (классы): В 7,5 / В 12,5 / В 15 / В 20 / В 22,5 / В 25 / В 30 / В 7,5 СС / В 12,5 СС / В 15 СС / В 20 СС / В 22,5 СС / В 25 СС / В 30 СС / В 40 F 300
+Пескобетон (марки): Пескобетон М100 / Пескобетон М150 / Пескобетон М200 / Пескобетон М250 / Пескобетон М350 / Пескобетон М400
 Раствор: М 50 / М 75 / М 100
 Подвижность бетона (concreteClass): П3 / П4
+
+ВАЖНО — различай бетон и пескобетон:
+- Если сказано "пескобетон" или "пескобетон М..." — material="Бетон", grade="Пескобетон М..."
+- Если сказано "бетон" (без слова "пескобетон") — material="Бетон", grade=класс В...
+- Если указана марка М (например М300) вместо класса В — переводи по таблице: М100→В 7,5 / М150→В 12,5 / М200→В 15 / М250→В 20 / М300→В 22,5 / М350→В 25 / М400→В 30
+- concreteClass (П3/П4) — только для material="Бетон" с классом В... Для пескобетона — null
 
 Верни JSON в зависимости от типа:
 
@@ -185,7 +193,7 @@ ${constructivesList}
 // Иконки и названия типов
 const TYPE_META = {
   техника:     { label: "Техника",      color: "#007bff", bg: "#e8f0fe", route: "/request" },
-  бетон:       { label: "Бетон/Раствор", color: "#e65100", bg: "#fff3e0", route: "/concrete-request2" },
+  бетон:       { label: "Бетон/Раствор", color: "#e65100", bg: "#fff3e0", route: "/concrete-request" },
   геодезисты:  { label: "Геодезисты",   color: "#388e3c", bg: "#e8f5e9", route: "/geo-request" },
   электрики:   { label: "Электрики",    color: "#7b1fa2", bg: "#f3e5f5", route: "/electricans-request" },
   лаборатория: { label: "Лаборатория",  color: "#00796b", bg: "#e0f2f1", route: "/lab-request" },
@@ -249,7 +257,7 @@ const SmartRequestPage = () => {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${GROQ_API_KEY}` },
         body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
+          model: "llama-3.3-70b-versatile",
           temperature: 0,
           max_tokens: 1500,
           response_format: { type: "json_object" },
@@ -311,7 +319,7 @@ const SmartRequestPage = () => {
           const validConstructives = floorConstructiveOptions[floor] || [];
           const constructive = validConstructives.includes(item.constructive) ? item.constructive : "";
           return {
-            objectCategory,
+            category: objectCategory,
             object: item.object || "",
             position,
             date: item.date || "",
