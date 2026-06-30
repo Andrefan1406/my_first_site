@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import styles from './RequestPage.module.css';
 import { getAuth } from 'firebase/auth';
 import { objectCategoryOptions, objectPositionOptions } from './data/constructionData';
@@ -35,9 +36,20 @@ const emptyRow = () => ({
 // ─── Компонент ───────────────────────────────────────────────────────────────
 
 const ElectricansRequestPage = () => {
+  const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getCurrentDate());
   const [rows, setRows] = useState([emptyRow()]);
+
+  useEffect(() => {
+    const prefill = location.state?.prefill;
+    if (!prefill) return;
+    if (prefill.date) setSelectedDate(prefill.date);
+    if (prefill.rows?.length) {
+      setRows(prefill.rows.map((r) => ({ ...emptyRow(), ...r })));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userFullName, setUserFullName] = useState('');
   const [userPhone, setUserPhone] = useState('');

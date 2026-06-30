@@ -1,5 +1,6 @@
 // Обновлённый компонент с ограничением времени и даты
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import styles from './RequestPage.module.css';
 import {
@@ -20,19 +21,27 @@ const materialGradeOptions = {
   'Раствор': ['М 50', 'М 75', 'М 100']
 };
 
+const emptyConcreteRow = () => ({
+  date: '', time: '', category: '', object: '', position: '',
+  block: '', floor: '', constructive: '', material: '',
+  concreteGrade: '', concreteClass: '', quantity: '', note: ''
+});
+
 const ConcreteRequestPage2 = () => {
-  const [formRows, setFormRows] = useState([
-    {
-      date: '', time: '', category: '', object: '', position: '',
-      block: '', floor: '', constructive: '', material: '',
-      concreteGrade: '', concreteClass: '', quantity: '', note: ''
-    }
-  ]);
+  const location = useLocation();
+  const [formRows, setFormRows] = useState([emptyConcreteRow()]);
 
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
+
+  useEffect(() => {
+    const prefill = location.state?.prefill;
+    if (!prefill?.rows?.length) return;
+    setFormRows(prefill.rows.map((r) => ({ ...emptyConcreteRow(), ...r })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const today = new Date();
   const nextWeek = new Date();
@@ -44,11 +53,7 @@ const ConcreteRequestPage2 = () => {
   const currentHour = today.getHours();
 
   const addRow = () => {
-    setFormRows(prev => [...prev, {
-      date: '', time: '', category: '', object: '', position: '',
-      block: '', floor: '', constructive: '', material: '',
-      concreteGrade: '', concreteClass: '', quantity: '', note: ''
-    }]);
+    setFormRows(prev => [...prev, emptyConcreteRow()]);
   };
 
   const removeRow = (index) => {
