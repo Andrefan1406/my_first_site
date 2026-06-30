@@ -11,11 +11,10 @@ import PeopleDashboardPage from './PeopleDashboardPage';
 import EquipmentReportPage from './EquipmentReportPage';
 import PeopleReportCharts from './PeopleReportCharts';
 import ConcreteProductionReport from './ConcreteProductionReport';
-import ConcreteRequestPage2 from './ConcreteRequestPage2';
+import ConcreteRequestPage from './ConcreteRequestPage';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
 import RagPage from './RagPage';
-import RemarksPage from "./remarks/RemarksPage";
 import LabTestRequestPaje from "./LabTestRequestPaje";
 import DefectActPage from "./pages/DefectActPage";
 import GrafikiPage from "./pages/GrafikiPage";
@@ -43,14 +42,7 @@ const App = () => {
         <Route path="/login" element={<LoginPage />} />
 
         {/* Главная */}
-        <Route
-          path="/"
-          element={
-            <Protected>
-              <HomePage />
-            </Protected>
-          }
-        />
+        <Route path="/" element={<Protected><HomePage /></Protected>} />
 
         {/* Заявки */}
         <Route
@@ -81,10 +73,10 @@ const App = () => {
         />
 
         <Route
-          path="/concrete-request2"
+          path="/concrete-request"
           element={
             <Protected>
-              <ConcreteRequestPage2 />
+              <ConcreteRequestPage />
             </Protected>
           }
         />
@@ -181,14 +173,6 @@ const App = () => {
           }
         />
 
-        <Route
-          path="/remarks"
-          element={
-            <Protected>
-              <RemarksPage />
-            </Protected>
-          }
-        />
 
         <Route
           path="/def-act"

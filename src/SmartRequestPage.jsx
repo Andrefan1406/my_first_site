@@ -1,31 +1,25 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { objectCategoryOptions, objectPositionOptions } from "./data/constructionData";
-import { objectCategoryOptions2, objectPositionOptions2 } from "./data/constructionData2";
+import { objectCategoryOptions, objectPositionOptions, equipmentCategoryOptions, positionBlockOptions, blockFloorOptions, floorConstructiveOptions } from "./data/constructionData";
 
 const GROQ_API_KEY = process.env.REACT_APP_GROQ_API_KEY;
 
-const equipmentCategories = {
-  "Автобетононасосы": ["Автобетононасос (стрела 37м)", "Автобетононасос (стрела 42м)", "Автобетононасос (стрела 50м)"],
-  "Автобетоносмесители": ["Автобетоносмеситель (5м3)", "Автобетоносмеситель (7м3)", "Автобетоносмеситель (10м3)", "Автобетоносмеситель (самоходный 2м3)"],
-  "Автокраны": ["Автокран (25т)", "Автокран (30т)", "Автокран (70т)"],
-  "Газели": ["Газель (грузовая кузов-3м)", "Газель (грузовая кузов-4м)", "Газель (грузовая кузов-6м)", "Газель (грузопассажирская кузов-2м)", "Газель (пассажирская)"],
-  "Длинномеры": ["Длинномер (9м)", "Длинномер (12м)", "Длинномер (16м)", "Трал"],
-  "Катки": ["Каток вибрационный (10тн)", "Каток вибрационный (3тн)", "Каток грунтовый (16тн)", "Каток дорожный (4тн)"],
-  "Манипуляторы": ["Манипулятор"],
-  "Погрузчики": ["Погрузчик 2м3", "Погрузчик 3м3", "Погрузчик (мини)", "Погрузчик (вилочный)"],
-  "Самосвалы": ["Самосвал (20т)", "Самосвал (15т)", "Самосвал (5т)"],
-  "Спецтехника": ["Автовышка", "Автогрейдер", "Ассенизаторная машина", "Асфальтоукладчик", "Бульдозер", "Дизельная электростанция", "Компрессор", "Поливомоечная машина", "Пробивочная установка (для труб)", "Трактор Белорусь (с щеткой)", "Трактор Белорусь (с прицепом)", "Трактор Белорусь (с отвалом)"],
-  "Экскаваторы": ["Экскаватор гусеничный (с ковшом)", "Экскаватор гусеничный (с гидромолотом)", "Экскаватор колесный (с ковшом)", "Экскаватор колесный (с гидромолотом)", "Экскаватор (мини)"],
-  "Экскаваторы-Погрузчики": ["Экскаватор-Погрузчик (с ковшом)", "Экскаватор-Погрузчик (с гидромолотом)", "Экскаватор-Погрузчик (с буроямом)"],
-};
+const equipmentCategories = equipmentCategoryOptions;
 
 // Справочники для промпта
 const objectsList = Object.values(objectCategoryOptions).flat();
-const objectsList2 = Object.values(objectCategoryOptions2).flat();
 const equipmentList = Object.entries(equipmentCategories)
   .map(([cat, items]) => `${cat}: ${items.join(", ")}`)
   .join("; ");
+const positionsList = Object.entries(objectPositionOptions)
+  .map(([obj, positions]) => `${obj}: ${positions.join(", ")}`)
+  .join("\n");
+const blocksList = Object.entries(positionBlockOptions)
+  .map(([pos, blocks]) => `${pos}: ${blocks.join(", ")}`)
+  .join("\n");
+const constructivesList = Object.entries(floorConstructiveOptions)
+  .map(([floor, constructives]) => `${floor}: ${constructives.join(", ")}`)
+  .join("\n");
 
 const today = new Date();
 const todayStr = today.toISOString().split("T")[0];
@@ -37,6 +31,9 @@ const SYSTEM_PROMPT = `Ты — помощник диспетчера строи
 - "бетон" — упоминается бетон, раствор, марка бетона (В15, В25 и т.п.), пескобетон, класс бетона
 - "геодезисты" — упоминаются геодезисты, вынос осей, съёмка, геодезия, разбивка, исполнительная
 - "электрики" — упоминаются электрики, подключение, отключение, прогрев бетона (электрический), монтаж/демонтаж электрики, электростанция
+- "лаборатория" — упоминаются лаборатория, испытание, ИПС, уплотнение грунта, прочность бетона, лабораторные
+- "брусчатка" — упоминаются брусчатка, бордюр, лоток, тротуарная плитка,
+- "жби" — упоминаются железобетонные изделия, ЖБИ, плита, перемычка, фундаментный блок, ФБС, балка, ригель, опора, кольцо, панель ограждения
 
 Сегодня: ${todayStr}. Если "завтра" — прибавь 1 день, "послезавтра" — 2 дня.
 Время — целое число часа (6..22). Если не указано — null.
@@ -44,11 +41,11 @@ const SYSTEM_PROMPT = `Ты — помощник диспетчера строи
 
 Прораб может запросить несколько позиций — каждая отдельным объектом в items.
 
-=== ОБЪЕКТЫ ДЛЯ ТЕХНИКИ / ГЕОДЕЗИСТОВ / ЭЛЕКТРИКОВ ===
+=== ОБЪЕКТЫ ДЛЯ ТЕХНИКИ / ГЕОДЕЗИСТОВ / ЭЛЕКТРИКОВ / БЕТОНА ===
 ${objectsList.join(", ")}
 
-=== ОБЪЕКТЫ ДЛЯ БЕТОНА/РАСТВОРА ===
-${objectsList2.join(", ")}
+=== ПОЗИЦИИ ПО ОБЪЕКТАМ ===
+${positionsList}
 
 === ТЕХНИКА (категория: наименования) ===
 ${equipmentList}
@@ -60,15 +57,22 @@ ${equipmentList}
 Монолит: Вынос осей, Проверка опалубки на вертикальность, Разбивка контура плиты перекрытия, Вынос метровой отметки, Исполнительная съёмка, Другое
 Земляные работы: Вынос границ котлована, Вынос высотных отметок, Вынос границ бетонной подготовки, Вынос границ фундамента, Исполнительная съёмка, Другое
 Благоустройство: Разбивка бордюр, поребрика, Вынос высотных отметок, Исполнительная съёмка, Топосъёмка, Другое
-Сети: Разбивка трассы (колодцы, кабеля, УП), Проверка правильности установки колодцев/трубопроводов, Исполнительная съёмка, Другое
+Сети: Разбивка трассы (колодцы, кабеля, УП), Проверка правильности установки колодцев, трубопроводов, Исполнительная съёмка, Другое
 Фасад: Вынос отметок, Другое
 
 === КАТЕГОРИИ РАБОТ ДЛЯ ЭЛЕКТРИКОВ ===
 Подключение, Отключение, Монтаж, Демонтаж, Прогрев бетона, Мелкосрочный ремонт, Обход и осмотр оборудования, Проверка, Другое
 
+=== БЛОКИ ПО ПОЗИЦИЯМ (только для жилых домов) ===
+${blocksList}
+
+=== КОНСТРУКТИВЫ ПО ЭТАЖАМ ===
+${constructivesList}
+
 === МАРКИ БЕТОНА ===
-Бетон: В 7,5 / В 12,5 / В 15 / В 20 / В 22,5 / В 25 / В 30 / В 40 F 300 / Пескобетон М100..М400
+Бетон: В 7,5 / В 12,5 / В 15 / В 20 / В 22,5 / В 25 / В 30 / В 7,5 СС / В 12,5 СС / В 15 СС / В 20 СС / В 22,5 СС / В 25 СС / В 30 СС / В 40 F 300 / Пескобетон М100 / Пескобетон М150 / Пескобетон М200 / Пескобетон М250 / Пескобетон М350 / Пескобетон М400
 Раствор: М 50 / М 75 / М 100
+Подвижность бетона (concreteClass): П3 / П4
 
 Верни JSON в зависимости от типа:
 
@@ -83,8 +87,9 @@ ${equipmentList}
 {
   "type": "бетон",
   "summary": "...",
-  "items": [{ "object": "...|null", "position": "...|null", "date": "YYYY-MM-DD|null", "time": число|null, "material": "Бетон|Раствор|null", "grade": "марка из справочника|null", "quantity": число|null, "note": "...|null" }]
+  "items": [{ "object": "...|null", "position": "...|null", "date": "YYYY-MM-DD|null", "time": число|null, "block": "блок из справочника|null", "floor": "этаж из справочника|null", "constructive": "конструктив из справочника|null", "material": "Бетон|Раствор|null", "grade": "марка из справочника|null", "concreteClass": "П3|П4|null", "quantity": число|null, "note": "...|null" }]
 }
+Примечание: block/floor/constructive заполняй только если позиция есть в справочнике блоков. Для остальных объектов (дороги, сети, производственные) — оставь null. material для каменной кладки = "Раствор", для остальных конструктивов = "Бетон". concreteClass только для material="Бетон".
 
 Для type="геодезисты":
 {
@@ -98,7 +103,84 @@ ${equipmentList}
   "type": "электрики",
   "summary": "...",
   "items": [{ "object": "...|null", "position": "...|null", "date": "YYYY-MM-DD|null", "startTime": число|null, "workCategory": "...|null", "workDescription": "...|null" }]
-}`;
+}
+
+=== СПРАВОЧНИК БРУСЧАТКИ ===
+Изделия: Брусчатка (ед.изм. м²), Бордюр (ед.изм. м.пог.), Лоток (ед.изм. м.пог.)
+Брусчатка — марки и характеристики:
+Б.1.П.7: серия Новый город, цвет Серый, размеры 160*160*7 / 160*200*7 / 160*240*7
+Б.2.П.7: серия Новый город, цвет Белый, размеры 160*160*7 / 160*200*7 / 160*240*7
+Б.3.П.7: серия Новый город, цвет Черный, размеры 160*160*7 / 160*200*7 / 160*240*7
+Б.5.П.7: серия Классика, цвет Серый, размеры 100*200*7
+Б.6.П.7: серия Крупноформат, цвет Серый, размеры 320*160*7
+Б.7.П.7: серия Крупноформат, цвет Белый, размеры 320*160*7
+Б.8.П.7: серия Крупноформат, цвет Черный, размеры 320*160*7
+Б.9.П.7: серия Крупноформат, цвет Серый, размеры 320*320*7
+Б.10.П.7: серия Крупноформат, цвет Белый, размеры 320*320*7
+Б.11.П.7: серия Крупноформат, цвет Черный, размеры 320*320*7
+Б.12.П.7: серия Крупноформат, цвет Красный, размеры 320*160*7
+Б.13.П.7: серия Старый Город, цвет Белый, размеры 120*120*7 / 120*90*7 / 180*120*7
+Б.14.П.7: серия Старый Город, цвет Черный, размеры 120*120*7 / 120*90*7 / 180*120*7
+Б.15.П.7: серия Старый Город, цвет Серый, размеры 120*120*7 / 120*90*7 / 180*120*7
+Бордюр — марка: БР 100.30.15
+Лоток — марка: 50.25.9
+Дата для брусчатки — не ранее чем через 14 дней от сегодня (${todayStr}).
+
+Для type="лаборатория":
+{
+  "type": "лаборатория",
+  "summary": "...",
+  "items": [{ "test": "Степень уплотнения грунта|Прочность бетона с помощью ИПС|null", "object": "...|null", "position": "...|null", "date": "YYYY-MM-DD|null", "block": "блок из справочника|null", "floor": "этаж из справочника|null", "constructive": "конструктив из справочника|null", "note": "...|null" }]
+}
+Примечание: для test="Степень уплотнения грунта" — block/floor всегда null, constructive всегда "Основание". Для test="Прочность бетона с помощью ИПС" — block/floor/constructive по справочникам (только если позиция есть в справочнике блоков). Если объект "Инженерные сети" — обязательно укажи note с деталями.
+
+=== СПРАВОЧНИК ЖБИ (изделие: марки) ===
+Балка: Б-6, Б-7, Б-8, другое
+Блоки бетонные для стен подвалов: ФБС 12.4.6т, ФБС 12.5.6т, ФБС 24.4.6т, ФБС 24.5.6т, ФБС 24.6.6т, ФБС 9.4.6т, ФБС 9.5.6т, ФБС 9.6.6т, ФБС12.6.6т, другое
+Ж/б опора для передвижного ограждения: ОП-1, другое
+Железобетонный фундамент для опоры наружного освещения: ФН-1, ФН-2, другое
+Кабель канал: К 20.6.3, другое
+Камни бетонные бортовые: БР100.20.8, другое
+Кольцо стеновое цилиндрическое (Технологический бетон): КС 10.3 (КЦ-10-3), КС 10.6 (КЦ-10-6), КС 10.9 (КЦ-10-9), КС 15.6 (КЦ-15-6), КС 15.9 (КЦ-15-9), КС 20.6 (КЦ-20-6), КС 20.9 (КЦ-20-9), КС 7.3 (КЦ-7-3), КС 7.9 (КЦ-7-9), другое
+Лоток: Л11-8/2, другое
+Лоток водоотводный: Л-100.15.15, Л-100.25.15, Л-150.15.15, другое
+Лоток водоотводный (Технологический бетон): Л-100.25.15, другое
+Опора освещения: СВ 105-3,5, СВ 95-2а, другое
+Опорное кольцо: КО-6 (КЦО-1), другое
+Панель ограждения: 3ПБ30.20, ПО1В, ПО1В*, другое
+Перемычка плитная: 2ПП17-5, 2ПП18-5, 3ПП16-71, 3ПП18-71, 3ПП27-71, 6ПП16-72, 6ПП21-72, 6ПП27-72, 6ПП30-13, другое
+Перемычка брусковая: 1ПБ 13-1п, 1ПБ 16-1п, 2ПБ 10-1п, 2ПБ 13-1п, 2ПБ 16-2п, 2ПБ 17-2п, 2ПБ 19-3п, 2ПБ 25-3п, 2ПБ 29-4п, 3ПБ 13-37п, 3ПБ 16-37п, 3ПБ 18-37п, 3ПБ 30-8п, 4ПБ 44-8п, 5ПБ 18-27п, 5ПБ 21-27п, 5ПБ 25-27п, 5ПБ 27-27п, 5ПБ 27-37п, другое
+Плита: ОП 200, ОП 220, П11-8, П-4, ПД 300.150.14-9, ПД 300.240.20-9, ПД 300.300.20-9, ПД 75.240.20-9, ПД 75.300.20-9, ПД43-15, ПТ 300.120.14-9, ПТ 300.150.14-9, ПТ 300.180.14-9, ПТ 300.210.16-9, ПТ 300.300.25-9, ПТ 30-15, ПТ 30-15/2000, ПТ 75.180.14-9, ПТ 75.210.16-9, ПТ 75.300.25-9, ПТ40-12, ПТ40-15, другое
+Плита для железнодорожных переездов: ПЖ 03.00.00, ПЖ 04.00.00, другое
+Плита днища: ПН10, ПН15, ПН20, ПН7, другое
+Плита дорожная: 1П30.18-30, другое
+Плита канала: ППк1, ППк1.1, ППк2, ППк2.1, ППк2.2, другое
+Плита лотка: П28-15, П28д-15, другое
+Плита перекрытия: КЦП 2-7, 1ПП15-1 (КЦП1-15-1), 1ПП15-2 (КЦП1-15-2), 1ПП20-1 (КЦП1-20-1), 1ПП20-2 (КЦП1-20-2), ПП10-1 (КЦП1-10-1), ПП10-2 (КЦП1-10-2), другое
+Плита перекрытия лотков: П11д-8а, П12/2-12а, П15д-8а, П18д-8а, П21д-8, ПО-2, ПО-3, ПО-4, другое
+Плита переходная: П800.98.40-ТАIII, другое
+Противовес: ПР-2, другое
+Пртивовес (Технологический бетон): ПР-1, другое
+Ригель: Р-5100, другое
+Стакан под панель ограждения: ОФ-1а, другое
+Другое: (указать в примечании)
+Дата для ЖБИ — не ранее чем через 14 дней от сегодня (${todayStr}). Если выбрано "Другое" в изделии или марке — обязательно укажи note.
+
+Для type="брусчатка":
+{
+  "type": "брусчатка",
+  "summary": "...",
+  "items": [{ "object": "...|null", "position": "...|null", "date": "YYYY-MM-DD|null", "block": "блок из справочника|null", "product": "Брусчатка|Бордюр|Лоток|null", "brand": "марка из справочника|null", "series": "серия|null", "color": "цвет|null", "dimensions": "размеры|null", "quantity": число|null, "note": "...|null" }]
+}
+Примечание: дата не раньше чем через 14 дней от сегодня. block — только если позиция есть в справочнике блоков.
+
+Для type="жби":
+{
+  "type": "жби",
+  "summary": "...",
+  "items": [{ "object": "...|null", "position": "...|null", "date": "YYYY-MM-DD|null", "block": "блок из справочника|null", "product": "изделие из справочника|null", "brand": "марка из справочника|null", "quantity": число|null, "note": "...|null" }]
+}
+Примечание: дата не раньше чем через 14 дней от сегодня. block — только если позиция есть в справочнике блоков. Если изделие или марка не из справочника — используй "Другое" и укажи детали в note.`;
 
 // Иконки и названия типов
 const TYPE_META = {
@@ -106,6 +188,9 @@ const TYPE_META = {
   бетон:       { label: "Бетон/Раствор", color: "#e65100", bg: "#fff3e0", route: "/concrete-request2" },
   геодезисты:  { label: "Геодезисты",   color: "#388e3c", bg: "#e8f5e9", route: "/geo-request" },
   электрики:   { label: "Электрики",    color: "#7b1fa2", bg: "#f3e5f5", route: "/electricans-request" },
+  лаборатория: { label: "Лаборатория",  color: "#00796b", bg: "#e0f2f1", route: "/lab-request" },
+  брусчатка:   { label: "Брусчатка/БЛБ", color: "#795548", bg: "#efebe9", route: "/blbrequest" },
+  жби:         { label: "ЖБИ",           color: "#546e7a", bg: "#eceff1", route: "/znbrequest" },
 };
 
 // Функция поиска категории объекта
@@ -213,23 +298,30 @@ const SmartRequestPage = () => {
 
     } else {
       // Для бетона, геодезистов, электриков — через router state
-      const catOptions = type === "бетон" ? objectCategoryOptions2 : objectCategoryOptions;
-      const posOptions = type === "бетон" ? objectPositionOptions2 : objectPositionOptions;
-
       const rows = items.map((item) => {
-        const objectCategory = findCategory(item.object, catOptions);
-        const validPos = posOptions[item.object] || [];
+        const objectCategory = findCategory(item.object, objectCategoryOptions);
+        const validPos = objectPositionOptions[item.object] || [];
         const position = validPos.includes(item.position) ? item.position : "";
 
         if (type === "бетон") {
+          const validBlocks = positionBlockOptions[position] || [];
+          const block = validBlocks.includes(item.block) ? item.block : "";
+          const validFloors = blockFloorOptions[block] || [];
+          const floor = validFloors.includes(item.floor) ? item.floor : "";
+          const validConstructives = floorConstructiveOptions[floor] || [];
+          const constructive = validConstructives.includes(item.constructive) ? item.constructive : "";
           return {
             objectCategory,
             object: item.object || "",
             position,
             date: item.date || "",
             time: item.time != null ? String(item.time) : "",
+            block,
+            floor,
+            constructive,
             material: item.material || "",
             concreteGrade: item.grade || "",
+            concreteClass: item.concreteClass || "",
             quantity: item.quantity != null ? String(item.quantity) : "",
             note: item.note || "",
           };
@@ -244,14 +336,64 @@ const SmartRequestPage = () => {
             workDescription: item.workDescription || "",
           };
         }
-        // электрики
+        if (type === "электрики") {
+          return {
+            objectCategory,
+            object: item.object || "",
+            position,
+            startTime: item.startTime != null ? String(item.startTime) : "",
+            workCategory: item.workCategory || "",
+            workDescription: item.workDescription || "",
+          };
+        }
+        if (type === "лаборатория") {
+        const isSoil = item.test === "Степень уплотнения грунта";
+        const validBlocks = !isSoil ? (positionBlockOptions[position] || []) : [];
+        const block = validBlocks.includes(item.block) ? item.block : "";
+        const validFloors = block ? (blockFloorOptions[block] || []) : [];
+        const floor = validFloors.includes(item.floor) ? item.floor : "";
+        const constructive = isSoil ? "Основание" : item.constructive || "";
         return {
           objectCategory,
           object: item.object || "",
           position,
-          startTime: item.startTime != null ? String(item.startTime) : "",
-          workCategory: item.workCategory || "",
-          workDescription: item.workDescription || "",
+          test: item.test || "",
+          date: item.date || "",
+          block,
+          floor,
+          constructive,
+          note: item.note || "",
+        };
+        }
+        if (type === "брусчатка") {
+        const blbBlock = (positionBlockOptions[position] || []).includes(item.block) ? item.block : "";
+        return {
+          objectCategory,
+          object: item.object || "",
+          position,
+          block: blbBlock,
+          date: item.date || "",
+          product: item.product || "",
+          brand: item.brand || "",
+          series: item.series || "",
+          color: item.color || "",
+          dimensions: item.dimensions || "",
+          quantity: item.quantity != null ? String(item.quantity) : "",
+          note: item.note || "",
+        };
+        }
+        // жби
+        const znbBlock = (positionBlockOptions[position] || []).includes(item.block) ? item.block : "";
+        return {
+          objectCategory,
+          object: item.object || "",
+          position,
+          block: znbBlock,
+          date: item.date || "",
+          product: item.product || "",
+          brand: item.brand || "",
+          quantity: item.quantity != null ? String(item.quantity) : "",
+          note: item.note || "",
         };
       });
 
@@ -276,8 +418,12 @@ const SmartRequestPage = () => {
       ["Позиция", item.position],
       ["Дата", item.date],
       ["Время", item.time != null ? `${item.time}:00` : null],
+      ["Блок", item.block],
+      ["Этаж", item.floor],
+      ["Конструктив", item.constructive],
       ["Материал", item.material],
       ["Марка", item.grade],
+      ["Подвижность", item.concreteClass],
       ["Кол-во", item.quantity],
       ["Примечание", item.note],
     ].filter(([, v]) => v != null && v !== "");
@@ -291,14 +437,50 @@ const SmartRequestPage = () => {
       ["Описание", item.workDescription],
     ].filter(([, v]) => v != null && v !== "");
 
-    // электрики
-    return [
+    if (type === "электрики") return [
       ["Объект", item.object],
       ["Позиция", item.position],
       ["Дата", item.date],
       ["Начало", item.startTime != null ? `${item.startTime}:00` : null],
       ["Категория работ", item.workCategory],
       ["Описание", item.workDescription],
+    ].filter(([, v]) => v != null && v !== "");
+
+    if (type === "лаборатория") return [
+      ["Испытание", item.test],
+      ["Объект", item.object],
+      ["Позиция", item.position],
+      ["Дата", item.date],
+      ["Блок", item.block],
+      ["Этаж", item.floor],
+      ["Конструктив", item.constructive],
+      ["Примечание", item.note],
+    ].filter(([, v]) => v != null && v !== "");
+
+    if (type === "брусчатка") return [
+      ["Объект", item.object],
+      ["Позиция", item.position],
+      ["Блок", item.block],
+      ["Дата", item.date],
+      ["Изделие", item.product],
+      ["Марка", item.brand],
+      ["Серия", item.series],
+      ["Цвет", item.color],
+      ["Размеры", item.dimensions],
+      ["Кол-во", item.quantity],
+      ["Примечание", item.note],
+    ].filter(([, v]) => v != null && v !== "");
+
+    // жби
+    return [
+      ["Объект", item.object],
+      ["Позиция", item.position],
+      ["Блок", item.block],
+      ["Дата", item.date],
+      ["Изделие", item.product],
+      ["Марка", item.brand],
+      ["Кол-во", item.quantity],
+      ["Примечание", item.note],
     ].filter(([, v]) => v != null && v !== "");
   };
 

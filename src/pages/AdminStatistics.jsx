@@ -25,7 +25,6 @@ const PAGE_NAMES = {
   "/people-charts": "Графики по людям",
   "/concrete-report": "Отчет по бетону",
   "/rag": "ИИ-поиск",
-  "/remarks": "Замечания",
   "/def-act": "Дефектный акт",
   "/grafiki": "Графики",
   "/admin/statistics": "Статистика администратора",

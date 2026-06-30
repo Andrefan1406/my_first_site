@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useLocation } from 'react-router-dom';
 import styles from './RequestPage.module.css';
 import { 
-    objectCategoryOptions2, 
-    objectPositionOptions2,
+    objectCategoryOptions, 
+    objectPositionOptions,
     positionBlockOptions
-} from './data/constructionData2';
+} from './data/constructionData';
 import Select from 'react-select';
 
 const selectMultiLineStyles = {
@@ -333,18 +334,36 @@ const seriesBrandOptions = {
     ]
 };
 
+const emptyZnbRow = () => ({
+  date: '', category: '', object: '', position: '', block: '',
+  product: '', brand: '', series: '', quantity: '', note: ''
+});
+
 const ZnbRequestPage = () => {
-  const [formRows, setFormRows] = useState([
-    {
-      date: '', category: '', object: '', position: '', block: '', product: '', 
-      brand: '', series: '', quantity: '', note: ''
-    }
-  ]);
+  const location = useLocation();
+  const [formRows, setFormRows] = useState([emptyZnbRow()]);
 
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
+
+  useEffect(() => {
+    const prefill = location.state?.prefill;
+    if (!prefill?.rows?.length) return;
+    setFormRows(prefill.rows.map((r) => {
+      const row = { ...emptyZnbRow(), ...r };
+      // автозаполнение серии по марке
+      if (row.brand) {
+        const foundSeries = Object.keys(seriesBrandOptions).find(s =>
+          (seriesBrandOptions[s] || []).includes(row.brand)
+        );
+        row.series = foundSeries || '';
+      }
+      return row;
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const today = new Date();
   const startDate = new Date();
@@ -354,11 +373,7 @@ const ZnbRequestPage = () => {
 
   // Добавление строки
   const addRow = () => {
-    setFormRows(prev => [
-      ...prev,
-      { date: '', category: '', object: '', position: '', block: '',
-        product: '', brand: '', series: '', quantity: '', note: '' }
-    ]);
+    setFormRows(prev => [...prev, emptyZnbRow()]);
   };
 
   // Удаление строки
@@ -425,10 +440,7 @@ const ZnbRequestPage = () => {
     setShowModal(false);
     setUserName('');
     setUserPhone('');
-    setFormRows([{
-      date: '', category: '', object: '', position: '', block: '',
-      product: '', brand: '', series: '', quantity: '', note: ''
-    }]);
+    setFormRows([emptyZnbRow()]);
   } catch (error) {
     console.error('Ошибка отправки:', error);
     alert('Ошибка при отправке!');
@@ -489,7 +501,7 @@ const ZnbRequestPage = () => {
     });
   };
 
-  const categoryOptions = Object.keys(objectCategoryOptions2).map(opt => ({
+  const categoryOptions = Object.keys(objectCategoryOptions).map(opt => ({
     value: opt, label: opt
   }));
 
@@ -555,7 +567,7 @@ const ZnbRequestPage = () => {
                 {/* Объект */}
                 <td style={{ minWidth: 140 }}>
                   <Select
-                    options={(objectCategoryOptions2[row.category] || []).map(o => ({ value: o, label: o }))}
+                    options={(objectCategoryOptions[row.category] || []).map(o => ({ value: o, label: o }))}
                     value={row.object ? { value: row.object, label: row.object } : null}
                     onChange={selected => handleChange({ target: { name: 'object', value: selected?.value || '' } }, index)}
                     placeholder="Выберите..."
@@ -568,7 +580,7 @@ const ZnbRequestPage = () => {
                 {/* Позиция */}
                 <td style={{ minWidth: 140 }}>
                   <Select
-                    options={(objectPositionOptions2[row.object] || []).map(p => ({ value: p, label: p }))}
+                    options={(objectPositionOptions[row.object] || []).map(p => ({ value: p, label: p }))}
                     value={row.position ? { value: row.position, label: row.position } : null}
                     onChange={selected => handleChange({ target: { name: 'position', value: selected?.value || '' } }, index)}
                     placeholder="Выберите..."
@@ -683,8 +695,7 @@ const ZnbRequestPage = () => {
         <button type="button" onClick={addRow} className={styles.addButton}>Добавить строку</button>
         <div className={styles.centerButtons}>
           <button type="button" onClick={() => window.location.href = '/'} className={styles.homeButton}>На главную</button>
-          <button type="button" onClick={() => setFormRows([{date: '', category: '', object: '', position: '', block: '',
-              product: '', brand: '', series: '', quantity: '', note: ''}])} 
+          <button type="button" onClick={() => setFormRows([emptyZnbRow()])}
             className={styles.clearButton}>Очистить заявку</button>
         </div>
         <button type="button" onClick={handleSubmit} className={styles.submitButton}>Отправить заявку</button>
