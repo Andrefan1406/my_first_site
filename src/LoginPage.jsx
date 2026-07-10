@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
   const navigate = useNavigate();
@@ -42,12 +43,22 @@ export default function LoginPage() {
           />
 
           <input
-            type="password"
+            type={showPassword ? "text" : "password"}
             placeholder="Пароль"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             style={styles.input}
           />
+
+          <label style={styles.checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={showPassword}
+              onChange={(e) => setShowPassword(e.target.checked)}
+              style={styles.checkbox}
+            />
+            Показать пароль
+          </label>
 
           {error && (
             <div style={styles.error}>
@@ -91,6 +102,23 @@ const styles = {
     borderRadius: "8px",
     border: "1px solid #ccc",
     boxSizing: "border-box"
+  },
+
+  checkboxLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "15px",
+    fontSize: "14px",
+    color: "#333",
+    cursor: "pointer",
+    userSelect: "none"
+  },
+
+  checkbox: {
+    width: "16px",
+    height: "16px",
+    cursor: "pointer"
   },
 
   button: {
