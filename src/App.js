@@ -11,6 +11,7 @@ import PeopleDashboardPage from './PeopleDashboardPage';
 import EquipmentReportPage from './EquipmentReportPage';
 import PeopleReportCharts from './PeopleReportCharts';
 import ConcreteProductionReport from './ConcreteProductionReport';
+import ConcreteDailyReportPage from './ConcreteDailyReportPage';
 import ConcreteRequestPage2 from './ConcreteRequestPage2';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
@@ -166,6 +167,15 @@ const App = () => {
           element={
             <Protected>
               <ConcreteProductionReport />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/concrete-daily-report"
+          element={
+            <Protected>
+              <ConcreteDailyReportPage />
             </Protected>
           }
         />

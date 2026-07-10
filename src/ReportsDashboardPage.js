@@ -19,11 +19,17 @@ const ReportsDashboardPage = () => {
       >
         Отчётность по технике
       </button>
-      <button 
-        onClick={() => navigate('/concrete-report')} 
+      <button
+        onClick={() => navigate('/concrete-report')}
         style={styles.button}
       >
         Отчётность БРУ
+      </button>
+      <button
+        onClick={() => navigate('/concrete-daily-report')}
+        style={styles.button}
+      >
+        Ежедневный отчет БРУ
       </button>
     </div>
     
