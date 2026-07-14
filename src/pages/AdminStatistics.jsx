@@ -14,6 +14,7 @@ const PAGE_NAMES = {
   "/request": "Заявка на технику",
   "/electricans-request": "Заявка электриков",
   "/geo-request": "Заявка геодезистов",
+  "/concrete-request": "Заявка на бетон",
   "/concrete-request2": "Заявка на бетон",
   "/blbrequest": "Заявка на брусчатку, лотки, бордюры",
   "/znbrequest": "Заявка на жби",

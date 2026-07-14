@@ -12,7 +12,7 @@ import EquipmentReportPage from './EquipmentReportPage';
 import PeopleReportCharts from './PeopleReportCharts';
 import ConcreteProductionReport from './ConcreteProductionReport';
 import ConcreteDailyReportPage from './ConcreteDailyReportPage';
-import ConcreteRequestPage2 from './ConcreteRequestPage2';
+import ConcreteRequestPage from './ConcreteRequestPage';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
 import RagPage from './RagPage';
@@ -81,10 +81,10 @@ const App = () => {
         />
 
         <Route
-          path="/concrete-request2"
+          path="/concrete-request"
           element={
             <Protected>
-              <ConcreteRequestPage2 />
+              <ConcreteRequestPage />
             </Protected>
           }
         />

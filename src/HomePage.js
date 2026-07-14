@@ -30,7 +30,7 @@ const HomePage = () => {
         Заявка на технику
       </button>
 
-      <button onClick={() => navigate('/concrete-request2')} style={styles.button}>
+      <button onClick={() => navigate('/concrete-request')} style={styles.button}>
         Заявка на бетон и раствор
       </button>
 
