@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx eslint *)",
+      "Bash(curl -s http://localhost:3000 -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(lsof -i :3000 -sTCP:LISTEN)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(ps -p 20176 -o command=)",
+      "mcp__claude-in-chrome__navigate",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git merge --no-ff feature/bru-daily-report -m ' *)",
+      "Bash(git branch *)"
+    ]
+  }
+}

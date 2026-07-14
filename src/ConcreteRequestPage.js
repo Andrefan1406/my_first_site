@@ -37,13 +37,15 @@ const ConcreteRequestPage = () => {
   const today = new Date();
   const tomorrow = new Date();
   tomorrow.setDate(today.getDate() + 1);
+  const overmorrow = new Date();
+  overmorrow.setDate(today.getDate() + 2);
   const nextWeek = new Date();
   nextWeek.setDate(today.getDate() + 7);
   const formatDate = (date) => date.toISOString().split('T')[0];
   const currentHour = today.getHours();
   const currentTimeInMinutes = today.getHours() * 60 + today.getMinutes();
-  const isTodayWindowOpen = currentTimeInMinutes >= 6 * 60 && currentTimeInMinutes <= 15 * 60;
-  const minDate = isTodayWindowOpen ? formatDate(today) : formatDate(tomorrow);
+  const isTodayWindowOpen = currentTimeInMinutes >= 0 && currentTimeInMinutes <= 15 * 60;
+  const minDate = isTodayWindowOpen ? formatDate(tomorrow) : formatDate(overmorrow);
   const maxDate = formatDate(nextWeek);
   const todayStr = formatDate(today);
 
