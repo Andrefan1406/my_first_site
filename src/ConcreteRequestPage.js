@@ -1,6 +1,7 @@
 // Обновлённый компонент с ограничением времени и даты
 import React, { useState } from 'react';
 import Select from 'react-select';
+import { getAuth } from 'firebase/auth';
 import styles from './RequestPage.module.css';
 import {
   objectCategoryOptions2,
@@ -45,7 +46,14 @@ const ConcreteRequestPage = () => {
   const currentHour = today.getHours();
   const currentTimeInMinutes = today.getHours() * 60 + today.getMinutes();
   const isTodayWindowOpen = currentTimeInMinutes >= 0 && currentTimeInMinutes <= 15 * 60;
-  const minDate = isTodayWindowOpen ? formatDate(tomorrow) : formatDate(overmorrow);
+
+  const auth = getAuth();
+  const currentUserEmail = auth.currentUser?.email?.toLowerCase();
+  const hasUnrestrictedTodayAccess = currentUserEmail === 'd.salangin@vkdevgroup.kz';
+
+  const minDate = hasUnrestrictedTodayAccess
+    ? formatDate(today)
+    : (isTodayWindowOpen ? formatDate(tomorrow) : formatDate(overmorrow));
   const maxDate = formatDate(nextWeek);
   const todayStr = formatDate(today);
 
