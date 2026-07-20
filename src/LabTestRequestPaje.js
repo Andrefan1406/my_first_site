@@ -1,14 +1,15 @@
 // Обновлённый компонент с ограничением времени и даты
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import styles from './RequestPage.module.css';
 import {
-  objectCategoryOptions2,
-  objectPositionOptions2,
+  objectCategoryOptions,
+  objectPositionOptions,
   positionBlockOptions,
   blockFloorOptions,
   concreteConstructiveOptions
-} from './data/constructionData2';
+} from './data/constructionData';
 
 const emptyRow = {
   test: '',
@@ -23,11 +24,19 @@ const emptyRow = {
 };
 
 const LabTestRequestPaje = () => {
+  const location = useLocation();
   const [formRows, setFormRows] = useState([{ ...emptyRow }]);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
+
+  useEffect(() => {
+    const prefill = location.state?.prefill;
+    if (!prefill?.rows?.length) return;
+    setFormRows(prefill.rows.map((r) => ({ ...emptyRow, ...r })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const today = new Date();
   const nextWeek = new Date();
@@ -201,7 +210,7 @@ const LabTestRequestPaje = () => {
     }
   };
 
-  const categoryOptions = Object.keys(objectCategoryOptions2).map(opt => ({
+  const categoryOptions = Object.keys(objectCategoryOptions).map(opt => ({
     value: opt,
     label: opt
   }));
@@ -334,7 +343,7 @@ const LabTestRequestPaje = () => {
 
                 <td style={{ minWidth: 140 }}>
                   <Select
-                    options={(objectCategoryOptions2[row.category] || []).map(obj => ({
+                    options={(objectCategoryOptions[row.category] || []).map(obj => ({
                       value: obj,
                       label: obj
                     }))}
@@ -378,7 +387,7 @@ const LabTestRequestPaje = () => {
 
                 <td style={{ minWidth: 140 }}>
                   <Select
-                    options={(objectPositionOptions2[row.object] || []).map(pos => ({
+                    options={(objectPositionOptions[row.object] || []).map(pos => ({
                       value: pos,
                       label: pos
                     }))}

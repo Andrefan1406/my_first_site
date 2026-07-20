@@ -1,39 +1,86 @@
 // Обновлённый компонент с ограничением времени и даты
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import { getAuth } from 'firebase/auth';
 import styles from './RequestPage.module.css';
 import {
-  objectCategoryOptions2,
-  objectPositionOptions2,
+  objectCategoryOptions,
+  objectPositionOptions,
   positionBlockOptions,
   blockFloorOptions,
-  floorConstructiveOptions
-} from './data/constructionData2';
+  floorConstructiveOptions,
+  materialGradeOptions
+} from './data/constructionData';
 
-const materialGradeOptions = {
-  'Бетон': [
-    'В 7,5', 'В 12,5', 'В 15', 'В 20', 'В 22,5', 'В 25', 'В 30',
-    'В 7,5 СС', 'В 12,5 СС', 'В 15 СС', 'В 20 СС', 'В 22,5 СС', 'В 25 СС', 'В 30 СС',
-    'В 40 F 300', 'Пескобетон М100', 'Пескобетон М150', 'Пескобетон М200',
-    'Пескобетон М250', 'Пескобетон М350', 'Пескобетон М400'
-  ],
-  'Раствор': ['М 50', 'М 75', 'М 100']
+const emptyConcreteRow = () => ({
+  date: '', time: '', category: '', object: '', position: '',
+  block: '', floor: '', constructive: '', material: '',
+  concreteGrade: '', concreteClass: '', quantity: '', note: ''
+});
+
+// Стирает поле-потомок только если оно реально стало невалидным для нового
+// значения родителя в цепочке category -> object -> position -> block ->
+// floor -> constructive -> material -> concreteGrade/concreteClass.
+// Это позволяет ручной правке одного поля не затирать остальные поля,
+// заполненные Умной заявкой, если они всё ещё согласованы.
+const pruneConcreteChain = (row) => {
+  const next = { ...row };
+
+  if (!(objectCategoryOptions[next.category] || []).includes(next.object)) {
+    next.object = '';
+  }
+  if (!(objectPositionOptions[next.object] || []).includes(next.position)) {
+    next.position = '';
+  }
+
+  const hasBlocks = !!positionBlockOptions[next.position];
+
+  if (!(positionBlockOptions[next.position] || []).includes(next.block)) {
+    next.block = '';
+  }
+  if (!(blockFloorOptions[next.block] || []).includes(next.floor)) {
+    next.floor = '';
+  }
+  if (!(floorConstructiveOptions[next.floor] || []).includes(next.constructive)) {
+    next.constructive = '';
+  }
+
+  if (!next.position) {
+    next.material = '';
+  } else if (hasBlocks) {
+    next.material = next.constructive
+      ? (next.constructive === 'каменная кладка' ? 'Раствор' : 'Бетон')
+      : '';
+  } else if (!['Бетон', 'Раствор'].includes(next.material)) {
+    next.material = '';
+  }
+
+  if (!(materialGradeOptions[next.material] || []).includes(next.concreteGrade)) {
+    next.concreteGrade = '';
+  }
+  if (next.material !== 'Бетон') {
+    next.concreteClass = '';
+  }
+
+  return next;
 };
 
 const ConcreteRequestPage = () => {
-  const [formRows, setFormRows] = useState([
-    {
-      date: '', time: '', category: '', object: '', position: '',
-      block: '', floor: '', constructive: '', material: '',
-      concreteGrade: '', concreteClass: '', quantity: '', note: ''
-    }
-  ]);
+  const location = useLocation();
+  const [formRows, setFormRows] = useState([emptyConcreteRow()]);
 
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
+
+  useEffect(() => {
+    const prefill = location.state?.prefill;
+    if (!prefill?.rows?.length) return;
+    setFormRows(prefill.rows.map((r) => ({ ...emptyConcreteRow(), ...r })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const today = new Date();
   const tomorrow = new Date();
@@ -58,11 +105,7 @@ const ConcreteRequestPage = () => {
   const todayStr = formatDate(today);
 
   const addRow = () => {
-    setFormRows(prev => [...prev, {
-      date: '', time: '', category: '', object: '', position: '',
-      block: '', floor: '', constructive: '', material: '',
-      concreteGrade: '', concreteClass: '', quantity: '', note: ''
-    }]);
+    setFormRows(prev => [...prev, emptyConcreteRow()]);
   };
 
   const removeRow = (index) => {
@@ -71,70 +114,23 @@ const ConcreteRequestPage = () => {
 
   const handleChange = (e, index) => {
     const { name, value } = e.target;
+    const chainFields = ['category', 'object', 'position', 'block', 'floor', 'constructive', 'material'];
     setFormRows(prevRows => {
       const updatedRows = [...prevRows];
-      const row = { ...updatedRows[index] };
-        
-      if (name === 'category') {
-        row.category = value;
-        row.object = '';
-        row.position = '';
-        row.block = '';
-        row.floor = '';
-        row.constructive = '';
-        row.material = '';
-        row.concreteGrade = '';
-        row.concreteClass = '';
-      } else if (name === 'object') {
-        row.object = value;
-        row.position = '';
-        row.block = '';
-        row.floor = '';
-        row.constructive = '';
-        row.material = '';
-        row.concreteGrade = '';
-        row.concreteClass = '';
-      } else if (name === 'position') {
-        row.position = value;
-        row.block = '';
-        row.floor = '';
-        row.constructive = '';
-        row.material = '';
-        row.concreteGrade = '';
-        row.concreteClass = '';
-      } else if (name === 'block') {
-        row.block = value;
-        row.floor = '';
-        row.constructive = '';
-        row.material = '';
-        row.concreteGrade = '';
-        row.concreteClass = '';
-      } else if (name === 'floor') {
-        row.floor = value;
-        row.constructive = '';
-        row.material = '';
-        row.concreteGrade = '';
-        row.concreteClass = '';
-      } else if (name === 'constructive') {
-        row.constructive = value;
-        if (positionBlockOptions[row.position]) {
-          row.material = value === 'каменная кладка' ? 'Раствор' : 'Бетон';
-        }
-        row.concreteGrade = '';
-        row.concreteClass = '';
-      } else if (name === 'material') {
-        row.material = value;
-        row.concreteGrade = '';
-        row.concreteClass = '';
-      } else if (name === 'quantity') {
+      let row = { ...updatedRows[index] };
+
+      if (name === 'quantity') {
         const regex = /^\d{0,6}([.,]\d?)?$/;
         if (value === '' || regex.test(value)) {
           row.quantity = value;
         }
       } else {
         row[name] = value;
+        if (chainFields.includes(name)) {
+          row = pruneConcreteChain(row);
+        }
       }
-  
+
       updatedRows[index] = row;
       return updatedRows;
     });
@@ -248,7 +244,7 @@ const ConcreteRequestPage = () => {
 
   
   
-  const categoryOptions = Object.keys(objectCategoryOptions2).map(opt => ({
+  const categoryOptions = Object.keys(objectCategoryOptions).map(opt => ({
     value: opt,
     label: opt
   }));
@@ -383,7 +379,7 @@ const ConcreteRequestPage = () => {
                 </td>
                 <td style={{ minWidth: 140 }}>
                   <Select
-                    options={(objectCategoryOptions2[row.category] || []).map(obj => ({
+                    options={(objectCategoryOptions[row.category] || []).map(obj => ({
                       value: obj,
                       label: obj
                     }))}
@@ -427,7 +423,7 @@ const ConcreteRequestPage = () => {
 
                 <td style={{ minWidth: 140 }}>
                   <Select
-                    options={(objectPositionOptions2[row.object] || []).map(pos => ({
+                    options={(objectPositionOptions[row.object] || []).map(pos => ({
                       value: pos,
                       label: pos
                     }))}

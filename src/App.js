@@ -15,12 +15,12 @@ import ConcreteDailyReportPage from './ConcreteDailyReportPage';
 import ConcreteRequestPage from './ConcreteRequestPage';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
-import RagPage from './RagPage';
-import RemarksPage from "./remarks/RemarksPage";
 import LabTestRequestPaje from "./LabTestRequestPaje";
 import DefectActPage from "./pages/DefectActPage";
 import GrafikiPage from "./pages/GrafikiPage";
+import RemarksPage from "./remarks/RemarksPage";
 
+import SmartRequestPage from './SmartRequestPage';
 import LoginPage from './LoginPage';
 import PrivateRoute from './components/PrivateRoute';
 import PageTracker from './components/PageTracker';
@@ -43,14 +43,7 @@ const App = () => {
         <Route path="/login" element={<LoginPage />} />
 
         {/* Главная */}
-        <Route
-          path="/"
-          element={
-            <Protected>
-              <HomePage />
-            </Protected>
-          }
-        />
+        <Route path="/" element={<Protected><HomePage /></Protected>} />
 
         {/* Заявки */}
         <Route
@@ -182,15 +175,6 @@ const App = () => {
 
         {/* Прочее */}
         <Route
-          path="/rag"
-          element={
-            <Protected>
-              <RagPage />
-            </Protected>
-          }
-        />
-
-        <Route
           path="/remarks"
           element={
             <Protected>
@@ -198,7 +182,6 @@ const App = () => {
             </Protected>
           }
         />
-
         <Route
           path="/def-act"
           element={
@@ -220,6 +203,14 @@ const App = () => {
           element={
             <Protected>
               <AdminStatistics />
+            </Protected>
+          }
+        />
+        <Route
+          path="/smart-request"
+          element={
+            <Protected>
+              <SmartRequestPage />
             </Protected>
           }
         />

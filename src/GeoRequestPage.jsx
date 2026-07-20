@@ -2,28 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import styles from './RequestPage.module.css';
 import { getAuth } from 'firebase/auth';
-import { objectCategoryOptions, objectPositionOptions, workCategoryOptions } from './data/constructionData';
+import { objectCategoryOptions, objectPositionOptions, konstruktivOptions, workTypeForKonstruktiv } from './data/constructionData';
 
-// Скрипт Google Apps Script для записи в таблицу
-const SCRIPT_URL = process.env.REACT_APP_ELEC_SCRIPT_URL || '';
+const SCRIPT_URL = process.env.REACT_APP_GEO_SCRIPT_URL || '';
 
 // ─── Вспомогательные ────────────────────────────────────────────────────────
 
 const getCurrentDate = () => {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const hoursOptions = Array.from({ length: 17 }, (_, i) => i + 6); // 6..22
-
 const emptyRow = () => ({
-  objectCategory: '', object: '', position: '',
-  workCategory: '', workDescription: '', startTime: '',
+  objectCategory: '',
+  object: '',
+  position: '',
+  konstruktiv: '',
+  workType: '',
+  workDescription: '',
 });
 
-// ─── Компонент ───────────────────────────────────────────────────────────────
+// ─── Компонент ──────────────────────────────────────────────────────────────
 
-const ElectricansRequestPage = () => {
+const GeoRequestPage = () => {
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getCurrentDate());
@@ -44,7 +45,7 @@ const ElectricansRequestPage = () => {
   const [userPosition, setUserPosition] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const positionOptions = ['Начальник участка', 'Производитель работ', 'Мастер'];
+  const positionOptions = ['Начальник участка', 'Производитель работ', 'Мастер', 'Геодезист'];
 
   useEffect(() => {
     const check = () => {
@@ -53,11 +54,17 @@ const ElectricansRequestPage = () => {
     check();
     window.addEventListener('resize', check);
     window.addEventListener('orientationchange', check);
-    return () => { window.removeEventListener('resize', check); window.removeEventListener('orientationchange', check); };
+    return () => {
+      window.removeEventListener('resize', check);
+      window.removeEventListener('orientationchange', check);
+    };
   }, []);
 
   const handleDateChange = (e) => {
-    if (e.target.value < getCurrentDate()) { alert('Нельзя выбрать дату меньше текущей!'); return; }
+    if (e.target.value < getCurrentDate()) {
+      alert('Нельзя выбрать дату меньше текущей!');
+      return;
+    }
     setSelectedDate(e.target.value);
   };
 
@@ -67,6 +74,7 @@ const ElectricansRequestPage = () => {
       next[index] = { ...next[index], [field]: value };
       if (field === 'objectCategory') { next[index].object = ''; next[index].position = ''; }
       if (field === 'object')         { next[index].position = ''; }
+      if (field === 'konstruktiv')    { next[index].workType = ''; }
       return next;
     });
   };
@@ -74,15 +82,14 @@ const ElectricansRequestPage = () => {
   const addRow = () => setRows(prev => [...prev, emptyRow()]);
   const removeRow = (i) => setRows(prev => prev.filter((_, idx) => idx !== i));
 
-  const isRowComplete = (row) =>
-    row.objectCategory && row.object && row.workCategory;
+  const isRowComplete = (row) => row.objectCategory && row.object && row.konstruktiv;
 
   const handleSubmitClick = () => {
     const auth = getAuth();
     const user = auth.currentUser;
     if (!user) { alert('Пожалуйста, войдите в систему.'); return; }
     if (rows.some(r => !isRowComplete(r))) {
-      alert('Заполните обязательные поля: Категория объекта, Объект, Категория работ.');
+      alert('Заполните обязательные поля: Категория объекта, Объект и Конструктив.');
       return;
     }
     setIsModalOpen(true);
@@ -99,11 +106,11 @@ const ElectricansRequestPage = () => {
 
     const payload = rows.map(row => ({
       date: selectedDate,
-      startTime: row.startTime ? `${row.startTime}:00` : '',
       objectCategory: row.objectCategory,
       object: row.object,
       position: row.position,
-      workCategory: row.workCategory,
+      konstruktiv: row.konstruktiv,
+      workType: row.workType,
       workDescription: row.workDescription,
       fullName: `${userFullName} - ${userPosition}`,
       phone: userPhone,
@@ -120,7 +127,9 @@ const ElectricansRequestPage = () => {
       }
       alert('Заявка отправлена!');
       setRows([emptyRow()]);
-      setUserFullName(''); setUserPhone(''); setUserPosition('');
+      setUserFullName('');
+      setUserPhone('');
+      setUserPosition('');
       setIsModalOpen(false);
     } catch (err) {
       console.error(err);
@@ -134,16 +143,40 @@ const ElectricansRequestPage = () => {
     if (window.confirm('Очистить все строки?')) setRows([emptyRow()]);
   };
 
+  // ─── Render helpers ───────────────────────────────────────────────────────
+
+  const renderWorkType = (row, i, asSelect = true) => {
+    const options = workTypeForKonstruktiv[row.konstruktiv];
+    if (!options) return <span style={{ color: '#bbb', fontSize: 13 }}>—</span>;
+    if (!asSelect) {
+      return (
+        <>
+          <label>Вид работы</label>
+          <select value={row.workType} onChange={e => handleChange(i, 'workType', e.target.value)}>
+            <option value="">Выберите</option>
+            {options.map(o => <option key={o}>{o}</option>)}
+          </select>
+        </>
+      );
+    }
+    return (
+      <select value={row.workType} onChange={e => handleChange(i, 'workType', e.target.value)}>
+        <option value="">Выберите</option>
+        {options.map(o => <option key={o}>{o}</option>)}
+      </select>
+    );
+  };
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className={styles.container}>
       <div className={styles.headerBlock}>
-        <h2>Заявка электриков</h2>
+        <h2>Заявка геодезистов</h2>
         <div className={styles.dateBlock}>
-          <label htmlFor="dateInput">Дата:</label>
+          <label htmlFor="geoDateInput">Дата:</label>
           <input
-            id="dateInput"
+            id="geoDateInput"
             type="date"
             value={selectedDate}
             min={getCurrentDate()}
@@ -174,17 +207,13 @@ const ElectricansRequestPage = () => {
               {(objectPositionOptions[row.object] || []).map(p => <option key={p}>{p}</option>)}
             </select>
 
-            <label>Время начала</label>
-            <select value={row.startTime} onChange={e => handleChange(i, 'startTime', e.target.value)}>
-              <option value="">—</option>
-              {hoursOptions.map(h => <option key={h} value={h}>{h}:00</option>)}
+            <label>Конструктив *</label>
+            <select value={row.konstruktiv} onChange={e => handleChange(i, 'konstruktiv', e.target.value)}>
+              <option value="">Выберите конструктив</option>
+              {konstruktivOptions.map(k => <option key={k}>{k}</option>)}
             </select>
 
-            <label>Категория работ *</label>
-            <select value={row.workCategory} onChange={e => handleChange(i, 'workCategory', e.target.value)}>
-              <option value="">Выберите категорию</option>
-              {workCategoryOptions.map(c => <option key={c}>{c}</option>)}
-            </select>
+            {workTypeForKonstruktiv[row.konstruktiv] && renderWorkType(row, i, false)}
 
             <label>Описание работ</label>
             <textarea
@@ -196,7 +225,9 @@ const ElectricansRequestPage = () => {
             />
 
             {rows.length > 1 && (
-              <button className={styles.removeButton} style={{ width: 'auto' }} onClick={() => removeRow(i)}>Удалить строку</button>
+              <button className={styles.removeButton} style={{ width: 'auto' }} onClick={() => removeRow(i)}>
+                Удалить строку
+              </button>
             )}
           </div>
         ))
@@ -209,60 +240,57 @@ const ElectricansRequestPage = () => {
                 <th>Категория объекта</th>
                 <th>Объект</th>
                 <th>Позиция</th>
-                <th>Время начала</th>
-                <th>Категория работ</th>
+                <th>Конструктив</th>
+                <th>Вид работы</th>
                 <th>Описание работ</th>
                 <th>Действия</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                  <tr key={i}>
-                    <td>
-                      <select value={row.objectCategory} onChange={e => handleChange(i, 'objectCategory', e.target.value)}>
-                        <option value="">Выберите</option>
-                        {Object.keys(objectCategoryOptions).map(c => <option key={c}>{c}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)} disabled={!row.objectCategory}>
-                        <option value="">Выберите</option>
-                        {(objectCategoryOptions[row.objectCategory] || []).map(o => <option key={o}>{o}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <select value={row.position} onChange={e => handleChange(i, 'position', e.target.value)} disabled={!row.object}>
-                        <option value="">—</option>
-                        {(objectPositionOptions[row.object] || []).map(p => <option key={p}>{p}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <select value={row.startTime} onChange={e => handleChange(i, 'startTime', e.target.value)}>
-                        <option value="">—</option>
-                        {hoursOptions.map(h => <option key={h} value={h}>{h}:00</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <select value={row.workCategory} onChange={e => handleChange(i, 'workCategory', e.target.value)}>
-                        <option value="">Выберите</option>
-                        {workCategoryOptions.map(c => <option key={c}>{c}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <textarea
-                        value={row.workDescription}
-                        onChange={e => handleChange(i, 'workDescription', e.target.value)}
-                        placeholder="Укажите детали..."
-                        rows={2}
-                        style={{ width: '100%', minWidth: 160, boxSizing: 'border-box', resize: 'vertical' }}
-                      />
-                    </td>
-                    <td>
-                      {rows.length > 1 && (
-                        <button className={styles.removeButton} onClick={() => removeRow(i)}>✕</button>
-                      )}
-                    </td>
-                  </tr>
+                <tr key={i}>
+                  <td>
+                    <select value={row.objectCategory} onChange={e => handleChange(i, 'objectCategory', e.target.value)}>
+                      <option value="">Выберите</option>
+                      {Object.keys(objectCategoryOptions).map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select value={row.object} onChange={e => handleChange(i, 'object', e.target.value)} disabled={!row.objectCategory}>
+                      <option value="">Выберите</option>
+                      {(objectCategoryOptions[row.objectCategory] || []).map(o => <option key={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select value={row.position} onChange={e => handleChange(i, 'position', e.target.value)} disabled={!row.object}>
+                      <option value="">—</option>
+                      {(objectPositionOptions[row.object] || []).map(p => <option key={p}>{p}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select value={row.konstruktiv} onChange={e => handleChange(i, 'konstruktiv', e.target.value)}>
+                      <option value="">Выберите</option>
+                      {konstruktivOptions.map(k => <option key={k}>{k}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    {renderWorkType(row, i, true)}
+                  </td>
+                  <td>
+                    <textarea
+                      value={row.workDescription}
+                      onChange={e => handleChange(i, 'workDescription', e.target.value)}
+                      placeholder="Укажите детали..."
+                      rows={2}
+                      style={{ width: '100%', minWidth: 160, boxSizing: 'border-box', resize: 'vertical' }}
+                    />
+                  </td>
+                  <td>
+                    {rows.length > 1 && (
+                      <button className={styles.removeButton} onClick={() => removeRow(i)}>✕</button>
+                    )}
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -273,7 +301,9 @@ const ElectricansRequestPage = () => {
       <div className={styles.buttonsContainer}>
         <button className={styles.addButton} onClick={addRow}>Добавить строку</button>
         <button className={styles.submitButton} onClick={handleSubmitClick}>Отправить заявку</button>
-        <button className={styles.removeButton} style={{ width: 'auto', marginTop: 0 }} onClick={handleClear}>Очистить заявку</button>
+        <button className={styles.removeButton} style={{ width: 'auto', marginTop: 0 }} onClick={handleClear}>
+          Очистить заявку
+        </button>
       </div>
 
       {/* ── Модальное окно: данные заявителя ────────────────────────────── */}
@@ -292,8 +322,12 @@ const ElectricansRequestPage = () => {
                 required
               />
               <label>Должность</label>
-              <select value={userPosition} onChange={e => setUserPosition(e.target.value)} required
-                style={{ padding: '8px', marginTop: '5px', border: '1px solid #ddd', borderRadius: '4px' }}>
+              <select
+                value={userPosition}
+                onChange={e => setUserPosition(e.target.value)}
+                required
+                style={{ padding: '8px', marginTop: '5px', border: '1px solid #ddd', borderRadius: '4px' }}
+              >
                 <option value="">Выберите должность</option>
                 {positionOptions.map(p => <option key={p}>{p}</option>)}
               </select>
@@ -316,4 +350,4 @@ const ElectricansRequestPage = () => {
   );
 };
 
-export default ElectricansRequestPage;
+export default GeoRequestPage;
