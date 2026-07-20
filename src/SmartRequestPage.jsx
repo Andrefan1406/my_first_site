@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { objectCategoryOptions, objectPositionOptions, equipmentCategoryOptions, positionBlockOptions, blockFloorOptions, floorConstructiveOptions, materialGradeOptions } from "./data/constructionData";
+import { objectCategoryOptions, objectPositionOptions, equipmentCategoryOptions, positionBlockOptions, blockFloorOptions, floorConstructiveOptions, materialGradeOptions, konstruktivOptions, workTypeForKonstruktiv, workCategoryOptions } from "./data/constructionData";
 
 // Ollama Cloud не отдаёт CORS-заголовки для браузера, поэтому запрос идёт
 // через локальный прокси (server/index.js), который держит ключ на сервере.
@@ -396,12 +396,15 @@ const SmartRequestPage = () => {
           };
         }
         if (type === "геодезисты") {
+          const konstruktiv = konstruktivOptions.includes(item.konstruktiv) ? item.konstruktiv : "";
+          const validWorkTypes = konstruktiv ? (workTypeForKonstruktiv[konstruktiv] || []) : [];
+          const workType = validWorkTypes.includes(item.workType) ? item.workType : "";
           return {
             objectCategory,
             object: item.object || "",
             position,
-            konstruktiv: item.konstruktiv || "",
-            workType: item.workType || "",
+            konstruktiv,
+            workType,
             workDescription: item.workDescription || "",
           };
         }
@@ -411,7 +414,7 @@ const SmartRequestPage = () => {
             object: item.object || "",
             position,
             startTime: item.startTime != null ? String(item.startTime) : "",
-            workCategory: item.workCategory || "",
+            workCategory: workCategoryOptions.includes(item.workCategory) ? item.workCategory : "",
             workDescription: item.workDescription || "",
           };
         }
@@ -421,7 +424,8 @@ const SmartRequestPage = () => {
         const block = validBlocks.includes(item.block) ? item.block : "";
         const validFloors = block ? (blockFloorOptions[block] || []) : [];
         const floor = validFloors.includes(item.floor) ? item.floor : "";
-        const constructive = isSoil ? "Основание" : item.constructive || "";
+        const validConstructives = floor ? (floorConstructiveOptions[floor] || []) : [];
+        const constructive = isSoil ? "Основание" : (validConstructives.includes(item.constructive) ? item.constructive : "");
         return {
           objectCategory,
           object: item.object || "",

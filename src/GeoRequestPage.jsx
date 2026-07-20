@@ -2,52 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import styles from './RequestPage.module.css';
 import { getAuth } from 'firebase/auth';
-import { objectCategoryOptions, objectPositionOptions } from './data/constructionData';
-
-const konstruktivOptions = [
-  'Монолит',
-  'Земляные работы',
-  'Благоустройство',
-  'Сети',
-  'Фасад',
-  'Другое',
-];
-
-const workTypeForKonstruktiv = {
-  'Монолит': [
-    'Вынос осей',
-    'Проверка опалубки на вертикальность',
-    'Разбивка контура плиты перекрытия',
-    'Вынос метровой отметки',
-    'Исполнительная съёмка',
-    'Другое',
-  ],
-  'Земляные работы': [
-    'Вынос границ котлована',
-    'Вынос высотных отметок',
-    'Вынос границ бетонной подготовки',
-    'Вынос границ фундамента',
-    'Исполнительная съёмка',
-    'Другое',
-  ],
-  'Благоустройство': [
-    'Разбивка бордюр, поребрика',
-    'Вынос высотных отметок',
-    'Исполнительная съёмка',
-    'Топосъёмка',
-    'Другое',
-  ],
-  'Сети': [
-    'Разбивка трассы (колодцы, кабеля, УП)',
-    'Проверка правильности установки колодцев, трубопроводов',
-    'Исполнительная съёмка',
-    'Другое',
-  ],
-  'Фасад': [
-    'Вынос отметок',
-    'Другое',
-  ],
-};
+import { objectCategoryOptions, objectPositionOptions, konstruktivOptions, workTypeForKonstruktiv } from './data/constructionData';
 
 const SCRIPT_URL = process.env.REACT_APP_GEO_SCRIPT_URL || '';
 

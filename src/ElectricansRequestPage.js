@@ -2,19 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import styles from './RequestPage.module.css';
 import { getAuth } from 'firebase/auth';
-import { objectCategoryOptions, objectPositionOptions } from './data/constructionData';
-
-const workCategoryOptions = [
-  'Подключение',
-  'Отключение',
-  'Монтаж',
-  'Демонтаж',
-  'Прогрев бетона',
-  'Мелкосрочный ремонт',
-  'Обход и осмотр оборудования',
-  'Проверка',
-  'Другое',
-];
+import { objectCategoryOptions, objectPositionOptions, workCategoryOptions } from './data/constructionData';
 
 // Скрипт Google Apps Script для записи в таблицу
 const SCRIPT_URL = process.env.REACT_APP_ELEC_SCRIPT_URL || '';
