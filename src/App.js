@@ -14,7 +14,6 @@ import ConcreteProductionReport from './ConcreteProductionReport';
 import ConcreteRequestPage from './ConcreteRequestPage';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
-import RagPage from './RagPage';
 import LabTestRequestPaje from "./LabTestRequestPaje";
 import DefectActPage from "./pages/DefectActPage";
 import GrafikiPage from "./pages/GrafikiPage";
@@ -164,16 +163,6 @@ const App = () => {
         />
 
         {/* Прочее */}
-        <Route
-          path="/rag"
-          element={
-            <Protected>
-              <RagPage />
-            </Protected>
-          }
-        />
-
-
         <Route
           path="/def-act"
           element={
