@@ -1,10 +1,43 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signOut } from "firebase/auth";
+import { signOut, getAuth } from "firebase/auth";
 import { auth } from "./firebase";
+
+// Тестовая группа для «Умной заявки» — пока фича обкатывается, кнопка на
+// главной показывается только этим email. Остальные видят обычную главную.
+const SMART_REQUEST_TESTERS = [
+  "admin@vkdev.kz",
+  "adamenko24051991@gmail.com",
+  "nach.razv@vkdevgroup.kz",
+  "b.azimhan@vkdevgroup.kz",
+  "f.bayahmetov_eu@vkdevgroup.kz",
+  "a.bizhumanov@vkdevgroup.kz",
+  "pom.pto@vkdevgroup.kz",
+  "r.jakenulas@vkdevgroup.kz",
+  "zhumabaev016@icloud.com",
+  "d.kisselev@vkdevgroup.kz",
+  "nachit@vkdevgroup.kz",
+  "e.makazhanov_eu@vkdevgroup.kz",
+  "manarbekovanuar242@gmail.com",
+  "b.mashut_eu@vkdevgroup.kz",
+  "mendybayev93@mail.ru",
+  "d.merzlov@vkdevgroup.kz",
+  "vk.master@vkdevgroup.kz",
+  "manat.vko.best@gmail.com",
+  "d.salangin@vkdevgroup.kz",
+  "salauatsamatov84@gmail.com",
+  "xaxaxafaf05@gmail.com",
+  "stepanenkomikhail0@gmail.com",
+  "v.titarenko@vkdevgroup.kz",
+  "nach.ovvk@vkdevgroup.kz",
+  "geo9@vkdevgroup.kz",
+];
 
 const HomePage = () => {
   const navigate = useNavigate();
+
+  const currentEmail = getAuth().currentUser?.email?.toLowerCase() || "";
+  const canUseSmartRequest = SMART_REQUEST_TESTERS.includes(currentEmail);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -26,9 +59,11 @@ const HomePage = () => {
 
       <h1>Добро пожаловать!</h1>
 
-      <button onClick={() => navigate('/smart-request')} style={styles.smartButton}>
-        ✦ Умная заявка (AI)
-      </button>
+      {canUseSmartRequest && (
+        <button onClick={() => navigate('/smart-request')} style={styles.smartButton}>
+          ✦ Умная заявка (AI)
+        </button>
+      )}
 
       <button onClick={() => navigate('/request')} style={styles.button}>
         Заявка на технику
