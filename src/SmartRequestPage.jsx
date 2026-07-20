@@ -1,8 +1,18 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { objectCategoryOptions, objectPositionOptions, equipmentCategoryOptions, positionBlockOptions, blockFloorOptions, floorConstructiveOptions } from "./data/constructionData";
+import { objectCategoryOptions, objectPositionOptions, equipmentCategoryOptions, positionBlockOptions, blockFloorOptions, floorConstructiveOptions, materialGradeOptions } from "./data/constructionData";
 
-const GROQ_API_KEY = process.env.REACT_APP_GROQ_API_KEY;
+// Ollama Cloud не отдаёт CORS-заголовки для браузера, поэтому запрос идёт
+// через локальный прокси (server/index.js), который держит ключ на сервере.
+const SMART_REQUEST_API_URL = process.env.REACT_APP_SMART_REQUEST_API_URL || "http://localhost:4000";
+
+// Модель иногда оборачивает JSON в ```json ... ``` несмотря на format:"json" —
+// на всякий случай снимаем обёртку перед парсингом.
+const extractJson = (raw) => {
+  const trimmed = (raw || "").trim();
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  return fenceMatch ? fenceMatch[1].trim() : trimmed;
+};
 
 const equipmentCategories = equipmentCategoryOptions;
 
@@ -246,21 +256,16 @@ const SmartRequestPage = () => {
 
   const analyze = async () => {
     if (!text.trim()) return;
-    if (!GROQ_API_KEY) { setError("Не задан REACT_APP_GROQ_API_KEY в .env"); return; }
 
     setLoading(true);
     setError("");
     setResult(null);
 
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const res = await fetch(`${SMART_REQUEST_API_URL}/api/smart-request`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${GROQ_API_KEY}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          temperature: 0,
-          max_tokens: 1500,
-          response_format: { type: "json_object" },
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: text },
@@ -268,10 +273,10 @@ const SmartRequestPage = () => {
         }),
       });
 
-      if (!res.ok) { const t = await res.text(); throw new Error(`Groq ${res.status}: ${t}`); }
+      if (!res.ok) { const t = await res.text(); throw new Error(`Smart Request API ${res.status}: ${t}`); }
 
       const data = await res.json();
-      const json = JSON.parse(data.choices[0].message.content);
+      const json = JSON.parse(extractJson(data.message?.content));
       if (!json.type) json.type = "техника";
       if (!json.items) { const { summary, type, ...item } = json; json.items = [item]; }
       setResult(json);
@@ -318,6 +323,22 @@ const SmartRequestPage = () => {
           const floor = validFloors.includes(item.floor) ? item.floor : "";
           const validConstructives = floorConstructiveOptions[floor] || [];
           const constructive = validConstructives.includes(item.constructive) ? item.constructive : "";
+
+          // Для позиций с блоками поле "Материал" в самой форме — не свободный
+          // выбор, а всегда выводится из "Конструктива" (селект задизейблен).
+          // Если конструктив не подтверждён справочником, material/grade/class
+          // подставлять нельзя — иначе на форме они "фантомно" пропадут при
+          // первом же выборе блока/этажа, хотя выглядели заполненными.
+          const hasBlocks = !!positionBlockOptions[position];
+          let material;
+          if (hasBlocks) {
+            material = constructive ? (constructive === "каменная кладка" ? "Раствор" : "Бетон") : "";
+          } else {
+            material = ["Бетон", "Раствор"].includes(item.material) ? item.material : "";
+          }
+          const concreteGrade = (materialGradeOptions[material] || []).includes(item.grade) ? item.grade : "";
+          const concreteClass = material === "Бетон" && ["П3", "П4"].includes(item.concreteClass) ? item.concreteClass : "";
+
           return {
             category: objectCategory,
             object: item.object || "",
@@ -327,9 +348,9 @@ const SmartRequestPage = () => {
             block,
             floor,
             constructive,
-            material: item.material || "",
-            concreteGrade: item.grade || "",
-            concreteClass: item.concreteClass || "",
+            material,
+            concreteGrade,
+            concreteClass,
             quantity: item.quantity != null ? String(item.quantity) : "",
             note: item.note || "",
           };
