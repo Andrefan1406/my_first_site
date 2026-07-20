@@ -59,12 +59,24 @@ function isCurrentMonth(date) {
   );
 }
 
+const SMART_REQUEST_TYPE_NAMES = {
+  техника: "Техника",
+  бетон: "Бетон/Раствор",
+  геодезисты: "Геодезисты",
+  электрики: "Электрики",
+  лаборатория: "Лаборатория",
+  брусчатка: "Брусчатка/БЛБ",
+  жби: "ЖБИ",
+};
+
 export default function AdminStatistics() {
   const [visits, setVisits] = useState([]);
+  const [smartRequestUsage, setSmartRequestUsage] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadVisits();
+    loadSmartRequestUsage();
   }, []);
 
   async function loadVisits() {
@@ -87,6 +99,27 @@ export default function AdminStatistics() {
       console.error("Ошибка загрузки статистики:", error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadSmartRequestUsage() {
+    try {
+      const q = query(
+        collection(db, "smart_request_usage"),
+        orderBy("timestamp", "desc"),
+        limit(500)
+      );
+
+      const snapshot = await getDocs(q);
+
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setSmartRequestUsage(data);
+    } catch (error) {
+      console.error("Ошибка загрузки статистики Умной заявки:", error);
     }
   }
 
@@ -163,6 +196,24 @@ export default function AdminStatistics() {
     )
     .slice(0, 20);
 
+  const smartRequestWithDate = smartRequestUsage
+    .map((usage) => ({
+      ...usage,
+      date: usage.timestamp?.toDate ? usage.timestamp.toDate() : null,
+    }))
+    .filter((usage) => usage.date);
+
+  const smartRequestToday = smartRequestWithDate.filter((usage) => isToday(usage.date));
+  const smartRequestMonth = smartRequestWithDate.filter((usage) => isCurrentMonth(usage.date));
+
+  const smartRequestByTypeToday = smartRequestToday.reduce((acc, usage) => {
+    const t = usage.type || "неизвестно";
+    acc[t] = (acc[t] || 0) + 1;
+    return acc;
+  }, {});
+
+  const smartRequestLatest = smartRequestWithDate.slice(0, 20);
+
   if (loading) {
     return (
       <div style={styles.page}>
@@ -200,6 +251,69 @@ export default function AdminStatistics() {
               : "Нет данных"}
           </div>
         </div>
+
+        <div style={styles.card}>
+          <div style={styles.cardLabel}>Заявок через Умную заявку сегодня</div>
+          <div style={styles.cardValue}>{smartRequestToday.length}</div>
+        </div>
+
+        <div style={styles.card}>
+          <div style={styles.cardLabel}>Через Умную заявку за месяц</div>
+          <div style={styles.cardValue}>{smartRequestMonth.length}</div>
+        </div>
+      </div>
+
+      <div style={styles.section}>
+        <h2>Умная заявка</h2>
+
+        {smartRequestToday.length === 0 ? (
+          <p>Сегодня заявок через AI пока не было.</p>
+        ) : (
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Тип заявки</th>
+                <th style={styles.th}>Заявок сегодня</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(smartRequestByTypeToday)
+                .sort((a, b) => b[1] - a[1])
+                .map(([type, count]) => (
+                  <tr key={type}>
+                    <td style={styles.td}>{SMART_REQUEST_TYPE_NAMES[type] || type}</td>
+                    <td style={styles.td}>{count}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        )}
+
+        <h3 style={{ marginTop: "20px" }}>Последние переходы из Умной заявки</h3>
+        {smartRequestLatest.length === 0 ? (
+          <p>Пока не использовалась.</p>
+        ) : (
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Дата</th>
+                <th style={styles.th}>Пользователь</th>
+                <th style={styles.th}>Тип заявки</th>
+                <th style={styles.th}>Строк</th>
+              </tr>
+            </thead>
+            <tbody>
+              {smartRequestLatest.map((usage) => (
+                <tr key={usage.id}>
+                  <td style={styles.td}>{usage.date.toLocaleString("ru-RU")}</td>
+                  <td style={styles.td}>{usage.email || "-"}</td>
+                  <td style={styles.td}>{SMART_REQUEST_TYPE_NAMES[usage.type] || usage.type || "-"}</td>
+                  <td style={styles.td}>{usage.itemCount ?? "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div style={styles.section}>

@@ -1,5 +1,8 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { getAuth } from "firebase/auth";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "./firebase";
 import { objectCategoryOptions, objectPositionOptions, equipmentCategoryOptions, positionBlockOptions, blockFloorOptions, floorConstructiveOptions, materialGradeOptions, konstruktivOptions, workTypeForKonstruktiv, workCategoryOptions } from "./data/constructionData";
 
 // Ollama Cloud не отдаёт CORS-заголовки для браузера, поэтому запрос идёт
@@ -249,6 +252,19 @@ const findCategory = (obj, catOptions) => {
   return "";
 };
 
+// Фиксируем факт использования Умной заявки для админ-статистики —
+// не блокирует переход в форму, если запись не удалась.
+const logSmartRequestUsage = (type, itemCount) => {
+  const user = getAuth().currentUser;
+  addDoc(collection(db, "smart_request_usage"), {
+    email: user?.email || null,
+    uid: user?.uid || null,
+    type,
+    itemCount,
+    timestamp: serverTimestamp(),
+  }).catch((err) => console.error("Не удалось залогировать использование Умной заявки:", err));
+};
+
 const SmartRequestPage = () => {
   const navigate = useNavigate();
   const [text, setText] = useState("");
@@ -332,6 +348,8 @@ const SmartRequestPage = () => {
     const { type, items } = result;
     const firstDate = items.find((i) => i.date)?.date;
     const meta = TYPE_META[type] || TYPE_META.техника;
+
+    logSmartRequestUsage(type, items.length);
 
     if (type === "техника") {
       const prefill = items.map((item) => ({
