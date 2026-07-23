@@ -15,7 +15,10 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(git merge --no-ff feature/bru-daily-report -m ' *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash(rm .claude/launch.json.local.bak; git log --oneline -5)",
+      "Bash(python -m http.server 8765)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8765/sitemap.html)"
     ]
   }
 }

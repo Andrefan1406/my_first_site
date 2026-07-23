@@ -1,21 +1,21 @@
-// Google Apps Script для записи заявок геодезистов
+// Google Apps Script для записи заявок электриков
 // Автономный скрипт (script.google.com/home) — не привязан к таблице,
-// пишет в таблицу "Заявки на геодезию" по её ID.
+// пишет в таблицу "заявка на электриков (Ответы)" по её ID.
 // Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone.
-// Полученный URL /exec положить в переменную окружения REACT_APP_GEO_SCRIPT_URL (Netlify).
+// Полученный URL /exec положить в переменную окружения REACT_APP_ELEC_SCRIPT_URL (Netlify).
 
-const SPREADSHEET_ID = '1qZ3ud2_-0ZhkwpwY-hUdXNnliOGKMq067E02pX2zP5c';
+const SPREADSHEET_ID = '1XniY3_hC9hdSPllqxLj45JSbKfc3avY0AD49dW0lM_Y';
 const SHEET_NAME = 'Заявки';
 
 // Заголовки колонок (вставляются автоматически при создании листа)
 const HEADERS = [
   'Отметка времени',     // A
   'Дата работ',          // B
-  'Категория объекта',   // C
-  'Объект',              // D
-  'Позиция',             // E
-  'Конструктив',         // F
-  'Вид работы',          // G
+  'Время начала',        // C
+  'Категория объекта',   // D
+  'Объект',              // E
+  'Позиция',             // F
+  'Категория работ',     // G
   'Описание работ',      // H
   'ФИО и должность',     // I
   'Телефон',             // J
@@ -51,11 +51,11 @@ function doPost(e) {
       sheet.appendRow([
         timestamp,                  // A: Отметка времени
         row.date            || '', // B: Дата работ
-        row.objectCategory  || '', // C: Категория объекта
-        row.object          || '', // D: Объект
-        row.position        || '', // E: Позиция
-        row.konstruktiv     || '', // F: Конструктив
-        row.workType        || '', // G: Вид работы
+        row.startTime       || '', // C: Время начала
+        row.objectCategory  || '', // D: Категория объекта
+        row.object          || '', // E: Объект
+        row.position        || '', // F: Позиция
+        row.workCategory    || '', // G: Категория работ
         row.workDescription || '', // H: Описание работ
         row.fullName        || '', // I: ФИО и должность
         row.phone           || '', // J: Телефон
