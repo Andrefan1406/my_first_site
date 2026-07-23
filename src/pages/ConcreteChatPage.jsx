@@ -11,8 +11,10 @@ import { TbCrane, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
-// Тот же прокси-сервер, что и у Умной заявки — там же поднят /api/chat.
-const SMART_REQUEST_API_URL = process.env.REACT_APP_SMART_REQUEST_API_URL || "http://localhost:4000";
+// Отдельный бэкенд от Умной заявки: та работает через сторонний Python-сервис
+// (rag_agent на Render), а /api/chat реализован в server/index.js этого репозитория
+// и задеплоен как отдельный Render-сервис.
+const CHAT_API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost:4000";
 const MAX_HISTORY = 10;
 const MAX_TEXTAREA_HEIGHT = 200;
 
@@ -357,7 +359,7 @@ const ConcreteChatPage = () => {
         content: m.text,
       }));
 
-      const res = await fetch(`${SMART_REQUEST_API_URL}/api/chat`, {
+      const res = await fetch(`${CHAT_API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: history }),
