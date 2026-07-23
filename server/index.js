@@ -18,6 +18,8 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get('/', (req, res) => res.status(200).send('ok'));
+
 app.post('/api/smart-request', async (req, res) => {
   const { messages } = req.body || {};
   if (!Array.isArray(messages) || !messages.length) {
@@ -37,7 +39,9 @@ app.post('/api/chat', handleChat);
 initSchema();
 startConcreteSync();
 
-const PORT = process.env.SMART_REQUEST_PROXY_PORT || 4000;
+// Render передаёт порт через PORT — слушаем его в первую очередь,
+// SMART_REQUEST_PROXY_PORT остаётся для локального оверрайда.
+const PORT = process.env.PORT || process.env.SMART_REQUEST_PROXY_PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Smart Request proxy listening on http://localhost:${PORT}`);
 });
