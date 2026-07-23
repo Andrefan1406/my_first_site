@@ -31,8 +31,14 @@ const ReportsDashboardPage = () => {
       >
         Ежедневный отчет БРУ
       </button>
+      <button
+        onClick={() => navigate('/concrete-chat')}
+        style={styles.smartButton}
+      >
+        ✦ Чат-бот по бетону (AI)
+      </button>
     </div>
-    
+
   );
 };
 
@@ -48,6 +54,20 @@ const styles = {
     cursor: 'pointer',
     fontSize: '16px',
     width: '250px'
+  },
+  smartButton: {
+    display: 'block',
+    margin: '10px auto',
+    padding: '10px 20px',
+    background: 'linear-gradient(135deg, #6610f2, #007bff)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: '700',
+    width: '250px',
+    boxShadow: '0 4px 12px rgba(102,16,242,0.35)',
   }
 };
 

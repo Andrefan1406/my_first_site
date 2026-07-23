@@ -13,6 +13,7 @@ import PeopleReportCharts from './PeopleReportCharts';
 import ConcreteProductionReport from './ConcreteProductionReport';
 import ConcreteDailyReportPage from './ConcreteDailyReportPage';
 import ConcreteRequestPage from './ConcreteRequestPage';
+import ConcreteChatPage from './pages/ConcreteChatPage';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
 import LabTestRequestPaje from "./LabTestRequestPaje";
@@ -169,6 +170,15 @@ const App = () => {
           element={
             <Protected>
               <ConcreteDailyReportPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/concrete-chat"
+          element={
+            <Protected>
+              <ConcreteChatPage />
             </Protected>
           }
         />

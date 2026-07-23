@@ -24,3 +24,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .env
+
+# synced concrete-orders sqlite db
+/server/data/
