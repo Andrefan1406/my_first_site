@@ -15,7 +15,9 @@ function ensureLimit(sql) {
   return `${sql} LIMIT ${DEFAULT_LIMIT}`;
 }
 
-function assertSafeSelect(sql) {
+// allowedTables — Set с именами таблиц, разрешённых для конкретного домена
+// чата (у каждого домена своя SQLite-таблица, см. chatHandler.js).
+function assertSafeSelect(sql, allowedTables = ALLOWED_TABLES) {
   if (typeof sql !== 'string' || !sql.trim()) {
     throw new SqlGuardError('Пустой SQL-запрос');
   }
@@ -41,7 +43,7 @@ function assertSafeSelect(sql) {
   if (tableRefs.length === 0) {
     throw new SqlGuardError('Не удалось определить таблицу запроса');
   }
-  if (tableRefs.some((t) => !ALLOWED_TABLES.has(t))) {
+  if (tableRefs.some((t) => !allowedTables.has(t))) {
     throw new SqlGuardError('Запрос ссылается на недопустимую таблицу');
   }
 

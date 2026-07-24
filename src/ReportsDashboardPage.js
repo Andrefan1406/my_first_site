@@ -35,7 +35,7 @@ const ReportsDashboardPage = () => {
         onClick={() => navigate('/concrete-chat')}
         style={styles.smartButton}
       >
-        ✦ Чат-бот по бетону (AI)
+        ✦ Чат-аналитика (AI)
       </button>
     </div>
 

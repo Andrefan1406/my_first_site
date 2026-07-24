@@ -7,7 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, LabelList
 } from "recharts";
-import { TbCrane, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
+import { TbCrane, TbBuildingCommunity, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -18,20 +18,47 @@ const CHAT_API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://loca
 const MAX_HISTORY = 10;
 const MAX_TEXTAREA_HEIGHT = 200;
 
-const SUGGESTIONS = [
-  "Сколько бетона отгружено в этом месяце?",
-  "Покажи по объектам сколько отгружено за последнюю неделю",
-  "Сколько всего заявок на раствор за всё время?",
+// Два независимых режима одного чата: свой system-prompt/таблица на бэкенде
+// (domain в теле запроса), свои примеры вопросов и своя история сообщений.
+const DOMAINS = [
+  {
+    key: "concrete",
+    label: "Аналитика по бетону",
+    Icon: TbCrane,
+    emptyTitle: "Аналитика по бетону",
+    emptyHint: "Спросите про заявки на бетон и раствор на естественном языке — например:",
+    placeholder: "Спросите про заявки на бетон...",
+    suggestions: [
+      "Сколько бетона отгружено в этом месяце?",
+      "Покажи по объектам сколько отгружено за последнюю неделю",
+      "Сколько всего заявок на раствор за всё время?",
+    ],
+  },
+  {
+    key: "objects",
+    label: "Аналитика по объектам",
+    Icon: TbBuildingCommunity,
+    emptyTitle: "Аналитика по объектам",
+    emptyHint: "Спросите про жилые дома, соцобъекты и сети на естественном языке — например:",
+    placeholder: "Спросите про объекты компании...",
+    suggestions: [
+      "Сколько объектов сдано, а сколько ещё строится?",
+      "Покажи все жилые дома с количеством квартир по каждому",
+      "Сколько всего школ и детских садов построено?",
+    ],
+  },
 ];
+const DEFAULT_DOMAIN = DOMAINS[0].key;
 
-const logConcreteChatUsage = (question) => {
+const logChatUsage = (question, domain) => {
   const user = getAuth().currentUser;
   addDoc(collection(db, "concrete_chat_usage"), {
     email: user?.email || null,
     uid: user?.uid || null,
     question,
+    domain,
     timestamp: serverTimestamp(),
-  }).catch((err) => console.error("Не удалось залогировать использование чата по бетону:", err));
+  }).catch((err) => console.error("Не удалось залогировать использование чата аналитики:", err));
 };
 
 const SERIES_COLORS = ["#10a37f", "#378ADD", "#EF9F27", "#D4537E", "#7F77DD", "#E24B4A"];
@@ -126,11 +153,11 @@ const TableAnswer = ({ table }) => {
   );
 };
 
-const Avatar = ({ role }) =>
+const Avatar = ({ role, Icon = TbCrane }) =>
   role === "user" ? (
     <div style={s.avatarUser}>Вы</div>
   ) : (
-    <div style={s.avatarAssistant}><TbCrane size={14} /></div>
+    <div style={s.avatarAssistant}><Icon size={14} /></div>
   );
 
 const pdfFileName = (text) => {
@@ -201,7 +228,7 @@ const copyTableAsData = async (table) => {
   await navigator.clipboard.write([item]);
 };
 
-const MessageRow = ({ message }) => {
+const MessageRow = ({ message, Icon }) => {
   const exportRef = useRef(null);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [copyState, setCopyState] = useState("idle"); // idle | copying | done | error
@@ -241,7 +268,7 @@ const MessageRow = ({ message }) => {
 
   return (
     <div style={s.row}>
-      <Avatar role={message.role} />
+      <Avatar role={message.role} Icon={Icon} />
       <div style={s.rowBody}>
         {message.role === "user" ? (
           <p style={s.userText}>{message.text}</p>
@@ -291,9 +318,9 @@ const MessageRow = ({ message }) => {
   );
 };
 
-const TypingRow = () => (
+const TypingRow = ({ Icon }) => (
   <div style={s.row}>
-    <Avatar role="assistant" />
+    <Avatar role="assistant" Icon={Icon} />
     <div style={s.rowBody}>
       <div style={s.typingDots}>
         <span style={{ ...s.typingDot, animationDelay: "0ms" }} />
@@ -304,15 +331,13 @@ const TypingRow = () => (
   </div>
 );
 
-const EmptyState = ({ onPick }) => (
+const EmptyState = ({ domain, onPick }) => (
   <div style={s.empty}>
-    <div style={s.emptyAvatar}><TbCrane size={24} /></div>
-    <h1 style={s.emptyTitle}>Аналитика по бетону</h1>
-    <p style={s.emptyHint}>
-      Спросите про заявки на бетон и раствор на естественном языке — например:
-    </p>
+    <div style={s.emptyAvatar}><domain.Icon size={24} /></div>
+    <h1 style={s.emptyTitle}>{domain.emptyTitle}</h1>
+    <p style={s.emptyHint}>{domain.emptyHint}</p>
     <div style={s.suggestions}>
-      {SUGGESTIONS.map((q) => (
+      {domain.suggestions.map((q) => (
         <button key={q} style={s.suggestionChip} onClick={() => onPick(q)}>
           {q}
         </button>
@@ -323,12 +348,18 @@ const EmptyState = ({ onPick }) => (
 
 const ConcreteChatPage = () => {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState([]);
+  const [activeDomain, setActiveDomain] = useState(DEFAULT_DOMAIN);
+  const [messagesByDomain, setMessagesByDomain] = useState({ concrete: [], objects: [] });
+  const [loadingByDomain, setLoadingByDomain] = useState({ concrete: false, objects: false });
+  const [errorByDomain, setErrorByDomain] = useState({ concrete: "", objects: "" });
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const listEndRef = useRef(null);
   const textareaRef = useRef(null);
+
+  const domain = DOMAINS.find((d) => d.key === activeDomain);
+  const messages = messagesByDomain[activeDomain];
+  const loading = loadingByDomain[activeDomain];
+  const error = errorByDomain[activeDomain];
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -341,17 +372,21 @@ const ConcreteChatPage = () => {
     el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
   };
 
+  // domainKey фиксируется на момент отправки: если пользователь переключит
+  // вкладку, пока идёт ответ, результат всё равно попадёт в чат того режима,
+  // в котором был задан вопрос, а не в тот, что сейчас на экране.
   const sendQuestion = async (question) => {
-    if (!question || loading) return;
+    const domainKey = activeDomain;
+    if (!question || loadingByDomain[domainKey]) return;
 
     const userMessage = { role: "user", text: question };
-    const nextMessages = [...messages, userMessage];
-    setMessages(nextMessages);
+    const nextMessages = [...messagesByDomain[domainKey], userMessage];
+    setMessagesByDomain((prev) => ({ ...prev, [domainKey]: nextMessages }));
     setInput("");
     requestAnimationFrame(resizeTextarea);
-    setError("");
-    setLoading(true);
-    logConcreteChatUsage(question);
+    setErrorByDomain((prev) => ({ ...prev, [domainKey]: "" }));
+    setLoadingByDomain((prev) => ({ ...prev, [domainKey]: true }));
+    logChatUsage(question, domainKey);
 
     try {
       const history = nextMessages.slice(-MAX_HISTORY).map((m) => ({
@@ -362,7 +397,7 @@ const ConcreteChatPage = () => {
       const res = await fetch(`${CHAT_API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: history, domain: domainKey }),
       });
 
       const data = await res.json();
@@ -371,23 +406,29 @@ const ConcreteChatPage = () => {
       }
 
       const answer = data.answer || {};
-      setMessages((prev) => [
+      setMessagesByDomain((prev) => ({
         ...prev,
-        {
-          role: "assistant",
-          text: answer.text || "",
-          title: answer.title || "",
-          subtitle: answer.subtitle || "",
-          type: answer.type || "text",
-          table: answer.table,
-          chart: answer.chart,
-          sql: data.sql,
-        },
-      ]);
+        [domainKey]: [
+          ...prev[domainKey],
+          {
+            role: "assistant",
+            text: answer.text || "",
+            title: answer.title || "",
+            subtitle: answer.subtitle || "",
+            type: answer.type || "text",
+            table: answer.table,
+            chart: answer.chart,
+            sql: data.sql,
+          },
+        ],
+      }));
     } catch (err) {
-      setError(err.message || "Не удалось получить ответ. Попробуйте ещё раз.");
+      setErrorByDomain((prev) => ({
+        ...prev,
+        [domainKey]: err.message || "Не удалось получить ответ. Попробуйте ещё раз.",
+      }));
     } finally {
-      setLoading(false);
+      setLoadingByDomain((prev) => ({ ...prev, [domainKey]: false }));
     }
   };
 
@@ -401,61 +442,89 @@ const ConcreteChatPage = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div style={s.page} className="analytics-shell">
       <style>{`
         @keyframes concreteChatBounce {
           0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
           40% { transform: scale(1); opacity: 1; }
         }
+        @media (max-width: 680px) {
+          .analytics-shell { flex-direction: column; }
+          .analytics-sidebar {
+            width: 100% !important;
+            flex-direction: row !important;
+            border-right: none !important;
+            border-bottom: 1px solid #eceef0;
+            overflow-x: auto;
+          }
+          .analytics-sidebar-title { display: none; }
+          .analytics-sidebar button { flex-shrink: 0; }
+        }
       `}</style>
 
-      <header style={s.header}>
-        <button onClick={() => navigate("/")} style={s.back}>←</button>
-        <span style={s.headerTitle}>Аналитика по бетону</span>
-      </header>
+      <nav style={s.sidebar} className="analytics-sidebar">
+        <div style={s.sidebarTitle} className="analytics-sidebar-title">Аналитика</div>
+        {DOMAINS.map((d) => (
+          <button
+            key={d.key}
+            style={{ ...s.sidebarItem, ...(d.key === activeDomain ? s.sidebarItemActive : null) }}
+            onClick={() => setActiveDomain(d.key)}
+          >
+            <d.Icon size={17} />
+            {d.label}
+          </button>
+        ))}
+      </nav>
 
-      <div style={s.scrollArea}>
-        <div style={s.column}>
-          {messages.length === 0 ? (
-            <EmptyState onPick={sendQuestion} />
-          ) : (
-            messages.map((m, i) => <MessageRow key={i} message={m} />)
-          )}
-          {loading && <TypingRow />}
-          <div ref={listEndRef} />
-        </div>
-      </div>
+      <div style={s.main}>
+        <header style={s.header}>
+          <button onClick={() => navigate("/")} style={s.back}>←</button>
+          <span style={s.headerTitle}>{domain.label}</span>
+        </header>
 
-      <div style={s.composerWrap}>
-        <div style={s.column}>
-          {error && <div style={s.error}>{error}</div>}
-          <div style={s.composer}>
-            <textarea
-              ref={textareaRef}
-              style={s.textarea}
-              rows={1}
-              placeholder="Спросите про заявки на бетон..."
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                resizeTextarea();
-              }}
-              onKeyDown={handleKeyDown}
-              disabled={loading}
-            />
-            <button
-              style={{
-                ...s.sendBtn,
-                ...((loading || !input.trim()) ? s.sendBtnDisabled : null),
-              }}
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
-              aria-label="Отправить"
-            >
-              ↑
-            </button>
+        <div style={s.scrollArea}>
+          <div style={s.column}>
+            {messages.length === 0 ? (
+              <EmptyState domain={domain} onPick={sendQuestion} />
+            ) : (
+              messages.map((m, i) => <MessageRow key={i} message={m} Icon={domain.Icon} />)
+            )}
+            {loading && <TypingRow Icon={domain.Icon} />}
+            <div ref={listEndRef} />
           </div>
-          <p style={s.disclaimer}>Ответы формирует ИИ — сверяйтесь по SQL-запросу под ответом.</p>
+        </div>
+
+        <div style={s.composerWrap}>
+          <div style={s.column}>
+            {error && <div style={s.error}>{error}</div>}
+            <div style={s.composer}>
+              <textarea
+                ref={textareaRef}
+                style={s.textarea}
+                rows={1}
+                placeholder={domain.placeholder}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  resizeTextarea();
+                }}
+                onKeyDown={handleKeyDown}
+                disabled={loading}
+              />
+              <button
+                style={{
+                  ...s.sendBtn,
+                  ...((loading || !input.trim()) ? s.sendBtnDisabled : null),
+                }}
+                onClick={handleSend}
+                disabled={loading || !input.trim()}
+                aria-label="Отправить"
+              >
+                ↑
+              </button>
+            </div>
+            <p style={s.disclaimer}>Ответы формирует ИИ — сверяйтесь по SQL-запросу под ответом.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -463,8 +532,14 @@ const ConcreteChatPage = () => {
 };
 
 const s = {
-  page: { display: "flex", flexDirection: "column", height: "100vh", background: "#fff", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
+  page: { display: "flex", height: "100vh", background: "#fff", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
 
+  sidebar: { flexShrink: 0, width: "220px", display: "flex", flexDirection: "column", gap: "4px", padding: "16px 10px", background: "#f7f7f8", borderRight: "1px solid #eceef0" },
+  sidebarTitle: { fontSize: "11px", fontWeight: 700, color: "#8e8ea0", textTransform: "uppercase", letterSpacing: "0.04em", padding: "6px 10px 10px" },
+  sidebarItem: { display: "flex", alignItems: "center", gap: "10px", textAlign: "left", background: "none", border: "none", borderRadius: "10px", padding: "10px 12px", fontSize: "14px", color: "#444", cursor: "pointer" },
+  sidebarItemActive: { background: "#e3f3ec", color: "#0d0d0d", fontWeight: 600 },
+
+  main: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100vh" },
   header: { flexShrink: 0, display: "flex", alignItems: "center", gap: "12px", padding: "12px 20px", borderBottom: "1px solid #eceef0" },
   back: { background: "none", border: "none", color: "#6e6e80", cursor: "pointer", fontSize: "20px", padding: "4px 8px", lineHeight: 1, borderRadius: "6px" },
   headerTitle: { fontSize: "15px", fontWeight: 600, color: "#0d0d0d" },

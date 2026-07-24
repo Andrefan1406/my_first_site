@@ -28,6 +28,35 @@ CREATE INDEX IF NOT EXISTS idx_concrete_date     ON concrete_orders(shipment_dat
 CREATE INDEX IF NOT EXISTS idx_concrete_object   ON concrete_orders(object_name);
 CREATE INDEX IF NOT EXISTS idx_concrete_material ON concrete_orders(material);
 
+-- objects — чистое зеркало вкладки "Объекты" Google Таблицы: пересоздаём таблицу
+-- при каждом старте (DROP+CREATE), а не ALTER, потому что данные в ней никогда
+-- не редактируются вручную и полностью перезаписываются синком сразу после
+-- старта (см. syncObjects.js) — так набор колонок в БД гарантированно совпадает
+-- с текущей схемой в коде, без ручных миграций.
+DROP TABLE IF EXISTS objects;
+CREATE TABLE objects (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  object_name           TEXT,
+  object_name_short     TEXT,
+  position              TEXT,
+  apartments_count      INTEGER,
+  object_type           TEXT,
+  status                TEXT,
+  address               TEXT,
+  commissioning_date    TEXT,
+  building_area_m2      REAL,
+  apartments_area_m2    REAL,
+  sewer_network_m       REAL,
+  water_network_m       REAL,
+  heating_network_m     REAL,
+  power_network_m       REAL,
+  low_current_network_m REAL,
+  coverage_area_m2      REAL,
+  synced_at             TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_objects_type   ON objects(object_type);
+CREATE INDEX IF NOT EXISTS idx_objects_status ON objects(status);
+
 CREATE TABLE IF NOT EXISTS sync_meta (
   key   TEXT PRIMARY KEY,
   value TEXT
@@ -69,11 +98,9 @@ function getReadDb() {
   return readDb;
 }
 
-function getLastSyncedAt() {
+function getLastSyncedAt(key = 'last_synced_at') {
   try {
-    const row = getReadDb()
-      .prepare("SELECT value FROM sync_meta WHERE key = 'last_synced_at'")
-      .get();
+    const row = getReadDb().prepare('SELECT value FROM sync_meta WHERE key = ?').get(key);
     return row ? row.value : null;
   } catch (err) {
     // до первого initSchema()+sync файла/таблиц ещё может не быть

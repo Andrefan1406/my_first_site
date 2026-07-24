@@ -1,4 +1,5 @@
-// Двухшаговый text-to-SQL чат по заявкам на бетон:
+// Двухшаговый text-to-SQL чат, общий для двух доменов (аналитика по бетону
+// и аналитика по объектам компании), выбираемых полем body.domain:
 // 1) вопрос -> LLM генерирует SQL -> валидация (sqlGuard) -> выполнение (readonly)
 // 2) результат SQL -> LLM формирует финальный ответ {type, text, table?, chart?}
 // Второй вызов никогда не видит непровалидированный SQL — только уже
@@ -15,25 +16,11 @@ const MAX_HISTORY = 10;
 // см. обсуждение с пользователем. Пока используем ту же модель, что и Smart Request.
 const SQL_MODEL = 'gpt-oss:120b-cloud';
 
-const TABLE_SCHEMA = `
-Таблица concrete_orders (заявки на бетон/раствор, одна строка = одна отгрузка):
-  shipment_date      TEXT  -- дата отгрузки, формат 'YYYY-MM-DD'
-  category           TEXT  -- категория объекта
-  material           TEXT  -- материал: 'Бетон' или 'Раствор'
-  object_name        TEXT  -- короткий код объекта, напр. 'НЖ 4'
-  block_position     TEXT  -- блок/позиция на объекте, свободный текст
-  grade_class        TEXT  -- марка/класс бетона или раствора, свободный текст, напр. 'В25'
-  volume_planned_m3  REAL  -- заявленный объём, м3
-  volume_actual_m3   REAL  -- фактически отгруженный объём, м3 (может быть NULL, если ещё не отгружено)
-  execution_note     TEXT  -- отметка о фактическом исполнении заявки
-Разрешена только одна таблица: concrete_orders.
-`.trim();
-
-function getDistinctValues(column, limit = 25) {
+function getDistinctValues(table, column, limit = 25) {
   try {
     const rows = getReadDb()
       .prepare(
-        `SELECT DISTINCT ${column} AS v FROM concrete_orders WHERE ${column} IS NOT NULL AND ${column} != '' LIMIT ?`
+        `SELECT DISTINCT ${column} AS v FROM ${table} WHERE ${column} IS NOT NULL AND ${column} != '' LIMIT ?`
       )
       .all(limit);
     return rows.map((r) => r.v);
@@ -42,13 +29,17 @@ function getDistinctValues(column, limit = 25) {
   }
 }
 
+function getTodayInAlmaty() {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Almaty' }).format(new Date());
+}
+
 // Модель ненадёжно считает диапазоны дат сама (путает "в этом месяце" с "сегодня") —
 // поэтому все нужные диапазоны считаем на сервере и даём готовыми строками.
 function getDateRanges() {
   const fmt = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Almaty' });
   const now = new Date();
   const todayStr = fmt.format(now);
-  const [y, m, d] = todayStr.split('-').map(Number);
+  const [y, m] = todayStr.split('-').map(Number);
 
   const toStr = (date) => fmt.format(date);
   const monthStart = new Date(Date.UTC(y, m - 1, 1));
@@ -67,18 +58,32 @@ function getDateRanges() {
   };
 }
 
-function buildSqlSystemPrompt() {
-  const objects = getDistinctValues('object_name', 40);
-  const categories = getDistinctValues('category', 15);
-  const materials = getDistinctValues('material', 5);
-  const grades = getDistinctValues('grade_class', 25);
+const CONCRETE_TABLE_SCHEMA = `
+Таблица concrete_orders (заявки на бетон/раствор, одна строка = одна отгрузка):
+  shipment_date      TEXT  -- дата отгрузки, формат 'YYYY-MM-DD'
+  category           TEXT  -- категория объекта
+  material           TEXT  -- материал: 'Бетон' или 'Раствор'
+  object_name        TEXT  -- короткий код объекта, напр. 'НЖ 4'
+  block_position     TEXT  -- блок/позиция на объекте, свободный текст
+  grade_class        TEXT  -- марка/класс бетона или раствора, свободный текст, напр. 'В25'
+  volume_planned_m3  REAL  -- заявленный объём, м3
+  volume_actual_m3   REAL  -- фактически отгруженный объём, м3 (может быть NULL, если ещё не отгружено)
+  execution_note     TEXT  -- отметка о фактическом исполнении заявки
+Разрешена только одна таблица: concrete_orders.
+`.trim();
+
+function buildConcreteSqlSystemPrompt() {
+  const objects = getDistinctValues('concrete_orders', 'object_name', 40);
+  const categories = getDistinctValues('concrete_orders', 'category', 15);
+  const materials = getDistinctValues('concrete_orders', 'material', 5);
+  const grades = getDistinctValues('concrete_orders', 'grade_class', 25);
   const dates = getDateRanges();
 
   return `
 Ты помощник, который превращает вопросы пользователя на русском языке в SQL-запросы SQLite
 для аналитики по заявкам на бетон и раствор.
 
-${TABLE_SCHEMA}
+${CONCRETE_TABLE_SCHEMA}
 
 Реальные значения object_name в базе (используй точное совпадение или LIKE '%...%'): ${JSON.stringify(objects)}
 Реальные значения category: ${JSON.stringify(categories)}
@@ -116,10 +121,92 @@ ${TABLE_SCHEMA}
 `.trim();
 }
 
-function buildAnswerSystemPrompt(question, sql, rows) {
+const OBJECTS_TABLE_SCHEMA = `
+Таблица objects (объекты компании: жилые дома, соцобъекты, инженерные сети, дороги и т.п.,
+одна строка = один объект):
+  object_name           TEXT    -- полное официальное наименование объекта (длинный текст, обычно включает позицию по генплану)
+  object_name_short     TEXT    -- краткое наименование, часто пусто
+  position               TEXT   -- позиция по генплану, напр. '51', '51/1', '56,60,64,72'
+  object_type            TEXT   -- тип объекта, см. список значений ниже
+  status                 TEXT   -- 'сдан' | 'строится' | 'в планах'
+  address                 TEXT  -- присвоенный адрес
+  commissioning_date      TEXT  -- дата акта ввода в эксплуатацию, 'YYYY-MM-DD' (NULL, если ещё не сдан)
+  apartments_count        INTEGER -- количество квартир (заполнено только для жилых домов)
+  building_area_m2        REAL  -- общая площадь здания, м2
+  apartments_area_m2      REAL  -- общая площадь квартир, м2
+  sewer_network_m         REAL  -- протяжённость сетей канализации, м
+  water_network_m         REAL  -- протяжённость сетей водоснабжения, м
+  heating_network_m       REAL  -- протяжённость сетей теплоснабжения, м
+  power_network_m         REAL  -- протяжённость сетей электроснабжения, м
+  low_current_network_m   REAL  -- протяжённость слаботочных сетей, м
+  coverage_area_m2        REAL  -- площадь дорожного покрытия, м2 (для дорог/проездов)
+Разрешена только одна таблица: objects.
+`.trim();
+
+function buildObjectsSqlSystemPrompt() {
+  const objectTypes = getDistinctValues('objects', 'object_type', 20);
+  const statuses = getDistinctValues('objects', 'status', 5);
+  const today = getTodayInAlmaty();
+
+  return `
+Ты помощник, который превращает вопросы пользователя на русском языке в SQL-запросы SQLite
+для аналитики по объектам строительной компании (жилые дома, школы, детсады, инженерные сети и т.п.).
+
+${OBJECTS_TABLE_SCHEMA}
+
+Реальные значения object_type в базе: ${JSON.stringify(objectTypes)}
+Реальные значения status: ${JSON.stringify(statuses)}
+Сегодняшняя дата: ${today} (год сдачи/ввода извлекай через strftime('%Y', commissioning_date)).
+
+Правила:
+- Генерируй ТОЛЬКО один SELECT-запрос. Никаких INSERT/UPDATE/DELETE/DROP и любых других
+  модифицирующих операций — они всё равно будут отклонены на сервере.
+- Для классификации типа объекта (жилой дом, школа, детский сад, инженерные сети и т.п.)
+  используй ТОЛЬКО колонку object_type.
+- Каждая строка — один объект. Не путай object_name (длинное полное наименование) с position
+  (короткий номер позиции по генплану).
+- Если пользователь называет объект по номеру позиции ("поз.58", "поз. 58", "позиция 58"),
+  ищи через position = '58' ИЛИ object_name LIKE '%поз.58%' ИЛИ object_name LIKE '%поз. 58%' —
+  в исходных данных позиция в тексте названия оформлена по-разному.
+- apartments_count, building_area_m2, apartments_area_m2 осмысленно заполнены только для
+  object_type = 'Жилой дом'; для остальных типов обычно NULL.
+- sewer_network_m/water_network_m/heating_network_m/power_network_m/low_current_network_m/
+  coverage_area_m2 заполнены в основном для инженерных сетей, дорог и проездов; для жилых
+  домов обычно NULL — не включай их в SUM для жилых домов.
+- "Сколько объектов" -> COUNT(*). "Сколько квартир/площади/метров сетей" -> SUM(соответствующей колонки).
+- Если вопрос — уточнение предыдущего (например "а по школам?"), перенеси фильтры предыдущего
+  вопроса (тип, статус, период) в новый SQL, заменив только то, что явно меняет новое сообщение.
+- Если в предыдущем сообщении был возвращён текст с ошибкой выполнения SQL — исправь запрос.
+
+Ответь строго в формате JSON: {"sql": "<SQL-запрос одной строкой>"}
+`.trim();
+}
+
+const DOMAIN_CONFIG = {
+  concrete: {
+    table: 'concrete_orders',
+    syncKey: 'last_synced_at',
+    notReadyText: 'Данные по бетону ещё загружаются, попробуйте через минуту.',
+    answerDomainLabel: 'заявкам на бетон и раствор',
+    buildSqlSystemPrompt: buildConcreteSqlSystemPrompt,
+  },
+  objects: {
+    table: 'objects',
+    syncKey: 'objects_last_synced_at',
+    notReadyText: 'Данные по объектам ещё загружаются, попробуйте через минуту.',
+    answerDomainLabel: 'объектам компании (жилым домам, соцобъектам, инженерным сетям и т.п.)',
+    buildSqlSystemPrompt: buildObjectsSqlSystemPrompt,
+  },
+};
+
+function resolveDomain(domainKey) {
+  return DOMAIN_CONFIG[domainKey] || DOMAIN_CONFIG.concrete;
+}
+
+function buildAnswerSystemPrompt(question, sql, rows, domainLabel) {
   const preview = rows.slice(0, 200);
   return `
-Ты помощник по аналитике заявок на бетон. Пользователь задал вопрос, для него уже выполнен SQL-запрос
+Ты помощник по аналитике ${domainLabel}. Пользователь задал вопрос, для него уже выполнен SQL-запрос
 к базе, и ты получил результат. Сформируй понятный ответ на русском языке.
 
 Вопрос пользователя: ${question}
@@ -160,11 +247,12 @@ function rowsToTable(rows) {
   return { columns, rows: rows.map((r) => columns.map((c) => r[c])) };
 }
 
-async function generateAndRunSql(history) {
+async function generateAndRunSql(history, domain) {
   const sqlMessages = [
-    { role: 'system', content: buildSqlSystemPrompt() },
+    { role: 'system', content: domain.buildSqlSystemPrompt() },
     ...history.map((m) => ({ role: m.role, content: m.content })),
   ];
+  const allowedTables = new Set([domain.table]);
 
   let lastSql = null;
   let lastErrorMessage = null;
@@ -175,7 +263,7 @@ async function generateAndRunSql(history) {
     lastSql = candidateSql;
 
     try {
-      const safeSql = assertSafeSelect(candidateSql);
+      const safeSql = assertSafeSelect(candidateSql, allowedTables);
       const rows = getReadDb().prepare(safeSql).all();
       return { sql: safeSql, rows };
     } catch (err) {
@@ -197,14 +285,16 @@ async function generateAndRunSql(history) {
 
 async function handleChat(req, res) {
   try {
-    const { messages } = req.body || {};
+    const { messages, domain: domainKey } = req.body || {};
     if (!Array.isArray(messages) || !messages.length) {
       return res.status(400).json({ error: 'Ожидается тело { messages: [...] }' });
     }
 
-    if (!getLastSyncedAt()) {
+    const domain = resolveDomain(domainKey);
+
+    if (!getLastSyncedAt(domain.syncKey)) {
       return res.json({
-        answer: { type: 'text', text: 'Данные по бетону ещё загружаются, попробуйте через минуту.' },
+        answer: { type: 'text', text: domain.notReadyText },
         sql: null,
       });
     }
@@ -219,7 +309,7 @@ async function handleChat(req, res) {
     let sql;
     let rows;
     try {
-      ({ sql, rows } = await generateAndRunSql(history));
+      ({ sql, rows } = await generateAndRunSql(history, domain));
     } catch (err) {
       const status = err.status || 422;
       return res.status(status).json({ error: err.message, sql: err.lastSql || null });
@@ -228,7 +318,7 @@ async function handleChat(req, res) {
     let answer;
     try {
       answer = await callOllamaJson(
-        [{ role: 'system', content: buildAnswerSystemPrompt(question, sql, rows) }],
+        [{ role: 'system', content: buildAnswerSystemPrompt(question, sql, rows, domain.answerDomainLabel) }],
         { format: 'json', temperature: 0, model: SQL_MODEL }
       );
     } catch (err) {

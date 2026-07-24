@@ -1,10 +1,12 @@
 // Backend-процесс: прокси для Умной заявки (Ollama Cloud) + text-to-SQL
-// чат по заявкам на бетон (SQLite, синхронизируется из Google Sheets).
+// чат по заявкам на бетон и по объектам компании (SQLite, синхронизируется
+// из Google Sheets — см. syncConcrete.js/syncObjects.js).
 require('dotenv').config();
 const express = require('express');
 const { callOllama } = require('./ollamaClient');
 const { initSchema } = require('./db');
 const { startConcreteSync } = require('./syncConcrete');
+const { startObjectsSync } = require('./syncObjects');
 const { handleChat } = require('./chatHandler');
 
 const app = express();
@@ -38,6 +40,7 @@ app.post('/api/chat', handleChat);
 
 initSchema();
 startConcreteSync();
+startObjectsSync();
 
 // Render передаёт порт через PORT — слушаем его в первую очередь,
 // SMART_REQUEST_PROXY_PORT остаётся для локального оверрайда.
