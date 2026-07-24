@@ -66,9 +66,9 @@ const CONCRETE_TABLE_SCHEMA = `
   object_name        TEXT  -- короткий код объекта, напр. 'НЖ 4'
   block_position     TEXT  -- блок/позиция на объекте, свободный текст
   grade_class        TEXT  -- марка/класс бетона или раствора, свободный текст, напр. 'В25'
-  volume_planned_m3  REAL  -- заявленный объём, м3
+  volume_planned_m3  REAL  -- заявленный объём ("количество"), м3
   volume_actual_m3   REAL  -- фактически отгруженный объём, м3 (может быть NULL, если ещё не отгружено)
-  execution_note     TEXT  -- отметка о фактическом исполнении заявки
+  execution_note     TEXT  -- отметка о фактическом исполнении заявки; ПУСТО (NULL или '') = заявка НЕ исполнена
 Разрешена только одна таблица: concrete_orders.
 `.trim();
 
@@ -77,6 +77,7 @@ function buildConcreteSqlSystemPrompt() {
   const categories = getDistinctValues('concrete_orders', 'category', 15);
   const materials = getDistinctValues('concrete_orders', 'material', 5);
   const grades = getDistinctValues('concrete_orders', 'grade_class', 25);
+  const executionNotes = getDistinctValues('concrete_orders', 'execution_note', 15);
   const dates = getDateRanges();
 
   return `
@@ -89,6 +90,7 @@ ${CONCRETE_TABLE_SCHEMA}
 Реальные значения category: ${JSON.stringify(categories)}
 Реальные значения material: ${JSON.stringify(materials)}
 Примеры значений grade_class: ${JSON.stringify(grades)}
+Реальные непустые значения execution_note (это ВСЕ значит "исполнено", независимо от текста): ${JSON.stringify(executionNotes)}
 
 Готовые диапазоны дат (используй их буквально, не вычисляй даты сам):
 - сегодня: ${dates.today}
@@ -108,6 +110,15 @@ ${CONCRETE_TABLE_SCHEMA}
   если явно спрашивают про число заявок/заказов ("сколько заявок", "сколько заказов").
 - Для объёма отгрузки используй volume_actual_m3, если вопрос про то, что реально отгружено/выполнено;
   используй volume_planned_m3, если вопрос про заявленный объём.
+- Заявка считается ИСПОЛНЕННОЙ, если execution_note заполнен (IS NOT NULL AND execution_note != ''),
+  и НЕисполненной, если execution_note пустой (IS NULL OR execution_note = '') — не ориентируйся на
+  volume_actual_m3 для определения исполненности, ориентируйся ИСКЛЮЧИТЕЛЬНО на execution_note.
+- Если вопрос про заявки/объём, которые НЕ исполнены (не исполнено, не отгружено, в работе, ожидает,
+  висит и т.п.): фильтруй (execution_note IS NULL OR execution_note = '') и считай объём по
+  volume_planned_m3 (столбец "количество"/заявленный объём) — НЕ по volume_actual_m3, так как у
+  неисполненных заявок фактический объём обычно ещё не проставлен.
+- Если вопрос про заявки/объём, которые исполнены/отгружены: фильтруй execution_note IS NOT NULL AND
+  execution_note != '', и считай объём по volume_actual_m3.
 - Если вопрос — уточнение предыдущего (например "а раствора?"), сначала определи, какие фильтры
   (период, объект, материал и т.п.) были в предыдущих вопросах этого диалога, и перенеси их в новый
   SQL, заменив только то, что уточняет новое сообщение. Не отбрасывай период/объект из предыдущего
