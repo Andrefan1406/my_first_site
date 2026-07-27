@@ -76,16 +76,64 @@ CREATE TABLE people_reports (
 CREATE INDEX idx_people_reports_date ON people_reports(report_date);
 CREATE INDEX idx_people_reports_site ON people_reports(site);
 
--- people_reports_filled — тот же состав колонок, что и people_reports, но
--- поверх непрерывного временного ряда: пропущенные рабочие дни восстановлены
--- методом LOCF (is_filled=1, source_date указывает, с какого дня скопировано),
--- пропущенные выходные не создаются вовсе. См. fillPeopleSeries.js — вся
--- логика восстановления реализована и задокументирована там, эта таблица —
--- лишь материализованный результат. Вся аналитика по составу отчётов
--- (по объекту/профессии/подрядчику) должна работать через эту таблицу,
--- а не через сырую people_reports.
-DROP TABLE IF EXISTS people_reports_filled;
-CREATE TABLE people_reports_filled (
+-- people_report_gaps — статус отчётности на уровне (участок, день) на весь
+-- календарный диапазон участка, включая субботу и воскресенье — выходные
+-- участвуют в пропусках наравне с рабочими днями (по требованию пользователя:
+-- раньше выходной без отчёта считался нормой, теперь тоже ждёт решения
+-- человека). Только ОБНАРУЖЕНИЕ пропусков (см. peopleGapDetection.js) —
+-- никаких данных сюда автоматически не подставляется. Пересчитывается при
+-- каждом синке и при каждом изменении решений (people_gap_decisions), поэтому
+-- DROP+CREATE.
+--   status:
+--     'real'               — реальный отчёт за день есть
+--     'missing'            — день (рабочий или выходной) без отчёта, ЖДЁТ решения человека
+--     'resolved_copy'      — администратор решил заполнить копированием с другого дня
+--     'resolved_no_report' — администратор подтвердил: участок в этот день не работал
+-- is_weekend при этом остаётся информационным флагом (для контекста при
+-- принятии решения), а не признаком того, что решение не нужно.
+DROP TABLE IF EXISTS people_report_gaps;
+CREATE TABLE people_report_gaps (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_date     TEXT,
+  site            TEXT,
+  is_weekend      INTEGER,
+  status          TEXT,
+  total_headcount REAL,    -- сумма headcount за день; NULL, если данных нет (включая нерешённые пропуски)
+  entries_count   INTEGER,
+  decided_by      TEXT,    -- email администратора, принявшего решение (для resolved_*), иначе NULL
+  decided_at      TEXT,    -- когда принято решение (для resolved_*), иначе NULL
+  source_date     TEXT,    -- для resolved_copy: с какого дня скопированы данные
+  synced_at       TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_people_gaps_date ON people_report_gaps(report_date);
+CREATE INDEX idx_people_gaps_site ON people_report_gaps(site);
+CREATE INDEX idx_people_gaps_status ON people_report_gaps(status);
+
+-- people_gap_decisions — ПОСТОЯННОЕ хранилище решений человека по пропускам.
+-- В отличие от остальных people_* таблиц, НЕ пересоздаётся при синке/старте
+-- (CREATE TABLE IF NOT EXISTS, без DROP) — это единственный источник истины
+-- о том, что решил администратор, и он должен пережить и рестарт процесса,
+-- и обновление сырых данных из Google Таблицы.
+--   action: 'copy' (скопировать данные с source_date) | 'confirm_no_report' (участок не работал)
+CREATE TABLE IF NOT EXISTS people_gap_decisions (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  site            TEXT NOT NULL,
+  report_date     TEXT NOT NULL, -- дата пропуска, к которому относится решение
+  action          TEXT NOT NULL,
+  source_date     TEXT,          -- обязателен для action='copy'
+  note            TEXT,
+  decided_by      TEXT NOT NULL, -- email администратора (проверяется на бэкенде через Firebase ID token)
+  decided_at      TEXT DEFAULT (datetime('now')),
+  UNIQUE(site, report_date)
+);
+
+-- people_reports_resolved — состав отчёта (по объекту/профессии/подрядчику)
+-- поверх РЕАЛЬНЫХ данных плюс данных, которые администратор явно решил
+-- скопировать через people_gap_decisions (action='copy'). Пропуски без
+-- решения человека сюда не попадают вообще — никаких автоматических догадок.
+-- Пересчитывается при каждом синке и при каждом изменении решений.
+DROP TABLE IF EXISTS people_reports_resolved;
+CREATE TABLE people_reports_resolved (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   report_date     TEXT,
   site            TEXT,
@@ -95,36 +143,14 @@ CREATE TABLE people_reports_filled (
   contractor      TEXT,
   profession      TEXT,
   headcount       REAL,
-  is_filled       INTEGER, -- 1 = запись восстановлена автоматически (реального отчёта не было), 0 = реальная запись
-  is_weekend      INTEGER, -- 1 = суббота или воскресенье (независимо от is_filled)
-  source_date     TEXT,    -- для is_filled=1: дата, с которой скопированы данные; иначе NULL
-  synced_at       TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX idx_people_filled_date ON people_reports_filled(report_date);
-CREATE INDEX idx_people_filled_site ON people_reports_filled(site);
-
--- people_report_days — статус отчётности на уровне (участок, день) на весь
--- календарный диапазон участка, включая пропущенные выходные. Не хранит
--- разбивку по объектам/профессиям — только сводный total_headcount. Нужна,
--- чтобы вопросы про полноту/своевременность отчётности (% заполненности,
--- сколько дней восстановлено, сколько отчётов не сдано) считались одним
--- простым запросом, без ручной генерации календаря на стороне LLM.
---   status: 'real' | 'filled' | 'weekend_no_report'
-DROP TABLE IF EXISTS people_report_days;
-CREATE TABLE people_report_days (
-  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  report_date     TEXT,
-  site            TEXT,
+  is_filled       INTEGER, -- 1 = заполнено администратором вручную (копия с source_date), 0 = реальная запись
   is_weekend      INTEGER,
-  status          TEXT,
-  is_filled       INTEGER,
-  source_date     TEXT,
-  total_headcount REAL,
-  entries_count   INTEGER,
+  source_date     TEXT,    -- для is_filled=1: дата, с которой скопированы данные
+  decided_by      TEXT,    -- для is_filled=1: email администратора
   synced_at       TEXT DEFAULT (datetime('now'))
 );
-CREATE INDEX idx_people_days_date ON people_report_days(report_date);
-CREATE INDEX idx_people_days_site ON people_report_days(site);
+CREATE INDEX idx_people_resolved_date ON people_reports_resolved(report_date);
+CREATE INDEX idx_people_resolved_site ON people_reports_resolved(site);
 
 CREATE TABLE IF NOT EXISTS sync_meta (
   key   TEXT PRIMARY KEY,

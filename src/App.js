@@ -24,8 +24,10 @@ import RemarksPage from "./remarks/RemarksPage";
 import SmartRequestPage from './SmartRequestPage';
 import LoginPage from './LoginPage';
 import PrivateRoute from './components/PrivateRoute';
+import AdminRoute from './components/AdminRoute';
 import PageTracker from './components/PageTracker';
 import AdminStatistics from "./pages/AdminStatistics";
+import PeopleGapsAdminPage from "./pages/PeopleGapsAdminPage";
 
 
 const Protected = ({ children }) => (
@@ -213,6 +215,16 @@ const App = () => {
           element={
             <Protected>
               <AdminStatistics />
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin/people-gaps"
+          element={
+            <Protected>
+              <AdminRoute>
+                <PeopleGapsAdminPage />
+              </AdminRoute>
             </Protected>
           }
         />

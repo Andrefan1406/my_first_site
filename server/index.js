@@ -10,14 +10,15 @@ const { startConcreteSync } = require('./syncConcrete');
 const { startObjectsSync } = require('./syncObjects');
 const { startPeopleSync } = require('./syncPeople');
 const { handleChat } = require('./chatHandler');
+const peopleGapsAdminRouter = require('./peopleGapsAdmin');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -39,6 +40,7 @@ app.post('/api/smart-request', async (req, res) => {
 });
 
 app.post('/api/chat', handleChat);
+app.use('/api/admin/people-gaps', peopleGapsAdminRouter);
 
 initSchema();
 startConcreteSync();
