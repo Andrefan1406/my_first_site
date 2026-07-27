@@ -193,6 +193,100 @@ ${OBJECTS_TABLE_SCHEMA}
 `.trim();
 }
 
+const PEOPLE_TABLES_SCHEMA = `
+Таблица people_reports_filled (состав ежедневных отчётов по людям на участках: сколько человек,
+на каком объекте, по какой профессии; одна строка = одна позиция отчёта за день):
+  report_date      TEXT  -- дата отчёта, 'YYYY-MM-DD'
+  site             TEXT  -- участок (кто отчитывается, обычно совпадает с начальником участка)
+  object_category  TEXT  -- категория объекта
+  object_name      TEXT  -- объект
+  position         TEXT  -- позиция/блок на объекте, свободный текст
+  contractor       TEXT  -- субподрядчик, свободный текст (может быть пустым)
+  profession       TEXT  -- профессия/специальность
+  headcount        REAL  -- количество человек по этой позиции отчёта
+  is_filled        INTEGER -- 1 = день восстановлен автоматически, начальник участка НЕ сдавал отчёт
+                            -- в этот день, данные скопированы с ближайшего предыдущего реального
+                            -- отчёта того же участка (LOCF); 0 = реальный отчёт
+  is_weekend       INTEGER -- 1 = суббота или воскресенье (независимо от is_filled)
+  source_date      TEXT    -- только для is_filled=1: дата реального отчёта, с которого скопированы данные
+
+Таблица people_report_days (статус отчётности по каждому участку на каждый календарный день,
+включая пропущенные выходные; одна строка = один день одного участка; НЕ содержит разбивки по
+объектам/профессиям — только сводный total_headcount за день):
+  report_date      TEXT    -- 'YYYY-MM-DD'
+  site             TEXT    -- участок
+  is_weekend       INTEGER -- 1 = суббота или воскресенье
+  status           TEXT    -- 'real' (реальный отчёт) | 'filled' (день восстановлен, отчёт не сдан) |
+                            -- 'weekend_no_report' (выходной без отчёта — это НОРМА, не ошибка)
+  is_filled        INTEGER -- 1 = status='filled' (для удобства фильтрации)
+  source_date      TEXT    -- только для status='filled': дата, с которой скопированы данные
+  total_headcount  REAL    -- сумма headcount по участку за день (NULL для weekend_no_report)
+  entries_count    INTEGER -- сколько строк отчёта было в этот день (0 для weekend_no_report)
+
+ВАЖНО про восстановление пропусков:
+- Отсутствие отчёта в рабочий день (Пн-Пт) означает, что начальник участка забыл его сдать. Такие
+  дни в обеих таблицах уже ВОССТАНОВЛЕНЫ автоматически (is_filled=1 / status='filled') копированием
+  данных с ближайшего предыдущего реального отчёта — это НЕ настоящие данные за этот день, а лучшее
+  доступное приближение, поэтому в ответах на вопросы про "реальную"/"фактическую" отчётность или про
+  "сколько отчётов не сдано"/"пропущено" их нужно явно отделять через is_filled/status.
+- Отсутствие отчёта в выходной (Сб/Вс) — это НОРМА (участок мог не работать), в people_report_days
+  такой день помечен status='weekend_no_report' и НЕ должен учитываться как "пропуск"/"нарушение"
+  при подсчёте процента заполненности отчётности — исключай такие дни из знаменателя.
+- Для "процента заполненности отчётности" по участку считай:
+  COUNT(status='real') * 100.0 / COUNT(status IN ('real','filled')) — т.е. weekend_no_report в
+  знаменатель не включается.
+- Для "количества людей"/"динамики численности" используй people_reports_filled или
+  people_report_days.total_headcount — это уже восстановленный ряд, а НЕ сырую таблицу people_reports.
+- Разрешены только эти две таблицы: people_reports_filled, people_report_days.
+`.trim();
+
+function buildPeopleSqlSystemPrompt() {
+  const sites = getDistinctValues('people_report_days', 'site', 40);
+  const professions = getDistinctValues('people_reports_filled', 'profession', 25);
+  const objectCategories = getDistinctValues('people_reports_filled', 'object_category', 20);
+  const objects = getDistinctValues('people_reports_filled', 'object_name', 40);
+  const dates = getDateRanges();
+
+  return `
+Ты помощник, который превращает вопросы пользователя на русском языке в SQL-запросы SQLite
+для аналитики по ежедневным отчётам начальников участков о количестве людей на объектах.
+
+${PEOPLE_TABLES_SCHEMA}
+
+Реальные значения site (участок): ${JSON.stringify(sites)}
+Реальные значения profession: ${JSON.stringify(professions)}
+Реальные значения object_category: ${JSON.stringify(objectCategories)}
+Примеры значений object_name: ${JSON.stringify(objects)}
+
+Готовые диапазоны дат (используй их буквально, не вычисляй даты сам):
+- сегодня: ${dates.today}
+- вчера: ${dates.yesterday}
+- текущий месяц: BETWEEN '${dates.currentMonthStart}' AND '${dates.currentMonthEnd}'
+- последние 7 дней: BETWEEN '${dates.last7DaysStart}' AND '${dates.today}'
+
+Правила:
+- Генерируй ТОЛЬКО один SELECT-запрос (можно с WITH). Никаких INSERT/UPDATE/DELETE/DROP и других
+  модифицирующих операций — они всё равно будут отклонены на сервере.
+- "В этом месяце" — это ВЕСЬ текущий месяц (диапазон выше), а НЕ "сегодня".
+- Вопросы про "сколько человек"/"численность" -> SUM(headcount) или SUM(total_headcount), а не COUNT(*).
+- Вопросы про "сколько отчётов не сдано"/"пропущено"/"забыли сдать"/"восстановлено автоматически" ->
+  people_report_days WHERE is_filled = 1 (и, если указан период, report_date BETWEEN ...).
+- Вопросы про "процент заполненности"/"своевременность отчётности" -> people_report_days, формула
+  из блока ВАЖНО выше, GROUP BY site при сравнении участков.
+- Вопросы про пропущенные выходные -> people_report_days WHERE status = 'weekend_no_report'; не
+  путай их с is_filled=1 (это разные, несмежные случаи).
+- Если вопрос — уточнение предыдущего (например "а по Брик Тауну?"), перенеси фильтры (период,
+  участок, объект, профессию) из предыдущих сообщений диалога, заменив только то, что явно меняет
+  новое сообщение.
+- Если в предыдущем сообщении был возвращён текст с ошибкой выполнения SQL — исправь запрос.
+
+Прежде чем ответить, кратко продумай: какая из двух таблиц нужна (состав отчёта или статус
+заполненности), какой период имеется в виду и какие фильтры перенести из предыдущих сообщений.
+
+Ответь строго в формате JSON: {"sql": "<SQL-запрос одной строкой>"}
+`.trim();
+}
+
 const DOMAIN_CONFIG = {
   concrete: {
     table: 'concrete_orders',
@@ -207,6 +301,13 @@ const DOMAIN_CONFIG = {
     notReadyText: 'Данные по объектам ещё загружаются, попробуйте через минуту.',
     answerDomainLabel: 'объектам компании (жилым домам, соцобъектам, инженерным сетям и т.п.)',
     buildSqlSystemPrompt: buildObjectsSqlSystemPrompt,
+  },
+  people: {
+    tables: ['people_reports_filled', 'people_report_days'],
+    syncKey: 'people_last_synced_at',
+    notReadyText: 'Данные по людям ещё загружаются, попробуйте через минуту.',
+    answerDomainLabel: 'ежедневным отчётам по людям на участках (с учётом автоматически восстановленных пропусков)',
+    buildSqlSystemPrompt: buildPeopleSqlSystemPrompt,
   },
 };
 
@@ -263,7 +364,7 @@ async function generateAndRunSql(history, domain) {
     { role: 'system', content: domain.buildSqlSystemPrompt() },
     ...history.map((m) => ({ role: m.role, content: m.content })),
   ];
-  const allowedTables = new Set([domain.table]);
+  const allowedTables = new Set(domain.tables || [domain.table]);
 
   let lastSql = null;
   let lastErrorMessage = null;

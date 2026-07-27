@@ -57,6 +57,75 @@ CREATE TABLE objects (
 CREATE INDEX IF NOT EXISTS idx_objects_type   ON objects(object_type);
 CREATE INDEX IF NOT EXISTS idx_objects_status ON objects(status);
 
+-- people_reports — чистое зеркало ежедневных отчётов начальников участков
+-- по людям (кто, где, сколько человек), без восстановления пропусков.
+-- Пересоздаётся при каждом старте по той же причине, что и objects.
+DROP TABLE IF EXISTS people_reports;
+CREATE TABLE people_reports (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_date     TEXT,
+  site            TEXT,
+  object_category TEXT,
+  object_name     TEXT,
+  position        TEXT,
+  contractor      TEXT,
+  profession      TEXT,
+  headcount       REAL,
+  synced_at       TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_people_reports_date ON people_reports(report_date);
+CREATE INDEX idx_people_reports_site ON people_reports(site);
+
+-- people_reports_filled — тот же состав колонок, что и people_reports, но
+-- поверх непрерывного временного ряда: пропущенные рабочие дни восстановлены
+-- методом LOCF (is_filled=1, source_date указывает, с какого дня скопировано),
+-- пропущенные выходные не создаются вовсе. См. fillPeopleSeries.js — вся
+-- логика восстановления реализована и задокументирована там, эта таблица —
+-- лишь материализованный результат. Вся аналитика по составу отчётов
+-- (по объекту/профессии/подрядчику) должна работать через эту таблицу,
+-- а не через сырую people_reports.
+DROP TABLE IF EXISTS people_reports_filled;
+CREATE TABLE people_reports_filled (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_date     TEXT,
+  site            TEXT,
+  object_category TEXT,
+  object_name     TEXT,
+  position        TEXT,
+  contractor      TEXT,
+  profession      TEXT,
+  headcount       REAL,
+  is_filled       INTEGER, -- 1 = запись восстановлена автоматически (реального отчёта не было), 0 = реальная запись
+  is_weekend      INTEGER, -- 1 = суббота или воскресенье (независимо от is_filled)
+  source_date     TEXT,    -- для is_filled=1: дата, с которой скопированы данные; иначе NULL
+  synced_at       TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_people_filled_date ON people_reports_filled(report_date);
+CREATE INDEX idx_people_filled_site ON people_reports_filled(site);
+
+-- people_report_days — статус отчётности на уровне (участок, день) на весь
+-- календарный диапазон участка, включая пропущенные выходные. Не хранит
+-- разбивку по объектам/профессиям — только сводный total_headcount. Нужна,
+-- чтобы вопросы про полноту/своевременность отчётности (% заполненности,
+-- сколько дней восстановлено, сколько отчётов не сдано) считались одним
+-- простым запросом, без ручной генерации календаря на стороне LLM.
+--   status: 'real' | 'filled' | 'weekend_no_report'
+DROP TABLE IF EXISTS people_report_days;
+CREATE TABLE people_report_days (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_date     TEXT,
+  site            TEXT,
+  is_weekend      INTEGER,
+  status          TEXT,
+  is_filled       INTEGER,
+  source_date     TEXT,
+  total_headcount REAL,
+  entries_count   INTEGER,
+  synced_at       TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_people_days_date ON people_report_days(report_date);
+CREATE INDEX idx_people_days_site ON people_report_days(site);
+
 CREATE TABLE IF NOT EXISTS sync_meta (
   key   TEXT PRIMARY KEY,
   value TEXT

@@ -7,7 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, LabelList
 } from "recharts";
-import { TbCrane, TbBuildingCommunity, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
+import { TbCrane, TbBuildingCommunity, TbUsers, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -47,8 +47,29 @@ const DOMAINS = [
       "Сколько всего школ и детских садов построено?",
     ],
   },
+  {
+    key: "people",
+    label: "Аналитика по людям",
+    Icon: TbUsers,
+    emptyTitle: "Аналитика по людям",
+    emptyHint:
+      "Спросите про численность людей на участках и полноту ежедневной отчётности — например:",
+    placeholder: "Спросите про отчёты по людям...",
+    suggestions: [
+      "Сколько человек работало на каждом участке вчера?",
+      "Какие участки не сдали отчёт за последнюю неделю?",
+      "Покажи динамику численности по участкам за месяц",
+      "Процент заполненности отчётности по участкам за июль",
+    ],
+  },
 ];
 const DEFAULT_DOMAIN = DOMAINS[0].key;
+
+// Начальное состояние per-domain стейтов собирается из DOMAINS, чтобы при
+// добавлении нового домена не приходилось руками находить и дописывать
+// каждый из трёх useState ниже.
+const buildInitialByDomain = (value) =>
+  DOMAINS.reduce((acc, d) => ({ ...acc, [d.key]: value }), {});
 
 const logChatUsage = (question, domain) => {
   const user = getAuth().currentUser;
@@ -349,9 +370,9 @@ const EmptyState = ({ domain, onPick }) => (
 const ConcreteChatPage = () => {
   const navigate = useNavigate();
   const [activeDomain, setActiveDomain] = useState(DEFAULT_DOMAIN);
-  const [messagesByDomain, setMessagesByDomain] = useState({ concrete: [], objects: [] });
-  const [loadingByDomain, setLoadingByDomain] = useState({ concrete: false, objects: false });
-  const [errorByDomain, setErrorByDomain] = useState({ concrete: "", objects: "" });
+  const [messagesByDomain, setMessagesByDomain] = useState(() => buildInitialByDomain([]));
+  const [loadingByDomain, setLoadingByDomain] = useState(() => buildInitialByDomain(false));
+  const [errorByDomain, setErrorByDomain] = useState(() => buildInitialByDomain(""));
   const [input, setInput] = useState("");
   const listEndRef = useRef(null);
   const textareaRef = useRef(null);
