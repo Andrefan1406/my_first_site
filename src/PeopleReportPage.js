@@ -164,7 +164,7 @@ const PeopleReportPage = () => {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${styles.peopleReportPage}`}>
       <h2>Ежедневный отчёт по людям</h2>
       <label>Дата:
         <input
@@ -199,7 +199,7 @@ const PeopleReportPage = () => {
         <tbody>
           {requests.map((row, index) => (
             <tr key={index}>
-              <td>
+              <td data-label="Участок">
                 <select
                   value={row.startTime}
                   onChange={e => handleChange(index, "startTime", e.target.value)}
@@ -209,7 +209,7 @@ const PeopleReportPage = () => {
                   {siteOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </td>
-              <td>
+              <td data-label="Категория объекта">
                 <select
                   value={row.objectCategory}
                   onChange={e => handleChange(index, "objectCategory", e.target.value)}
@@ -219,7 +219,7 @@ const PeopleReportPage = () => {
                   {Object.keys(objectCategoryOptions).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </td>
-              <td>
+              <td data-label="Объект">
                 <select
                   value={row.endTime}
                   onChange={e => handleChange(index, "endTime", e.target.value)}
@@ -230,7 +230,7 @@ const PeopleReportPage = () => {
                   {(objectCategoryOptions[row.objectCategory] || []).map(obj => <option key={obj} value={obj}>{obj}</option>)}
                 </select>
               </td>
-              <td>
+              <td data-label="Позиция">
                 <select
                   value={row.object}
                   onChange={e => handleChange(index, "object", e.target.value)}
@@ -241,14 +241,14 @@ const PeopleReportPage = () => {
                   {(objectPositionOptions[row.endTime] || []).map(pos => <option key={pos} value={pos}>{pos}</option>)}
                 </select>
               </td>
-              <td>
+              <td data-label="Наименование работ/подрядчика">
                 <input
                   value={row.position}
                   onChange={e => handleChange(index, "position", e.target.value)}
                   className={isInvalid(index, "position") ? styles.invalidField : ""}
                 />
               </td>
-              <td>
+              <td data-label="Профессия">
                 <select
                   value={row.category}
                   onChange={e => handleChange(index, "category", e.target.value)}
@@ -258,7 +258,7 @@ const PeopleReportPage = () => {
                   {professionOptions.map(option => <option key={option} value={option}>{option}</option>)}
                 </select>
               </td>
-              <td>
+              <td data-label="Количество">
                 <input
                   type="number"
                   min="1"
@@ -268,7 +268,7 @@ const PeopleReportPage = () => {
                   className={isInvalid(index, "equipmentName") ? styles.invalidField : ""}
                 />
               </td>
-              <td>
+              <td data-label="Действия" className={styles.actionsCell}>
                 <button className={`${styles.iconButton} ${styles.green}`} onClick={() => addRequest(index)}>＋</button>
                 {requests.length > 1 && <button className={`${styles.iconButton} ${styles.red}`} onClick={() => removeRequest(index)}>−</button>}
               </td>

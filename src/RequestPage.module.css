@@ -390,13 +390,143 @@ input, textarea {
     justify-content: space-between;
     align-items: center;
   }
-  
+
   .dateBlock {
     margin-top: 0;
   }
-  
+
   .removeButton {
     width: auto;
     margin-top: 0;
+  }
+}
+
+/* Адаптивная вёрстка отчёта по людям (PeopleReportPage) на узких экранах —
+   таблица нечитаема на телефоне в вертикальной ориентации (7 узких колонок
+   с select'ами), поэтому на мобильных превращаем каждую строку таблицы в
+   отдельную карточку с полями друг под другом. Всё под .peopleReportPage,
+   чтобы не задеть остальные страницы-заявки, использующие тот же .requestTable
+   из этого общего CSS-модуля. */
+@media (max-width: 640px) {
+  .peopleReportPage {
+    padding: 12px;
+  }
+
+  .peopleReportPage h2 {
+    font-size: 18px;
+  }
+
+  .peopleReportPage > label {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    font-weight: 600;
+  }
+
+  .peopleReportPage > label input[type="date"] {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px; /* 16px не даёт Safari на iOS зумить страницу при фокусе */
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-sizing: border-box;
+  }
+
+  .peopleReportPage .requestTable,
+  .peopleReportPage .requestTable thead,
+  .peopleReportPage .requestTable tbody,
+  .peopleReportPage .requestTable tfoot,
+  .peopleReportPage .requestTable tr,
+  .peopleReportPage .requestTable td {
+    display: block;
+    width: 100%;
+  }
+
+  .peopleReportPage .requestTable thead {
+    /* Заголовки не нужны — вместо них подпись перед каждым полем (data-label) */
+    display: none;
+  }
+
+  .peopleReportPage .requestTable tbody tr {
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 14px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+
+  .peopleReportPage .requestTable tbody td {
+    border: none;
+    padding: 6px 0;
+  }
+
+  .peopleReportPage .requestTable tbody td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #666;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .peopleReportPage .requestTable select,
+  .peopleReportPage .requestTable input {
+    font-size: 16px; /* против авто-зума на iOS */
+    padding: 10px;
+    min-height: 40px;
+  }
+
+  .peopleReportPage .requestTable .actionsCell {
+    display: flex;
+    gap: 10px;
+    padding-top: 10px;
+  }
+
+  .peopleReportPage .requestTable .actionsCell::before {
+    display: none;
+  }
+
+  .peopleReportPage .iconButton {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+    flex: 1;
+  }
+
+  .peopleReportPage .requestTable tfoot tr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: none;
+    padding: 10px 4px;
+    background: transparent;
+    margin-bottom: 0;
+    box-shadow: none;
+  }
+
+  .peopleReportPage .requestTable tfoot td {
+    display: inline-block;
+    width: auto;
+    background: transparent;
+  }
+
+  .peopleReportPage .buttonsContainer {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .peopleReportPage .buttonsContainer button {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+  }
+
+  .peopleReportPage .modal {
+    width: 90vw;
+    max-width: 340px;
   }
 }
