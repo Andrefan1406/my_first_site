@@ -13,9 +13,21 @@ import html2canvas from "html2canvas";
 
 const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost:4000";
 
+const WEEKDAY_NAMES = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+
+// Считаем день недели из строки даты напрямую через UTC, не полагаясь на
+// часовой пояс браузера — тот же приём, что и в server/peopleGapDetection.js.
+const weekdayName = (dateStr) => {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return WEEKDAY_NAMES[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+};
+
 // PDF-бланк дат без отчёта для конкретного участка — печатная форма для
 // начальника участка: он вписывает количество людей от руки за каждую дату.
 // Только "missing" (нерешённые пропуски) — уже решённые дни в бланк не идут.
+// Суббота/воскресенье выделены подписью дня недели и заливкой строки, чтобы
+// начальник участка сразу видел, какие пропуски — выходные (см. is_weekend
+// из people_report_gaps — теперь выходные тоже пропуски, а не норма).
 //
 // jsPDF рендерит text() только стандартными PDF-шрифтами (Helvetica и т.п.),
 // которые не содержат кириллических глифов — русский текст превращается в
@@ -23,20 +35,28 @@ const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost
 // ConcreteDailyReportPage.js, строим обычную HTML-таблицу, рендерим её в
 // картинку через html2canvas и вставляем в PDF как изображение — так текст
 // берётся из реального рендера браузера со шрифтом, который кириллицу знает.
-const buildMissingGapsPdf = async (site, missingGaps) => {
-  const sorted = [...missingGaps].sort((a, b) => a.report_date.localeCompare(b.report_date));
+// Сколько строк дат помещается на странице при текущей вёрстке (шрифт 14px,
+// паддинг ячеек 6/12px, отступы листа 15мм) — подобрано опытным путём.
+// На первом листе меньше, потому что там ещё название участка и шапка
+// таблицы; на остальных листах только повторённая шапка таблицы.
+const FIRST_PAGE_ROWS = 34;
+const OTHER_PAGE_ROWS = 35;
 
-  const rowsHtml = sorted
-    .map(
-      (gap) => `
-        <tr>
-          <td style="border:1px solid #000;padding:6px 12px;">${gap.report_date}</td>
-          <td style="border:1px solid #000;padding:6px 12px;">&nbsp;</td>
-        </tr>
-      `
-    )
-    .join("");
+const buildGapRowHtml = (gap) => {
+  const rowBg = gap.is_weekend ? "background:#fdf3d0;" : "";
+  const dayLabel = weekdayName(gap.report_date);
+  const dateCell = gap.is_weekend
+    ? `${gap.report_date} <strong>(${dayLabel}, выходной)</strong>`
+    : `${gap.report_date} (${dayLabel})`;
+  return `
+    <tr style="${rowBg}">
+      <td style="border:1px solid #000;padding:6px 12px;">${dateCell}</td>
+      <td style="border:1px solid #000;padding:6px 12px;">&nbsp;</td>
+    </tr>
+  `;
+};
 
+const renderPageToCanvas = async (rowsHtml, siteTitle) => {
   const container = document.createElement("div");
   container.style.position = "fixed";
   container.style.left = "-9999px";
@@ -47,7 +67,7 @@ const buildMissingGapsPdf = async (site, missingGaps) => {
   container.style.fontFamily = "Arial, sans-serif";
   container.style.color = "#000";
   container.innerHTML = `
-    <h2 style="margin:0 0 14px;font-size:20px;">${site}</h2>
+    ${siteTitle ? `<h2 style="margin:0 0 14px;font-size:20px;">${siteTitle}</h2>` : ""}
     <table style="border-collapse:collapse;width:100%;font-size:14px;">
       <thead>
         <tr>
@@ -61,42 +81,67 @@ const buildMissingGapsPdf = async (site, missingGaps) => {
 
   document.body.appendChild(container);
   try {
-    const canvas = await html2canvas(container, { scale: 2, backgroundColor: "#ffffff" });
-    const imgData = canvas.toDataURL("image/png");
-
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    const imgWidth = pageWidth - margin * 2;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    const usableHeight = pageHeight - margin * 2;
-
-    let heightLeft = imgHeight;
-    let position = margin;
-
-    pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
-    heightLeft -= usableHeight;
-
-    while (heightLeft > 0) {
-      position -= usableHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
-      heightLeft -= usableHeight;
-    }
-
-    const today = new Date().toLocaleDateString("ru-RU");
-    const fileSafeSite = site.replace(/[^\p{L}\p{N}]+/gu, "_");
-    pdf.save(`пропуски_${fileSafeSite}_${today.replace(/\./g, "-")}.pdf`);
+    return await html2canvas(container, { scale: 2, backgroundColor: "#ffffff" });
   } finally {
     document.body.removeChild(container);
   }
+};
+
+// PDF-бланк дат без отчёта для конкретного участка — печатная форма для
+// начальника участка: он вписывает количество людей от руки за каждую дату.
+// Только "missing" (нерешённые пропуски) — уже решённые дни в бланк не идут.
+// Суббота/воскресенье выделены подписью дня недели и заливкой строки, чтобы
+// начальник участка сразу видел, какие пропуски — выходные (см. is_weekend
+// из people_report_gaps — теперь выходные тоже пропуски, а не норма).
+//
+// jsPDF рендерит text() только стандартными PDF-шрифтами (Helvetica и т.п.),
+// которые не содержат кириллических глифов — русский текст превращается в
+// мусорные символы. Поэтому, как и в ConcreteChatPage.jsx/
+// ConcreteDailyReportPage.js, строим обычную HTML-таблицу и рендерим её в
+// картинку через html2canvas — так текст берётся из реального рендера
+// браузера со шрифтом, который кириллицу знает.
+//
+// Каждая страница рендерится ОТДЕЛЬНЫМ html2canvas-вызовом с ограниченным
+// числом целых строк (FIRST_PAGE_ROWS/OTHER_PAGE_ROWS), а не одной большой
+// картинкой, порезанной по пикселям задним числом — раньше из-за этого
+// строка могла попасть ровно на границу страниц и обрезаться посередине.
+const buildMissingGapsPdf = async (site, missingGaps) => {
+  const sorted = [...missingGaps].sort((a, b) => a.report_date.localeCompare(b.report_date));
+
+  const pageChunks = [];
+  for (let i = 0; i < sorted.length; ) {
+    const isFirstPage = pageChunks.length === 0;
+    const size = isFirstPage ? FIRST_PAGE_ROWS : OTHER_PAGE_ROWS;
+    pageChunks.push({ rows: sorted.slice(i, i + size), showTitle: isFirstPage });
+    i += size;
+  }
+
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const margin = 15;
+  const imgWidth = pageWidth - margin * 2;
+
+  for (let p = 0; p < pageChunks.length; p++) {
+    const { rows, showTitle } = pageChunks[p];
+    const rowsHtml = rows.map(buildGapRowHtml).join("");
+    const canvas = await renderPageToCanvas(rowsHtml, showTitle ? site : null);
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    if (p > 0) pdf.addPage();
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, imgHeight);
+  }
+
+  const today = new Date().toLocaleDateString("ru-RU");
+  const fileSafeSite = site.replace(/[^\p{L}\p{N}]+/gu, "_");
+  pdf.save(`пропуски_${fileSafeSite}_${today.replace(/\./g, "-")}.pdf`);
 };
 
 const STATUS_LABELS = {
   missing: "Ждёт решения",
   resolved_copy: "Заполнено (копия)",
   resolved_no_report: "Не работал (подтверждено)",
+  resolved_completed: "Работы завершены",
+  inactive: "Не ожидается (работы завершены ранее)",
   real: "Реальный отчёт",
 };
 
@@ -104,6 +149,18 @@ const STATUS_COLORS = {
   missing: "#c0392b",
   resolved_copy: "#1a7f37",
   resolved_no_report: "#6e6e80",
+  resolved_completed: "#2c5f8a",
+  inactive: "#aaaaaa",
+};
+
+// Текст для панели "уже решено" — показывается только для статусов,
+// начинающихся с 'resolved_' (см. RowActions). 'inactive' и прочие статусы
+// в неё не попадают, т.к. сами по себе не являются решением — это
+// следствие более раннего решения 'work_completed'.
+const RESOLVED_TEXT = {
+  resolved_copy: (gap) => `Скопировано с ${gap.source_date}`,
+  resolved_no_report: () => "Подтверждено: участок не работал",
+  resolved_completed: () => "Отмечено: работы на участке завершены",
 };
 
 async function getIdToken() {
@@ -148,15 +205,12 @@ const RowActions = ({ gap, candidates, loadingCandidates, onLoadCandidates, onDe
   }, [bestGuess, sourceDate]);
 
   const isPending = gap.status === "missing";
+  const isResolved = gap.status.startsWith("resolved_");
 
-  if (!isPending) {
+  if (isResolved) {
     return (
       <div style={s.resolvedInfo}>
-        <div>
-          {gap.status === "resolved_copy"
-            ? `Скопировано с ${gap.source_date}`
-            : "Подтверждено: участок не работал"}
-        </div>
+        <div>{(RESOLVED_TEXT[gap.status] || (() => gap.status))(gap)}</div>
         <div style={s.resolvedMeta}>
           {gap.decided_by} · {gap.decided_at?.replace("T", " ").slice(0, 16)}
         </div>
@@ -165,6 +219,15 @@ const RowActions = ({ gap, candidates, loadingCandidates, onLoadCandidates, onDe
         </button>
       </div>
     );
+  }
+
+  if (gap.status === "inactive") {
+    return <div style={s.muted}>Не ожидается — работы на участке завершены ранее</div>;
+  }
+
+  if (!isPending) {
+    // Прочие статусы (например 'real' при фильтре "Все статусы") — решение не нужно.
+    return <span style={s.muted}>—</span>;
   }
 
   if (!expanded) {
@@ -214,6 +277,14 @@ const RowActions = ({ gap, candidates, loadingCandidates, onLoadCandidates, onDe
       >
         Участок не работал в этот день
       </button>
+      <button
+        style={s.confirmBtnCompleted}
+        disabled={busy}
+        onClick={() => onDecide(gap, { action: "work_completed" })}
+        title="Все последующие дни этого участка перестанут быть пропусками, пока не появится новый реальный отчёт"
+      >
+        Работы завершены
+      </button>
       <button style={s.linkBtn} onClick={() => setExpanded(false)}>
         Отмена
       </button>
@@ -225,7 +296,6 @@ const PeopleGapsAdminPage = () => {
   const navigate = useNavigate();
   const [gaps, setGaps] = useState([]);
   const [sites, setSites] = useState([]);
-  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyKey, setBusyKey] = useState(null);
@@ -239,8 +309,28 @@ const PeopleGapsAdminPage = () => {
   const [loadingCandidatesFor, setLoadingCandidatesFor] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // Сводка считается из уже загруженного gaps на клиенте (а не хранится
+  // отдельным стейтом с сервера) — так она остаётся точной и после точечных
+  // локальных обновлений строк в handleDecide/handleUndo, без лишнего
+  // перезапроса всего списка.
+  const summary = useMemo(
+    () => ({
+      total: gaps.length,
+      pending: gaps.filter((r) => r.status === "missing").length,
+      resolvedCopy: gaps.filter((r) => r.status === "resolved_copy").length,
+      resolvedNoReport: gaps.filter((r) => r.status === "resolved_no_report").length,
+      resolvedCompleted: gaps.filter((r) => r.status === "resolved_completed").length,
+    }),
+    [gaps]
+  );
+
+  // silent=true — фоновое обновление данных БЕЗ показа "Загрузка..." вместо
+  // таблицы: если убрать таблицу на время запроса, её место в DOM схлопывается
+  // и страница визуально "улетает" вверх (та же проблема, которую убирали
+  // точечными обновлениями строк для copy/confirm_no_report — здесь она нужна
+  // для work_completed, где локальным обновлением одной строки не обойтись).
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const params = new URLSearchParams();
@@ -249,11 +339,10 @@ const PeopleGapsAdminPage = () => {
       const data = await apiFetch(`/api/admin/people-gaps?${params.toString()}`);
       setGaps(data.gaps || []);
       setSites(data.sites || []);
-      setSummary(data.summary || null);
     } catch (err) {
       setError(err.message || "Не удалось загрузить пропуски");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [filterSite, filterStatus]);
 
@@ -276,16 +365,26 @@ const PeopleGapsAdminPage = () => {
     }
   };
 
+  // 'copy' и 'confirm_no_report' решают ровно один день — после ответа
+  // сервера просто обновляем эту строку на месте, без перезагрузки всего
+  // списка, чтобы таблица не "улетала" и не теряла место, где только что
+  // работал администратор. 'work_completed' — исключение: оно может менять
+  // статус МНОГИХ последующих дней участка (real -> missing -> inactive),
+  // поэтому для него нужен полный перезапрос списка.
   const handleDecide = async (gap, payload) => {
     const key = `${gap.site}|${gap.report_date}`;
     setBusyKey(key);
     setError("");
     try {
-      await apiFetch(`/api/admin/people-gaps/decisions`, {
+      const data = await apiFetch(`/api/admin/people-gaps/decisions`, {
         method: "POST",
         body: JSON.stringify({ site: gap.site, report_date: gap.report_date, ...payload }),
       });
-      await load();
+      if (payload.action === "work_completed") {
+        await load(true);
+      } else if (data.gap) {
+        setGaps((prev) => prev.map((g) => (g.site === gap.site && g.report_date === gap.report_date ? data.gap : g)));
+      }
     } catch (err) {
       setError(err.message || "Не удалось сохранить решение");
     } finally {
@@ -316,16 +415,24 @@ const PeopleGapsAdminPage = () => {
     }
   };
 
+  // Отмена 'resolved_completed' тоже может затронуть много последующих дней
+  // (они снова становятся 'missing') — та же логика, что и в handleDecide:
+  // для неё полный перезапрос, для остальных — точечное обновление строки.
   const handleUndo = async (gap) => {
     const key = `${gap.site}|${gap.report_date}`;
+    const wasCompleted = gap.status === "resolved_completed";
     setBusyKey(key);
     setError("");
     try {
-      await apiFetch(`/api/admin/people-gaps/decisions`, {
+      const data = await apiFetch(`/api/admin/people-gaps/decisions`, {
         method: "DELETE",
         body: JSON.stringify({ site: gap.site, report_date: gap.report_date }),
       });
-      await load();
+      if (wasCompleted) {
+        await load(true);
+      } else if (data.gap) {
+        setGaps((prev) => prev.map((g) => (g.site === gap.site && g.report_date === gap.report_date ? data.gap : g)));
+      }
     } catch (err) {
       setError(err.message || "Не удалось отменить решение");
     } finally {
@@ -340,22 +447,24 @@ const PeopleGapsAdminPage = () => {
         <h1 style={s.title}>Пропуски в отчётах по людям</h1>
       </div>
 
-      {summary && (
-        <div style={s.cards}>
-          <div style={s.card}>
-            <div style={s.cardLabel}>Ждут решения</div>
-            <div style={{ ...s.cardValue, color: STATUS_COLORS.missing }}>{summary.pending}</div>
-          </div>
-          <div style={s.card}>
-            <div style={s.cardLabel}>Заполнено копией</div>
-            <div style={{ ...s.cardValue, color: STATUS_COLORS.resolved_copy }}>{summary.resolvedCopy}</div>
-          </div>
-          <div style={s.card}>
-            <div style={s.cardLabel}>Подтверждено «не работал»</div>
-            <div style={{ ...s.cardValue, color: STATUS_COLORS.resolved_no_report }}>{summary.resolvedNoReport}</div>
-          </div>
+      <div style={s.cards}>
+        <div style={s.card}>
+          <div style={s.cardLabel}>Ждут решения</div>
+          <div style={{ ...s.cardValue, color: STATUS_COLORS.missing }}>{summary.pending}</div>
         </div>
-      )}
+        <div style={s.card}>
+          <div style={s.cardLabel}>Заполнено копией</div>
+          <div style={{ ...s.cardValue, color: STATUS_COLORS.resolved_copy }}>{summary.resolvedCopy}</div>
+        </div>
+        <div style={s.card}>
+          <div style={s.cardLabel}>Подтверждено «не работал»</div>
+          <div style={{ ...s.cardValue, color: STATUS_COLORS.resolved_no_report }}>{summary.resolvedNoReport}</div>
+        </div>
+        <div style={s.card}>
+          <div style={s.cardLabel}>Работы завершены</div>
+          <div style={{ ...s.cardValue, color: STATUS_COLORS.resolved_completed }}>{summary.resolvedCompleted}</div>
+        </div>
+      </div>
 
       <div style={s.filters}>
         <label>
@@ -373,10 +482,11 @@ const PeopleGapsAdminPage = () => {
             <option value="missing">Ждут решения</option>
             <option value="resolved_copy">Заполнено копией</option>
             <option value="resolved_no_report">Подтверждено «не работал»</option>
+            <option value="resolved_completed">Работы завершены</option>
             <option value="">Все статусы</option>
           </select>
         </label>
-        <button onClick={load} disabled={loading}>Обновить</button>
+        <button onClick={() => load()} disabled={loading}>Обновить</button>
         <button
           onClick={handleDownloadPdf}
           disabled={!filterSite || pdfLoading}
@@ -443,7 +553,7 @@ const s = {
   back: { background: "none", border: "1px solid #ddd", borderRadius: "6px", padding: "6px 12px", cursor: "pointer" },
   title: { margin: 0, fontSize: "22px" },
 
-  cards: { display: "grid", gridTemplateColumns: "repeat(3, minmax(160px, 1fr))", gap: "16px", marginBottom: "20px" },
+  cards: { display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr))", gap: "16px", marginBottom: "20px" },
   card: { background: "#fff", borderRadius: "12px", padding: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" },
   cardLabel: { color: "#666", fontSize: "13px", marginBottom: "6px" },
   cardValue: { fontSize: "28px", fontWeight: 700 },
@@ -464,6 +574,7 @@ const s = {
   select: { flex: 1, padding: "4px" },
   confirmBtn: { background: "#1a7f37", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: "12px", whiteSpace: "nowrap" },
   confirmBtnAlt: { background: "#6e6e80", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: "12px" },
+  confirmBtnCompleted: { background: "#2c5f8a", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: "12px" },
   linkBtn: { background: "none", border: "none", color: "#007bff", cursor: "pointer", fontSize: "12px", textAlign: "left", padding: 0 },
 
   resolvedInfo: { fontSize: "13px" },

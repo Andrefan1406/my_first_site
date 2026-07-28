@@ -7,7 +7,8 @@
 //      сырую таблицу people_reports.
 //   2) rebuildDerivedTables() — пересчитывает people_report_gaps и
 //      people_reports_resolved из уже сохранённых people_reports +
-//      people_gap_decisions (решений администратора, см. peopleGapsAdmin.js).
+//      people_gap_decisions (решений администратора, см. peopleGapsAdmin.js
+//      и peopleGapDetection.js).
 // Второй шаг вызывается и после каждого синка, и сразу после того, как
 // администратор принял/отменил решение по конкретному пропуску — поэтому он
 // вынесен отдельной экспортируемой функцией, а не зашит внутрь синка.
@@ -20,7 +21,7 @@
 const cron = require('node-cron');
 const Papa = require('papaparse');
 const { getWriteDb } = require('./db');
-const { detectPeopleGaps } = require('./peopleGapDetection');
+const { reconstructPeopleTimeline } = require('./peopleGapDetection');
 
 const CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vS0qVYHkI9ySfT0LO9SwG36BYrmI-chO09ws7GSjWcnQU2pX4Gzw-R4LXg6tdi44KXa1i5yQYcLF27U/pub?output=csv';
@@ -103,13 +104,15 @@ async function syncRawFromSheet() {
   return normalizedRows.length;
 }
 
-const groupDateKey = (site, date) => site + '::' + date;
-
 // Пересчитывает people_report_gaps и people_reports_resolved из того, что
 // уже лежит в БД: сырых отчётов (people_reports) и решений администратора
 // (people_gap_decisions). Ничего не скачивает из интернета — чистая функция
 // над текущим состоянием БД, поэтому безопасно вызывать после каждого
 // изменения решений, не дожидаясь следующего планового синка.
+//
+// Вся логика (обнаружение пропусков + применение решений, включая
+// 'work_completed', которое влияет на статус многих дней вперёд) — в
+// peopleGapDetection.js; здесь только чтение из БД, вызов и запись обратно.
 function rebuildDerivedTables() {
   const db = getWriteDb();
 
@@ -122,93 +125,8 @@ function rebuildDerivedTables() {
     SELECT site, report_date, action, source_date, decided_by, decided_at
     FROM people_gap_decisions
   `).all();
-  const decisionByKey = new Map(decisions.map((d) => [groupDateKey(d.site, d.report_date), d]));
 
-  // Строки для каждой реальной даты по участку — нужны, чтобы материализовать
-  // action='copy': копируем именно детальные строки source_date, а не сводную цифру.
-  const rowsByGroupDate = new Map();
-  for (const row of rawRows) {
-    const key = groupDateKey(row.site, row.report_date);
-    if (!rowsByGroupDate.has(key)) rowsByGroupDate.set(key, []);
-    rowsByGroupDate.get(key).push(row);
-  }
-
-  const baseGaps = detectPeopleGaps(rawRows);
-
-  const finalGapRows = [];
-  const resolvedDetailRows = [];
-
-  for (const gap of baseGaps) {
-    const key = groupDateKey(gap.site, gap.report_date);
-
-    if (gap.status === 'real') {
-      finalGapRows.push({ ...gap, decided_by: null, decided_at: null, source_date: null });
-      for (const row of rowsByGroupDate.get(key) || []) {
-        resolvedDetailRows.push({
-          ...row,
-          is_filled: 0,
-          is_weekend: gap.is_weekend,
-          source_date: null,
-          decided_by: null,
-        });
-      }
-      continue;
-    }
-
-    // status === 'missing' (рабочий день или выходной без отчёта) — смотрим,
-    // есть ли решение человека. Больше нет отдельного "выходной без отчёта —
-    // это норма": по требованию пользователя выходные тоже считаются
-    // пропуском и ждут явного решения администратора.
-    const decision = decisionByKey.get(key);
-    if (!decision) {
-      finalGapRows.push({ ...gap, decided_by: null, decided_at: null, source_date: null });
-      continue;
-    }
-
-    if (decision.action === 'confirm_no_report') {
-      finalGapRows.push({
-        ...gap,
-        status: 'resolved_no_report',
-        decided_by: decision.decided_by,
-        decided_at: decision.decided_at,
-        source_date: null,
-      });
-      continue;
-    }
-
-    if (decision.action === 'copy' && decision.source_date) {
-      const sourceKey = groupDateKey(gap.site, decision.source_date);
-      const sourceRows = rowsByGroupDate.get(sourceKey) || [];
-      const total = sourceRows.reduce((sum, r) => sum + (Number(r.headcount) || 0), 0);
-
-      finalGapRows.push({
-        ...gap,
-        status: 'resolved_copy',
-        total_headcount: total,
-        entries_count: sourceRows.length,
-        decided_by: decision.decided_by,
-        decided_at: decision.decided_at,
-        source_date: decision.source_date,
-      });
-
-      for (const row of sourceRows) {
-        resolvedDetailRows.push({
-          ...row,
-          report_date: gap.report_date,
-          is_filled: 1,
-          is_weekend: gap.is_weekend,
-          source_date: decision.source_date,
-          decided_by: decision.decided_by,
-        });
-      }
-      continue;
-    }
-
-    // Решение есть, но некорректное (например, action='copy' без source_date,
-    // либо source_date без реальных строк) — не материализуем данные, оставляем
-    // пропуск как есть, чтобы не потерять сигнал "требует внимания".
-    finalGapRows.push({ ...gap, decided_by: null, decided_at: null, source_date: null });
-  }
+  const { dayRows, detailRows } = reconstructPeopleTimeline(rawRows, decisions);
 
   const insertGap = db.prepare(`
     INSERT INTO people_report_gaps (
@@ -232,16 +150,16 @@ function rebuildDerivedTables() {
   const replaceDerived = db.transaction(() => {
     db.prepare('DELETE FROM people_report_gaps').run();
     db.prepare('DELETE FROM people_reports_resolved').run();
-    for (const row of finalGapRows) insertGap.run(row);
-    for (const row of resolvedDetailRows) insertResolved.run(row);
+    for (const row of dayRows) insertGap.run(row);
+    for (const row of detailRows) insertResolved.run(row);
   });
 
   replaceDerived();
 
   return {
-    gapRowCount: finalGapRows.length,
-    resolvedRowCount: resolvedDetailRows.length,
-    pendingGaps: finalGapRows.filter((r) => r.status === 'missing').length,
+    gapRowCount: dayRows.length,
+    resolvedRowCount: detailRows.length,
+    pendingGaps: dayRows.filter((r) => r.status === 'missing').length,
   };
 }
 

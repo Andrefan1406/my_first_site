@@ -52,6 +52,7 @@ router.get('/', (req, res) => {
     pending: rows.filter((r) => r.status === 'missing').length,
     resolvedCopy: rows.filter((r) => r.status === 'resolved_copy').length,
     resolvedNoReport: rows.filter((r) => r.status === 'resolved_no_report').length,
+    resolvedCompleted: rows.filter((r) => r.status === 'resolved_completed').length,
   };
 
   res.json({ gaps: rows, sites, summary });
@@ -92,16 +93,21 @@ router.get('/candidates', (req, res) => {
   res.json({ candidates: [before, after].filter(Boolean) });
 });
 
-// Принять решение по пропуску: скопировать данные с source_date, либо
-// подтвердить, что участок в этот день не работал.
+// Принять решение по пропуску: скопировать данные с source_date, подтвердить,
+// что участок в этот день не работал, либо отметить "работы завершены" —
+// последнее закрывает участок на все последующие дни (см.
+// peopleGapDetection.js) до нового реального отчёта или следующего такого
+// же решения. Дни со status='inactive' (уже закрытые более ранним
+// 'work_completed') сюда не попадают — их нельзя решить напрямую, нужно
+// отменить исходное решение 'work_completed' на более ранней дате.
 router.post('/decisions', (req, res) => {
   const { site, report_date: reportDate, action, source_date: sourceDate, note } = req.body || {};
 
   if (!site || !reportDate || !action) {
     return res.status(400).json({ error: 'site, report_date и action обязательны' });
   }
-  if (!['copy', 'confirm_no_report'].includes(action)) {
-    return res.status(400).json({ error: "action должен быть 'copy' или 'confirm_no_report'" });
+  if (!['copy', 'confirm_no_report', 'work_completed'].includes(action)) {
+    return res.status(400).json({ error: "action должен быть 'copy', 'confirm_no_report' или 'work_completed'" });
   }
   if (action === 'copy' && !sourceDate) {
     return res.status(400).json({ error: "Для action='copy' обязателен source_date" });
