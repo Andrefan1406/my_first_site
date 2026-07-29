@@ -11,6 +11,7 @@ const { startObjectsSync } = require('./syncObjects');
 const { startPeopleSync } = require('./syncPeople');
 const { handleChat } = require('./chatHandler');
 const peopleGapsAdminRouter = require('./peopleGapsAdmin');
+const concreteDashboardRouter = require('./concreteDashboard');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -41,6 +42,7 @@ app.post('/api/smart-request', async (req, res) => {
 
 app.post('/api/chat', handleChat);
 app.use('/api/admin/people-gaps', peopleGapsAdminRouter);
+app.use('/api/concrete-dashboard', concreteDashboardRouter);
 
 initSchema();
 startConcreteSync();
