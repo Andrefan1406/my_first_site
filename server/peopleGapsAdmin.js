@@ -15,14 +15,23 @@ router.use(requireAdmin);
 // Список пропусков/дней с опциональными фильтрами. По умолчанию отдаёт всё,
 // чтобы фронтенд сам фильтровал на клиенте (объём данных небольшой — тысячи
 // строк, не миллионы), но фильтры на сервере тоже поддержаны на случай роста.
+//
+// site поддерживает несколько значений — фронтенд шлёт повторяющийся параметр
+// (?site=A&site=B), Express сам собирает такие в массив req.query.site (при
+// одном значении будет просто строка) — используем IN(...) вместо равенства,
+// чтобы фильтр "Участок" в админ-панели поддерживал множественный выбор.
 router.get('/', (req, res) => {
-  const { site, status, from, to } = req.query;
+  const { status, from, to } = req.query;
+  const siteParam = req.query.site;
+  const siteList = Array.isArray(siteParam) ? siteParam : siteParam ? [siteParam] : [];
+
   const clauses = [];
   const params = {};
 
-  if (site) {
-    clauses.push('site = @site');
-    params.site = site;
+  if (siteList.length) {
+    const siteKeys = siteList.map((_, i) => `@site${i}`);
+    clauses.push(`site IN (${siteKeys.join(', ')})`);
+    siteList.forEach((s, i) => { params[`site${i}`] = s; });
   }
   if (status) {
     clauses.push('status = @status');

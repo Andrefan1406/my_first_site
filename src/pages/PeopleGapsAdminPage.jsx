@@ -5,7 +5,7 @@
 // подтвердить, что участок в этот день не работал. Никакого автоматического
 // заполнения: пока решения нет, день так и остаётся "требует решения" и не
 // участвует в аналитике (см. server/peopleGapDetection.js, server/syncPeople.js).
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAuth } from "firebase/auth";
 import jsPDF from "jspdf";
@@ -101,39 +101,58 @@ const renderPageToCanvas = async (rowsHtml, siteTitle) => {
 // картинку через html2canvas — так текст берётся из реального рендера
 // браузера со шрифтом, который кириллицу знает.
 //
+// Разбивает отсортированные пропуски ОДНОГО участка на страницы по
+// FIRST_PAGE_ROWS/OTHER_PAGE_ROWS — первая страница получает заголовок
+// (название участка), остальные — нет (только повторённая шапка таблицы).
+const buildSitePageChunks = (gaps) => {
+  const sorted = [...gaps].sort((a, b) => a.report_date.localeCompare(b.report_date));
+  const chunks = [];
+  for (let i = 0; i < sorted.length; ) {
+    const isFirstPage = chunks.length === 0;
+    const size = isFirstPage ? FIRST_PAGE_ROWS : OTHER_PAGE_ROWS;
+    chunks.push({ rows: sorted.slice(i, i + size), showTitle: isFirstPage });
+    i += size;
+  }
+  return chunks;
+};
+
 // Каждая страница рендерится ОТДЕЛЬНЫМ html2canvas-вызовом с ограниченным
 // числом целых строк (FIRST_PAGE_ROWS/OTHER_PAGE_ROWS), а не одной большой
 // картинкой, порезанной по пикселям задним числом — раньше из-за этого
 // строка могла попасть ровно на границу страниц и обрезаться посередине.
-const buildMissingGapsPdf = async (site, missingGaps) => {
-  const sorted = [...missingGaps].sort((a, b) => a.report_date.localeCompare(b.report_date));
-
-  const pageChunks = [];
-  for (let i = 0; i < sorted.length; ) {
-    const isFirstPage = pageChunks.length === 0;
-    const size = isFirstPage ? FIRST_PAGE_ROWS : OTHER_PAGE_ROWS;
-    pageChunks.push({ rows: sorted.slice(i, i + size), showTitle: isFirstPage });
-    i += size;
-  }
-
+//
+// siteGroups — [{ site, gaps }, ...]: при нескольких выбранных участках
+// разделы идут один за другим в одном PDF, каждый со своим заголовком —
+// новый участок всегда начинается с новой страницы.
+const buildMissingGapsPdf = async (siteGroups) => {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const margin = 15;
   const imgWidth = pageWidth - margin * 2;
 
-  for (let p = 0; p < pageChunks.length; p++) {
-    const { rows, showTitle } = pageChunks[p];
-    const rowsHtml = rows.map(buildGapRowHtml).join("");
-    const canvas = await renderPageToCanvas(rowsHtml, showTitle ? site : null);
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  let isFirstPageOverall = true;
 
-    if (p > 0) pdf.addPage();
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, imgHeight);
+  for (const { site, gaps } of siteGroups) {
+    const pageChunks = buildSitePageChunks(gaps);
+
+    for (const { rows, showTitle } of pageChunks) {
+      const rowsHtml = rows.map(buildGapRowHtml).join("");
+      const canvas = await renderPageToCanvas(rowsHtml, showTitle ? site : null);
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      if (!isFirstPageOverall) pdf.addPage();
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, imgHeight);
+      isFirstPageOverall = false;
+    }
   }
 
   const today = new Date().toLocaleDateString("ru-RU");
-  const fileSafeSite = site.replace(/[^\p{L}\p{N}]+/gu, "_");
-  pdf.save(`пропуски_${fileSafeSite}_${today.replace(/\./g, "-")}.pdf`);
+  const siteNames = siteGroups.map((g) => g.site);
+  const fileLabel = siteNames.length <= 3
+    ? siteNames.join("_")
+    : `${siteNames.length}_участков`;
+  const fileSafeLabel = fileLabel.replace(/[^\p{L}\p{N}_]+/gu, "_");
+  pdf.save(`пропуски_${fileSafeLabel}_${today.replace(/\./g, "-")}.pdf`);
 };
 
 const STATUS_LABELS = {
@@ -300,8 +319,23 @@ const PeopleGapsAdminPage = () => {
   const [error, setError] = useState("");
   const [busyKey, setBusyKey] = useState(null);
 
-  const [filterSite, setFilterSite] = useState("");
+  // Множественный выбор участков (см. дропдаун с чекбоксами ниже) — пустой
+  // массив означает "Все".
+  const [filterSite, setFilterSite] = useState([]);
+  const [siteDropdownOpen, setSiteDropdownOpen] = useState(false);
+  const siteDropdownRef = useRef(null);
   const [filterStatus, setFilterStatus] = useState("missing");
+
+  useEffect(() => {
+    if (!siteDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (siteDropdownRef.current && !siteDropdownRef.current.contains(e.target)) {
+        setSiteDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [siteDropdownOpen]);
 
   // Ключ — "site|report_date": кандидаты на копирование зависят от конкретного
   // пропуска (ближайшие реальные даты вокруг него), а не только от участка.
@@ -334,7 +368,7 @@ const PeopleGapsAdminPage = () => {
     setError("");
     try {
       const params = new URLSearchParams();
-      if (filterSite) params.set("site", filterSite);
+      filterSite.forEach((site) => params.append("site", site));
       if (filterStatus) params.set("status", filterStatus);
       const data = await apiFetch(`/api/admin/people-gaps?${params.toString()}`);
       setGaps(data.gaps || []);
@@ -392,22 +426,38 @@ const PeopleGapsAdminPage = () => {
     }
   };
 
-  // Всегда экспортируем именно "missing" по выбранному участку — независимо
+  // Всегда экспортируем именно "missing" по выбранным участкам — независимо
   // от текущего фильтра статуса на экране, т.к. смысл документа только в
-  // ещё не решённых пропусках (см. buildMissingGapsPdf).
+  // ещё не решённых пропусках (см. buildMissingGapsPdf). Один запрос на все
+  // выбранные участки сразу (сервер поддерживает несколько ?site=...),
+  // дальше группируем по участку на клиенте — так в PDF разделы участков
+  // идут один за другим, каждый со своим заголовком.
   const handleDownloadPdf = async () => {
-    if (!filterSite) return;
+    if (!filterSite.length) return;
     setPdfLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ site: filterSite, status: "missing" });
+      const params = new URLSearchParams();
+      filterSite.forEach((site) => params.append("site", site));
+      params.set("status", "missing");
       const data = await apiFetch(`/api/admin/people-gaps?${params.toString()}`);
-      const missingGaps = data.gaps || [];
-      if (!missingGaps.length) {
-        setError(`По участку «${filterSite}» нет нерешённых пропусков — скачивать нечего.`);
+      const allGaps = data.gaps || [];
+      if (!allGaps.length) {
+        setError("По выбранным участкам нет нерешённых пропусков — скачивать нечего.");
         return;
       }
-      await buildMissingGapsPdf(filterSite, missingGaps);
+
+      const bySite = new Map();
+      for (const gap of allGaps) {
+        if (!bySite.has(gap.site)) bySite.set(gap.site, []);
+        bySite.get(gap.site).push(gap);
+      }
+      const groups = [...filterSite]
+        .sort((a, b) => a.localeCompare(b, "ru"))
+        .filter((site) => bySite.has(site))
+        .map((site) => ({ site, gaps: bySite.get(site) }));
+
+      await buildMissingGapsPdf(groups);
     } catch (err) {
       setError(err.message || "Не удалось сформировать PDF");
     } finally {
@@ -467,15 +517,42 @@ const PeopleGapsAdminPage = () => {
       </div>
 
       <div style={s.filters}>
-        <label>
-          Участок:{" "}
-          <select value={filterSite} onChange={(e) => setFilterSite(e.target.value)}>
-            <option value="">Все</option>
-            {sites.map((site) => (
-              <option key={site} value={site}>{site}</option>
-            ))}
-          </select>
-        </label>
+        <div style={s.multiSelectWrap} ref={siteDropdownRef}>
+          <span style={s.filterLabel}>Участок:</span>
+          <button
+            type="button"
+            style={s.multiSelectButton}
+            onClick={() => setSiteDropdownOpen((open) => !open)}
+          >
+            {filterSite.length === 0 ? "Все" : `Выбрано: ${filterSite.length}`} ▾
+          </button>
+          {siteDropdownOpen && (
+            <div style={s.multiSelectPanel}>
+              <div style={s.multiSelectActions}>
+                <button type="button" style={s.linkBtn} onClick={() => setFilterSite(sites)}>
+                  Выбрать все
+                </button>
+                <button type="button" style={s.linkBtn} onClick={() => setFilterSite([])}>
+                  Сбросить
+                </button>
+              </div>
+              {sites.map((site) => (
+                <label key={site} style={s.multiSelectOption}>
+                  <input
+                    type="checkbox"
+                    checked={filterSite.includes(site)}
+                    onChange={() =>
+                      setFilterSite((prev) =>
+                        prev.includes(site) ? prev.filter((s2) => s2 !== site) : [...prev, site]
+                      )
+                    }
+                  />
+                  {site}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
         <label>
           Статус:{" "}
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
@@ -489,8 +566,8 @@ const PeopleGapsAdminPage = () => {
         <button onClick={() => load()} disabled={loading}>Обновить</button>
         <button
           onClick={handleDownloadPdf}
-          disabled={!filterSite || pdfLoading}
-          title={!filterSite ? "Сначала выберите участок" : "Скачать список дней без отчёта для начальника участка"}
+          disabled={!filterSite.length || pdfLoading}
+          title={!filterSite.length ? "Сначала выберите один или несколько участков" : "Скачать список дней без отчёта для начальника участка"}
           style={s.pdfBtn}
         >
           {pdfLoading ? "Формирую PDF..." : "⬇ Скачать PDF для начальника участка"}
@@ -560,6 +637,13 @@ const s = {
 
   filters: { display: "flex", gap: "16px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" },
   pdfBtn: { background: "#8e44ad", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 14px", cursor: "pointer", fontSize: "13px" },
+
+  filterLabel: { marginRight: "6px" },
+  multiSelectWrap: { position: "relative", display: "inline-flex", alignItems: "center" },
+  multiSelectButton: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: "13px", minWidth: "110px", textAlign: "left" },
+  multiSelectPanel: { position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 20, background: "#fff", border: "1px solid #ddd", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", padding: "8px", minWidth: "240px", maxHeight: "320px", overflowY: "auto" },
+  multiSelectActions: { display: "flex", justifyContent: "space-between", gap: "12px", padding: "0 4px 8px", marginBottom: "6px", borderBottom: "1px solid #eee" },
+  multiSelectOption: { display: "flex", alignItems: "center", gap: "8px", padding: "4px", fontSize: "13px", cursor: "pointer", whiteSpace: "nowrap" },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", fontSize: "13px" },
   muted: { color: "#888", fontSize: "13px" },

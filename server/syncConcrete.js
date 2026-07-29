@@ -52,6 +52,10 @@ function normalizeRow(row) {
     volume_planned_m3: parseVolume(row['Объём, м3']),
     volume_actual_m3: parseVolume(row['Фактический объём']),
     execution_note: row['Отметка о исполнении'] || null,
+    // "Планируемая дата поставки" — дата, которую заказчик указал при подаче
+    // заявки ("Дата доставки бетона" в таблице), в отличие от "Дата отгрузки"
+    // (shipment_date), проставляемой по факту исполнения. Тот же формат ДД.ММ.ГГГГ.
+    planned_delivery_date: normalizeDate(row['Дата доставки бетона']),
   };
 }
 
@@ -60,10 +64,12 @@ function syncConcreteData(rows) {
   const insert = db.prepare(`
     INSERT INTO concrete_orders (
       shipment_date, shipment_date_raw, category, material, object_name,
-      block_position, grade_class, volume_planned_m3, volume_actual_m3, execution_note
+      block_position, grade_class, volume_planned_m3, volume_actual_m3, execution_note,
+      planned_delivery_date
     ) VALUES (
       @shipment_date, @shipment_date_raw, @category, @material, @object_name,
-      @block_position, @grade_class, @volume_planned_m3, @volume_actual_m3, @execution_note
+      @block_position, @grade_class, @volume_planned_m3, @volume_actual_m3, @execution_note,
+      @planned_delivery_date
     )
   `);
   const upsertMeta = db.prepare(`

@@ -11,18 +11,22 @@ const DB_PATH = path.join(DATA_DIR, 'concrete.db');
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS concrete_orders (
-  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-  shipment_date      TEXT,
-  shipment_date_raw  TEXT,
-  category           TEXT,
-  material           TEXT,
-  object_name        TEXT,
-  block_position     TEXT,
-  grade_class        TEXT,
-  volume_planned_m3  REAL,
-  volume_actual_m3   REAL,
-  execution_note     TEXT,
-  synced_at          TEXT DEFAULT (datetime('now'))
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  shipment_date          TEXT,
+  shipment_date_raw      TEXT,
+  category               TEXT,
+  material               TEXT,
+  object_name            TEXT,
+  block_position         TEXT,
+  grade_class            TEXT,
+  volume_planned_m3      REAL,
+  volume_actual_m3       REAL,
+  execution_note         TEXT,
+  planned_delivery_date  TEXT, -- "Дата доставки бетона" из Google Таблицы: дата, которую
+                                -- заказчик указал при подаче заявки, 'YYYY-MM-DD'. Отличается
+                                -- от shipment_date ("Дата отгрузки"), которая проставляется по
+                                -- факту исполнения и может не совпадать с запланированной.
+  synced_at              TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_concrete_date     ON concrete_orders(shipment_date);
 CREATE INDEX IF NOT EXISTS idx_concrete_object   ON concrete_orders(object_name);
@@ -174,6 +178,18 @@ function ensureDataDir() {
   }
 }
 
+// concrete_orders создаётся через CREATE TABLE IF NOT EXISTS (а не DROP+CREATE,
+// как objects/people_reports), поэтому у уже существующих баз (локальных и на
+// проде) новая колонка сама не появится — нужна явная миграция ALTER TABLE.
+// Добавляем сюда по мере необходимости; безопасно звать многократно —
+// проверяем PRAGMA table_info, ADD COLUMN шлём только если колонки ещё нет.
+function migrateSchema(db) {
+  const columns = db.prepare("PRAGMA table_info(concrete_orders)").all().map((c) => c.name);
+  if (!columns.includes('planned_delivery_date')) {
+    db.exec('ALTER TABLE concrete_orders ADD COLUMN planned_delivery_date TEXT');
+  }
+}
+
 // Открывает/создаёт БД и накатывает схему. Идемпотентно, безопасно
 // звать многократно (используется при старте процесса).
 function initSchema() {
@@ -181,6 +197,7 @@ function initSchema() {
   const db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
   db.exec(SCHEMA);
+  migrateSchema(db);
   db.close();
 }
 
