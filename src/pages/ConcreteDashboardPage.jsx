@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from "recharts";
 
 const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost:4000";
@@ -40,6 +40,15 @@ function buildChartData(rows, material, valueMode) {
   }
 
   return [...byMonth.values()];
+}
+
+// Итог за год по каждому из 2024/2025/2026 — сумма всех месяцев, для
+// отдельного мини-графика из 3 столбиков рядом с помесячным.
+function buildYearTotals(monthlyData) {
+  return YEARS.map((year) => ({
+    year,
+    total: monthlyData.reduce((sum, row) => sum + (row[year] || 0), 0),
+  }));
 }
 
 // Строки из /unexecuted (одна на материал+объект+позицию) -> список объектов
@@ -165,27 +174,97 @@ const UnexecutedSection = ({ title, rows, expandedKeys, onToggleObject, material
   );
 };
 
-const MonthlyChartCard = ({ title, data, expanded, onMouseEnter, onMouseLeave }) => (
-  <div
-    style={{ ...s.card, ...(expanded ? s.cardExpanded : null) }}
-    onMouseEnter={onMouseEnter}
-    onMouseLeave={onMouseLeave}
-  >
-    <h3 style={s.cardTitle}>{title}</h3>
-    <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-        <XAxis dataKey="month" fontSize={12} stroke="#8e8ea0" />
-        <YAxis fontSize={12} stroke="#8e8ea0" />
-        <Tooltip formatter={(value) => (value ? `${Number(value).toLocaleString("ru-RU")} м³` : "0 м³")} />
-        <Legend />
+const yearTooltipFormatter = (value) => (value ? `${Number(value).toLocaleString("ru-RU")} м³` : "0 м³");
+
+// Большие числа — целыми и с разделителем разрядов, чтобы подписи над
+// столбиками не превращались в простыню цифр.
+const formatBarValue = (value) => {
+  if (value === undefined || value === null || Number.isNaN(value)) return "";
+  return Math.abs(value) >= 1000
+    ? Math.round(value).toLocaleString("ru-RU")
+    : value.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
+};
+
+// Подписи над столбиками: на основном (помесячном) графике разворачиваем
+// вертикально — там много узких столбиков и горизонтальные числа наезжают
+// друг на друга; на мини-графике итогов всего 3 широких столбика, поэтому
+// подписи остаются горизонтальными.
+const makeBarLabel = (rotate) => (props) => {
+  const { x, y, width, value } = props;
+  const label = formatBarValue(value);
+  if (!label) return null;
+  const cx = x + width / 2;
+
+  if (rotate) {
+    return (
+      <text x={cx} y={y - 6} fontSize={10} fill="#6e6e80" textAnchor="start" transform={`rotate(-90 ${cx} ${y - 6})`}>
+        {label}
+      </text>
+    );
+  }
+  return (
+    <text x={cx} y={y - 6} fontSize={11} fill="#6e6e80" textAnchor="middle">
+      {label}
+    </text>
+  );
+};
+
+const MonthlyChartCard = ({ title, data, expanded, onMouseEnter, onMouseLeave }) => {
+  const totals = useMemo(() => buildYearTotals(data), [data]);
+
+  return (
+    <div
+      style={{ ...s.card, ...(expanded ? s.cardExpanded : null) }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <h3 style={s.cardTitle}>{title}</h3>
+      <div style={s.chartRow}>
+        <ResponsiveContainer width="100%" height={320} style={{ flex: 3 }}>
+          <BarChart data={data} margin={{ top: expanded ? 36 : 10, right: 10, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+            <XAxis dataKey="month" fontSize={12} stroke="#8e8ea0" />
+            <YAxis fontSize={12} stroke="#8e8ea0" />
+            <Tooltip formatter={yearTooltipFormatter} />
+            {YEARS.map((year) => (
+              <Bar key={year} dataKey={year} name={year} fill={YEAR_COLORS[year]}>
+                {expanded && <LabelList dataKey={year} content={makeBarLabel(true)} />}
+              </Bar>
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+
+        <ResponsiveContainer width="100%" height={320} style={{ flex: 1 }}>
+          <BarChart data={totals} margin={{ top: expanded ? 20 : 10, right: 10, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+            <XAxis dataKey="year" fontSize={12} stroke="#8e8ea0" />
+            <YAxis orientation="right" fontSize={12} stroke="#8e8ea0" />
+            <Tooltip formatter={yearTooltipFormatter} />
+            <Bar dataKey="total" name="Итого">
+              {totals.map((t) => (
+                <Cell key={t.year} fill={YEAR_COLORS[t.year]} />
+              ))}
+              {expanded && <LabelList dataKey="total" content={makeBarLabel(false)} />}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Общая легенда на обе диаграммы сразу — раньше Legend был только у
+          основного графика, из-за чего области построения (и ось X) не
+          совпадали по высоте с мини-графиком итогов, у которого своего
+          Legend не было. */}
+      <div style={s.legendRow}>
         {YEARS.map((year) => (
-          <Bar key={year} dataKey={year} name={year} fill={YEAR_COLORS[year]} />
+          <span key={year} style={s.legendItem}>
+            <span style={{ ...s.legendSwatch, background: YEAR_COLORS[year] }} />
+            {year}
+          </span>
         ))}
-      </BarChart>
-    </ResponsiveContainer>
-  </div>
-);
+      </div>
+    </div>
+  );
+};
 
 const ConcreteDashboardPage = () => {
   const navigate = useNavigate();
@@ -456,6 +535,10 @@ const s = {
   // остаётся на месте под ней.
   cardExpanded: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.2)" },
   cardTitle: { margin: "0 0 12px", fontSize: "15px" },
+  chartRow: { display: "flex", gap: "8px", alignItems: "stretch" },
+  legendRow: { display: "flex", justifyContent: "center", gap: "20px", marginTop: "6px" },
+  legendItem: { display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#555" },
+  legendSwatch: { width: "10px", height: "10px", borderRadius: "2px", display: "inline-block" },
 
   section: { background: "#fff", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", marginBottom: "20px" },
   sectionTitle: { margin: "0 0 12px", fontSize: "18px" },

@@ -38,7 +38,6 @@ const HomePage = () => {
 
   const currentEmail = getAuth().currentUser?.email?.toLowerCase() || "";
   const canUseSmartRequest = SMART_REQUEST_TESTERS.includes(currentEmail);
-  const isAdmin = currentEmail === "admin@vkdev.kz";
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -104,16 +103,6 @@ const HomePage = () => {
       >
         Графики и отчёты
       </button>
-
-      <button onClick={() => navigate('/concrete-dashboard')} style={{ ...styles.button, background: '#6c3ba3' }}>
-        Аналитика по бетону и раствору
-      </button>
-
-      {isAdmin && (
-        <button onClick={() => navigate('/admin/people-gaps')} style={{ ...styles.button, background: '#444' }}>
-          ⚙ Пропуски в отчётах по людям
-        </button>
-      )}
     </div>
   );
 };
