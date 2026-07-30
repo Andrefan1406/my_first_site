@@ -31,12 +31,6 @@ const ReportsDashboardPage = () => {
       >
         Ежедневный отчет БРУ
       </button>
-      <button
-        onClick={() => navigate('/concrete-chat')}
-        style={styles.smartButton}
-      >
-        ✦ Чат-аналитика (AI)
-      </button>
     </div>
 
   );

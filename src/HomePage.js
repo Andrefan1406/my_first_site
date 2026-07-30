@@ -38,7 +38,6 @@ const HomePage = () => {
 
   const currentEmail = getAuth().currentUser?.email?.toLowerCase() || "";
   const canUseSmartRequest = SMART_REQUEST_TESTERS.includes(currentEmail);
-  const isAdmin = currentEmail === "admin@vkdev.kz";
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -105,11 +104,6 @@ const HomePage = () => {
         Графики и отчёты
       </button>
 
-      {isAdmin && (
-        <button onClick={() => navigate('/admin/people-gaps')} style={{ ...styles.button, background: '#444' }}>
-          ⚙ Пропуски в отчётах по людям
-        </button>
-      )}
     </div>
   );
 };
