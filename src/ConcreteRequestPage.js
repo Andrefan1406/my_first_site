@@ -19,6 +19,11 @@ const emptyConcreteRow = () => ({
   concreteGrade: '', concreteClass: '', quantity: '', note: ''
 });
 
+// «Реализация» — единственная категория без цепочки объект/позиция/блок/
+// этаж/конструктив (это не объект строительства, а сбыт), поэтому эти поля
+// для неё не обязательны, а примечание — наоборот, обязательно всегда.
+const REALIZATION_CATEGORY = 'Реализация';
+
 // Стирает поле-потомок только если оно реально стало невалидным для нового
 // значения родителя в цепочке category -> object -> position -> block ->
 // floor -> constructive -> material -> concreteGrade/concreteClass.
@@ -46,7 +51,13 @@ const pruneConcreteChain = (row) => {
     next.constructive = '';
   }
 
-  if (!next.position) {
+  // У «Реализации» позиции нет и не будет — материал там выбирается
+  // напрямую, не завязан на позицию/блок, как у остальных категорий.
+  if (next.category === REALIZATION_CATEGORY) {
+    if (!['Бетон', 'Раствор'].includes(next.material)) {
+      next.material = '';
+    }
+  } else if (!next.position) {
     next.material = '';
   } else if (hasBlocks) {
     next.material = next.constructive
@@ -64,6 +75,30 @@ const pruneConcreteChain = (row) => {
   }
 
   return next;
+};
+
+const getActiveRequiredFields = (row) => {
+  const activeFields = ['date', 'time', 'category', 'quantity'];
+
+  if (row.category === REALIZATION_CATEGORY) {
+    activeFields.push('note');
+  } else {
+    activeFields.push('object', 'position');
+  }
+
+  const hasBlocks = positionBlockOptions[row.position];
+  if (hasBlocks) {
+    activeFields.push('block', 'floor', 'constructive');
+  } else {
+    activeFields.push('material');
+    if (row.material === 'Бетон') {
+      activeFields.push('concreteGrade', 'concreteClass');
+    } else if (row.material === 'Раствор') {
+      activeFields.push('concreteGrade');
+    }
+  }
+
+  return activeFields;
 };
 
 const ConcreteRequestPage = () => {
@@ -139,60 +174,29 @@ const ConcreteRequestPage = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-  
-    const requiredFields = ['date', 'time', 'category', 'object', 'position', 'quantity'];
-  
+
     const hasEmptyRequiredField = formRows.some(row => {
-      const activeFields = [...requiredFields];
-      const hasBlocks = positionBlockOptions[row.position];
-  
-      if (hasBlocks) {
-        activeFields.push('block', 'floor', 'constructive');
-      } else {
-        activeFields.push('material');
-        if (row.material === 'Бетон') {
-          activeFields.push('concreteGrade', 'concreteClass');
-        } else if (row.material === 'Раствор') {
-          activeFields.push('concreteGrade');
-        }
-      }
-  
+      const activeFields = getActiveRequiredFields(row);
       return activeFields.some(field => !row[field]?.toString().trim());
     });
-  
+
     if (hasEmptyRequiredField) {
       alert('Пожалуйста, заполните все обязательные поля.');
       return;
     }
-  
+
     // ✅ Только если всё ок — открываем модалку
     setShowModal(true);
   };
 
   const handleFinalSubmit = async () => {
-  const requiredFields = ['date', 'time', 'category', 'object', 'position', 'quantity'];
-
   const hasEmptyRequiredField = formRows.some(row => {
-    const activeFields = [...requiredFields];
-
-    // Если позиция есть в positionBlockOptions, значит нужны block, floor, constructive
-    const hasBlocks = positionBlockOptions[row.position];
-    if (hasBlocks) {
-      activeFields.push('block', 'floor', 'constructive');
-    } else {
-      activeFields.push('material');
-      if (row.material === 'Бетон') {
-        activeFields.push('concreteGrade', 'concreteClass');
-      } else if (row.material === 'Раствор') {
-        activeFields.push('concreteGrade'); // для раствора только марка
-      }
-    }
-
+    const activeFields = getActiveRequiredFields(row);
     return activeFields.some(field => !row[field]?.toString().trim());
   });
 
   if (hasEmptyRequiredField) {
-    alert('Пожалуйста, заполните все обязательные поля (кроме примечания).');
+    alert('Пожалуйста, заполните все обязательные поля.');
     return;
   }
 
