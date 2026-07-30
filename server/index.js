@@ -3,13 +3,16 @@
 // Ключ OLLAMA_API_KEY хранится только здесь и никогда не попадает в клиентский бандл.
 require('dotenv').config();
 const express = require('express');
+const { initSchema } = require('./db');
+const { startConcreteSync } = require('./syncConcrete');
+const concreteDailyReportRouter = require('./concreteDailyReport');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -52,7 +55,14 @@ app.post('/api/smart-request', async (req, res) => {
   }
 });
 
-const PORT = process.env.SMART_REQUEST_PROXY_PORT || 4000;
+app.use('/api/concrete-dashboard', concreteDailyReportRouter);
+
+initSchema();
+startConcreteSync();
+
+// Render передаёт порт через PORT — слушаем его в первую очередь,
+// SMART_REQUEST_PROXY_PORT остаётся для локального оверрайда.
+const PORT = process.env.PORT || process.env.SMART_REQUEST_PROXY_PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Smart Request proxy listening on http://localhost:${PORT}`);
 });
