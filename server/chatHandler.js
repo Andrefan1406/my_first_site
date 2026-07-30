@@ -457,12 +457,17 @@ async function handleChat(req, res) {
 
     let answer;
     try {
+      // Единственным сообщением с role:"system" (без единого role:"user") эта
+      // модель через Ollama Cloud отвечает пустым content и done_reason
+      // "load", будто застревает на загрузке — вместо реального ответа.
+      // С тем же промптом в роли "user" отвечает нормально, поэтому шлём так.
       answer = await callOllamaJson(
-        [{ role: 'system', content: buildAnswerSystemPrompt(question, sql, rows, domain.answerDomainLabel) }],
+        [{ role: 'user', content: buildAnswerSystemPrompt(question, sql, rows, domain.answerDomainLabel) }],
         { format: 'json', temperature: 0, model: SQL_MODEL }
       );
     } catch (err) {
       // LLM не смог отформатировать ответ — отдаём сырую таблицу, чтобы не терять результат.
+      console.error('[chat] не удалось получить ответ от модели, отдаю таблицу:', err.message);
       answer = { type: 'table', text: 'Результат запроса:', table: rowsToTable(rows) };
     }
 

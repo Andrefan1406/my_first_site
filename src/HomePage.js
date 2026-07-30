@@ -103,7 +103,6 @@ const HomePage = () => {
       >
         Графики и отчёты
       </button>
-
     </div>
   );
 };

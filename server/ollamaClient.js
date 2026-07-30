@@ -39,30 +39,56 @@ function extractJson(content) {
   return (fenced ? fenced[1] : content).trim();
 }
 
+const LOAD_RETRY_ATTEMPTS = 3;
+const LOAD_RETRY_DELAY_MS = 2000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Высокоуровневый вызов для серверной логики (text-to-SQL): бросает
 // исключение на сетевую/HTTP ошибку и возвращает уже распарсенный
 // объект из содержимого ответа модели.
+//
+// Ollama Cloud иногда отвечает 200 с пустым content и done_reason "load" —
+// модель ещё прогревается и не сгенерировала ничего, вместо того чтобы
+// дождаться и отдать реальный ответ. Ретраим несколько раз с паузой, прежде
+// чем сдаться.
 async function callOllamaJson(messages, opts) {
-  const { status, bodyText } = await callOllama(messages, opts);
-  if (status < 200 || status >= 300) {
-    const err = new Error(`Ollama Cloud вернул ошибку ${status}: ${bodyText}`);
-    err.status = 502;
-    throw err;
+  let lastLoadError;
+
+  for (let attempt = 1; attempt <= LOAD_RETRY_ATTEMPTS; attempt++) {
+    const { status, bodyText } = await callOllama(messages, opts);
+    if (status < 200 || status >= 300) {
+      const err = new Error(`Ollama Cloud вернул ошибку ${status}: ${bodyText}`);
+      err.status = 502;
+      throw err;
+    }
+
+    let envelope;
+    try {
+      envelope = JSON.parse(bodyText);
+    } catch (e) {
+      throw new Error(`Не удалось распарсить ответ Ollama как JSON: ${e.message}`);
+    }
+
+    const content = envelope?.message?.content;
+
+    if (!content && envelope?.done_reason === 'load') {
+      lastLoadError = new Error('Ollama Cloud: модель ещё прогревается (done_reason=load), пустой ответ');
+      if (attempt < LOAD_RETRY_ATTEMPTS) {
+        await sleep(LOAD_RETRY_DELAY_MS * attempt);
+        continue;
+      }
+      throw lastLoadError;
+    }
+
+    try {
+      return JSON.parse(extractJson(content));
+    } catch (e) {
+      throw new Error(`Ответ модели не является валидным JSON: ${e.message}`);
+    }
   }
 
-  let envelope;
-  try {
-    envelope = JSON.parse(bodyText);
-  } catch (e) {
-    throw new Error(`Не удалось распарсить ответ Ollama как JSON: ${e.message}`);
-  }
-
-  const content = envelope?.message?.content;
-  try {
-    return JSON.parse(extractJson(content));
-  } catch (e) {
-    throw new Error(`Ответ модели не является валидным JSON: ${e.message}`);
-  }
+  throw lastLoadError;
 }
 
 module.exports = { callOllama, callOllamaJson, extractJson, OLLAMA_MODEL };

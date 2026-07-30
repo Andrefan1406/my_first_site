@@ -1,20 +1,30 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAuth } from "firebase/auth";
 
 const ReportsDashboardPage = () => {
   const navigate = useNavigate();
 
+  const currentEmail = getAuth().currentUser?.email?.toLowerCase() || "";
+  const isAdmin = currentEmail === "admin@vkdev.kz";
+
   return (
     <div style={{ padding: '20px', textAlign: 'center' }}>
       <h2>Направления отчётности</h2>
-      <button 
-        onClick={() => navigate('/people-dashboard')} 
+      <button
+        onClick={() => navigate('/concrete-chat')}
+        style={styles.smartButton}
+      >
+        ✦ Чат-аналитика (AI)
+      </button>
+      <button
+        onClick={() => navigate('/people-dashboard')}
         style={styles.button}
       >
         Отчётность по людям
       </button>
-      <button 
-        onClick={() => navigate('/equipment-report')} 
+      <button
+        onClick={() => navigate('/equipment-report')}
         style={styles.button}
       >
         Отчётность по технике
@@ -31,6 +41,20 @@ const ReportsDashboardPage = () => {
       >
         Ежедневный отчет БРУ
       </button>
+      <button
+        onClick={() => navigate('/concrete-dashboard')}
+        style={{ ...styles.button, background: '#6c3ba3' }}
+      >
+        Дашборд по бетону и раствору
+      </button>
+      {isAdmin && (
+        <button
+          onClick={() => navigate('/admin/people-gaps')}
+          style={{ ...styles.button, background: '#444' }}
+        >
+          ⚙ Пропуски в отчётах по людям
+        </button>
+      )}
     </div>
 
   );

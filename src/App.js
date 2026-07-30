@@ -28,6 +28,7 @@ import AdminRoute from './components/AdminRoute';
 import PageTracker from './components/PageTracker';
 import AdminStatistics from "./pages/AdminStatistics";
 import PeopleGapsAdminPage from "./pages/PeopleGapsAdminPage";
+import ConcreteDashboardPage from "./pages/ConcreteDashboardPage";
 
 
 const Protected = ({ children }) => (
@@ -181,6 +182,15 @@ const App = () => {
           element={
             <Protected>
               <ConcreteChatPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/concrete-dashboard"
+          element={
+            <Protected>
+              <ConcreteDashboardPage />
             </Protected>
           }
         />
