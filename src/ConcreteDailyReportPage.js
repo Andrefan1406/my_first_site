@@ -1,12 +1,13 @@
-/* Ежедневный отчёт БРУ: исполненные заявки за выбранную дату + итоги с начала месяца */
-import React, { useEffect, useRef, useState } from "react";
-import Papa from "papaparse";
+/* Ежедневный отчёт БРУ: исполненные заявки за выбранную дату + итоги с начала месяца.
+   Данные считает сервер (server/concreteDailyReport.js) поверх concrete_orders —
+   той же таблицы, что синкает вся бетонная аналитика, вместо прямого разбора
+   CSV-экспорта в браузере. */
+import React, { useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 
-const csvUrl =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSu48SFcG0-dZpjkW3Z3uN3jJF0QPkpFUroD1YHWRj_8jy7ZwND096Rgd60fDiQGPHMOY8TDVy-_fl/pub?gid=949231644&single=true&output=csv";
+const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost:4000";
 
 const getLocalDateStr = (date) => {
   const year = date.getFullYear();
@@ -21,29 +22,6 @@ const getYesterday = () => {
   return getLocalDateStr(d);
 };
 
-// Дата отгрузки в таблице хранится как текст "ДД.ММ.ГГГГ"
-const formatSheetDate = (dateStr) => {
-  if (!dateStr) return "";
-  const parts = dateStr.split(".");
-  if (parts.length === 3) {
-    return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
-  }
-  return dateStr;
-};
-
-const parseVolume = (value) => {
-  const num = parseFloat((value || "0").toString().replace(",", "."));
-  return isNaN(num) ? 0 : num;
-};
-
-const isFulfilled = (row) => !!row["Отметка о исполнении"]?.toString().trim();
-
-// Объём исполненной заявки: фактически отгруженный, а если он не указан — заявленный
-const getRowVolume = (row) => {
-  const actual = parseVolume(row["Фактический объём"]);
-  return actual > 0 ? actual : parseVolume(row["Объём, м3"]);
-};
-
 const formatVolume = (value) =>
   value.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
 
@@ -51,32 +29,13 @@ const ConcreteDailyReportPage = () => {
   const maxDate = getYesterday();
   const reportRef = useRef(null);
 
-  const [tableData, setTableData] = useState([]);
-  const [loadingData, setLoadingData] = useState(true);
-  const [loadError, setLoadError] = useState("");
   const [selectedDate, setSelectedDate] = useState(maxDate);
   const [dateError, setDateError] = useState("");
   const [report, setReport] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [exportingPdf, setExportingPdf] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
-
-  useEffect(() => {
-    Papa.parse(csvUrl, {
-      download: true,
-      header: true,
-      complete: (results) => {
-        const data = results.data.filter((row) =>
-          Object.values(row).some((value) => value?.trim())
-        );
-        setTableData(data);
-        setLoadingData(false);
-      },
-      error: () => {
-        setLoadError("Не удалось загрузить данные из таблицы.");
-        setLoadingData(false);
-      },
-    });
-  }, []);
 
   const handleDateChange = (e) => {
     const value = e.target.value;
@@ -89,53 +48,24 @@ const ConcreteDailyReportPage = () => {
     }
   };
 
-  // Строит раздел отчёта для одного материала (Бетон/Раствор):
-  // группировка по объекту и марке за выбранную дату + итоги за день и с начала месяца
-  const buildMaterialSection = (materialName) => {
-    const groups = {};
-
-    tableData.forEach((row) => {
-      if (!isFulfilled(row)) return;
-      if (row["Материал"]?.trim() !== materialName) return;
-      if (formatSheetDate(row["Дата отгрузки"]) !== selectedDate) return;
-
-      const object = row["Объект"]?.trim() || "—";
-      const grade = row["Марка, класс"]?.trim() || "—";
-      const key = `${object}|${grade}`;
-
-      if (!groups[key]) {
-        groups[key] = { object, grade, volume: 0 };
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setLoadError("");
+    try {
+      const res = await fetch(
+        `${API_URL}/api/concrete-dashboard/daily-report?date=${selectedDate}`
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Ошибка сервера (${res.status})`);
       }
-      groups[key].volume += getRowVolume(row);
-    });
-
-    const rows = Object.values(groups).sort((a, b) =>
-      a.object.localeCompare(b.object, "ru")
-    );
-    const dailyTotal = rows.reduce((sum, row) => sum + row.volume, 0);
-
-    // Итог с 1-го числа месяца по выбранную дату включительно
-    const monthPrefix = selectedDate.slice(0, 7);
-    let monthTotal = 0;
-
-    tableData.forEach((row) => {
-      if (!isFulfilled(row)) return;
-      if (row["Материал"]?.trim() !== materialName) return;
-      const rowDate = formatSheetDate(row["Дата отгрузки"]);
-      if (!rowDate || !rowDate.startsWith(monthPrefix) || rowDate > selectedDate) return;
-      monthTotal += getRowVolume(row);
-    });
-
-    return { name: materialName, rows, dailyTotal, monthTotal };
-  };
-
-  const handleGenerate = () => {
-    setReport({
-      date: selectedDate,
-      // Бетон всегда первым, затем раствор
-      materials: [buildMaterialSection("Бетон"), buildMaterialSection("Раствор")],
-    });
-    setCopyStatus("");
+      setReport(data);
+      setCopyStatus("");
+    } catch (err) {
+      setLoadError("Не удалось загрузить данные из таблицы: " + err.message);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handlePrint = () => {
@@ -290,8 +220,8 @@ const ConcreteDailyReportPage = () => {
 
         {dateError && <p style={{ color: "red", margin: 0 }}>{dateError}</p>}
 
-        <button onClick={handleGenerate} disabled={loadingData} style={styles.button}>
-          {loadingData ? "Загрузка данных..." : "Сформировать отчет"}
+        <button onClick={handleGenerate} disabled={generating} style={styles.button}>
+          {generating ? "Формирование отчёта..." : "Сформировать отчет"}
         </button>
 
         {report && (
