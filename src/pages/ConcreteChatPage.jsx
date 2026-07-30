@@ -125,7 +125,11 @@ const ChartAnswer = ({ chart }) => {
     0,
     ...chart.data.flatMap((row) => (chart.series || []).map((s) => Math.abs(Number(row[s.key]) || 0)))
   );
-  const rotateLabels = maxValue >= 10000;
+  // Длинный график (много категорий по X) сужает столбики, и даже
+  // не самые большие числа начинают наезжать друг на друга — поворачиваем
+  // подписи и при большом значении, и при длинном графике, не только
+  // при первом.
+  const rotateLabels = maxValue >= 10000 || chart.data.length > 8;
 
   return (
     <ResponsiveContainer width="100%" height={rotateLabels ? 300 : 260}>
