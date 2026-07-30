@@ -13,6 +13,7 @@ import PeopleReportCharts from './PeopleReportCharts';
 import ConcreteProductionReport from './ConcreteProductionReport';
 import ConcreteDailyReportPage from './ConcreteDailyReportPage';
 import ConcreteRequestPage from './ConcreteRequestPage';
+import ConcreteChatPage from './pages/ConcreteChatPage';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
 import LabTestRequestPaje from "./LabTestRequestPaje";
@@ -23,8 +24,10 @@ import RemarksPage from "./remarks/RemarksPage";
 import SmartRequestPage from './SmartRequestPage';
 import LoginPage from './LoginPage';
 import PrivateRoute from './components/PrivateRoute';
+import AdminRoute from './components/AdminRoute';
 import PageTracker from './components/PageTracker';
 import AdminStatistics from "./pages/AdminStatistics";
+import PeopleGapsAdminPage from "./pages/PeopleGapsAdminPage";
 
 
 const Protected = ({ children }) => (
@@ -173,6 +176,15 @@ const App = () => {
           }
         />
 
+        <Route
+          path="/concrete-chat"
+          element={
+            <Protected>
+              <ConcreteChatPage />
+            </Protected>
+          }
+        />
+
         {/* Прочее */}
         <Route
           path="/remarks"
@@ -203,6 +215,16 @@ const App = () => {
           element={
             <Protected>
               <AdminStatistics />
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin/people-gaps"
+          element={
+            <Protected>
+              <AdminRoute>
+                <PeopleGapsAdminPage />
+              </AdminRoute>
             </Protected>
           }
         />
