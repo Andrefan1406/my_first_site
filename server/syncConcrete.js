@@ -43,6 +43,20 @@ function normalizeDate(raw) {
   return null;
 }
 
+// "06.06.2024 15:26:16" (час без ведущего нуля, как в исходнике) ->
+// "2024-06-06 15:26:16" — для стабильной сортировки как обычной строки.
+// Мусор/пусто -> null (сортировка отправит такие заявки в конец при ASC).
+function normalizeDateTime(raw) {
+  if (!raw) return null;
+  const value = String(raw).trim();
+  if (!value) return null;
+
+  const match = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const [, d, m, y, h, min, s] = match;
+  return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')} ${h.padStart(2, '0')}:${min}:${s}`;
+}
+
 // "Позиция"/"Блок"/"Этаж"/"Конструктив" — раньше это была одна составная
 // колонка "Блок, позиция"; в сводном листе для части строк они уже разбиты
 // по отдельным столбцам (~20% строк), а для остальных всё так же слито в
@@ -65,8 +79,24 @@ async function fetchAndParseCsv() {
   return data;
 }
 
+// Естественный ключ строки — у исходной таблицы нет стабильного ID
+// (полная перезаписка при каждом синке, см. верхний комментарий файла), а
+// локально скрытым в concreteRequestsBoard.js заявкам нужен идентификатор,
+// переживающий пересинк. Комбинация из времени подачи + объекта + позиции +
+// материала + объёма достаточно уникальна на практике и не меняется, пока
+// саму строку не отредактируют в исходной таблице.
+function buildRequestKey(row) {
+  return [
+    row.submitted_at || '',
+    row.object_name || '',
+    row.block_position || '',
+    row.material || '',
+    row.volume_planned_m3 ?? '',
+  ].join('|');
+}
+
 function normalizeRow(row) {
-  return {
+  const base = {
     shipment_date: normalizeDate(row['Дата отгрузки']),
     shipment_date_raw: row['Дата отгрузки'] || null,
     // В сводном листе колонка "Категория" встречается дважды: первая — та,
@@ -90,7 +120,14 @@ function normalizeRow(row) {
     // заявки, в отличие от "Дата отгрузки" (shipment_date), проставляемой по
     // факту исполнения.
     planned_delivery_date: normalizeDate(row['Планируемая дата поставки']),
+    submitted_at: normalizeDateTime(row['Дата и время подачи заявки']),
+    // 'Согласовано' — единственное непустое значение колонки на практике.
+    geo_approved: row['Согласование геодезистов']?.trim() === 'Согласовано' ? 1 : 0,
+    responsible_name: row['ФИО'] || null,
+    responsible_phone: row['Телефон'] || null,
+    note: row['Примечание'] || null,
   };
+  return { ...base, request_key: buildRequestKey(base) };
 }
 
 function syncConcreteData(rows) {
@@ -99,11 +136,13 @@ function syncConcreteData(rows) {
     INSERT INTO concrete_orders (
       shipment_date, shipment_date_raw, category, material, object_name,
       block_position, grade_class, volume_planned_m3, volume_actual_m3, execution_note,
-      planned_delivery_date
+      planned_delivery_date, submitted_at, geo_approved, responsible_name, responsible_phone,
+      note, request_key
     ) VALUES (
       @shipment_date, @shipment_date_raw, @category, @material, @object_name,
       @block_position, @grade_class, @volume_planned_m3, @volume_actual_m3, @execution_note,
-      @planned_delivery_date
+      @planned_delivery_date, @submitted_at, @geo_approved, @responsible_name, @responsible_phone,
+      @note, @request_key
     )
   `);
   const upsertMeta = db.prepare(`

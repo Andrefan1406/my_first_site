@@ -6,7 +6,13 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
-const DATA_DIR = path.join(__dirname, 'data');
+// На Render (и любом другом хостинге с эфемерной ФС) без подключённого
+// Persistent Disk этот файл стирается при каждом деплое/рестарте — вместе с
+// ним пропадают и concrete_hidden_requests (локальные "удаления" в таблице
+// заявок), и people_gap_decisions (решения по пропускам в отчётах по людям).
+// CONCRETE_DATA_DIR позволяет указать путь примонтированного диска явно,
+// не завязываясь на внутреннюю структуру каталогов конкретного хостинга.
+const DATA_DIR = process.env.CONCRETE_DATA_DIR || path.join(__dirname, 'data');
 const DB_PATH = path.join(DATA_DIR, 'concrete.db');
 
 const SCHEMA = `
@@ -26,11 +32,37 @@ CREATE TABLE IF NOT EXISTS concrete_orders (
                                 -- заказчик указал при подаче заявки, 'YYYY-MM-DD'. Отличается
                                 -- от shipment_date ("Дата отгрузки"), которая проставляется по
                                 -- факту исполнения и может не совпадать с запланированной.
+  submitted_at           TEXT, -- "Дата и время подачи заявки", 'YYYY-MM-DD HH:MM:SS' (может
+                                -- быть NULL у старых строк без этой колонки в исходнике).
+  geo_approved           INTEGER DEFAULT 0, -- 1, если "Согласование геодезистов" = "Согласовано".
+  responsible_name       TEXT, -- "ФИО" заявителя из Google Таблицы.
+  responsible_phone      TEXT, -- "Телефон" заявителя из Google Таблицы.
+  note                   TEXT, -- "Примечание" заявителя из Google Таблицы.
+  request_key            TEXT, -- естественный ключ строки (submitted_at+object+position+
+                                -- material+volume) — см. syncConcrete.js:buildRequestKey.
+                                -- Не проставляется как UNIQUE: два разных синка одной и той же
+                                -- заявки должны давать один и тот же ключ, а не конфликтовать.
   synced_at              TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_concrete_date     ON concrete_orders(shipment_date);
 CREATE INDEX IF NOT EXISTS idx_concrete_object   ON concrete_orders(object_name);
 CREATE INDEX IF NOT EXISTS idx_concrete_material ON concrete_orders(material);
+-- idx_concrete_key НЕ здесь: на уже существующей локальной/прод базе
+-- (CREATE TABLE IF NOT EXISTS — no-op, если таблица уже есть) колонки
+-- request_key ещё может не быть, пока не отработает ALTER TABLE в
+-- migrateSchema() ниже. Индекс создаётся там же, сразу после ALTER.
+
+-- Локальное «удаление» строк из таблицы неисполненных заявок (см.
+-- src/components/ConcretePendingRequestsTable.jsx) — НЕ трогает исходную
+-- Google Таблицу и НЕ пересоздаётся при синке (иначе скрытая строка
+-- вернулась бы уже через 2 часа, на следующем DELETE+INSERT в
+-- concrete_orders). Единственный источник истины о том, что скрыто.
+CREATE TABLE IF NOT EXISTS concrete_hidden_requests (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_key  TEXT NOT NULL UNIQUE,
+  hidden_by    TEXT NOT NULL, -- email администратора (проверяется на бэкенде через Firebase ID token)
+  hidden_at    TEXT DEFAULT (datetime('now'))
+);
 
 -- objects — чистое зеркало вкладки "Объекты" Google Таблицы: пересоздаём таблицу
 -- при каждом старте (DROP+CREATE), а не ALTER, потому что данные в ней никогда
@@ -187,6 +219,25 @@ function migrateSchema(db) {
   const columns = db.prepare("PRAGMA table_info(concrete_orders)").all().map((c) => c.name);
   if (!columns.includes('planned_delivery_date')) {
     db.exec('ALTER TABLE concrete_orders ADD COLUMN planned_delivery_date TEXT');
+  }
+  if (!columns.includes('submitted_at')) {
+    db.exec('ALTER TABLE concrete_orders ADD COLUMN submitted_at TEXT');
+  }
+  if (!columns.includes('geo_approved')) {
+    db.exec('ALTER TABLE concrete_orders ADD COLUMN geo_approved INTEGER DEFAULT 0');
+  }
+  if (!columns.includes('request_key')) {
+    db.exec('ALTER TABLE concrete_orders ADD COLUMN request_key TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_concrete_key ON concrete_orders(request_key)');
+  }
+  if (!columns.includes('responsible_name')) {
+    db.exec('ALTER TABLE concrete_orders ADD COLUMN responsible_name TEXT');
+  }
+  if (!columns.includes('responsible_phone')) {
+    db.exec('ALTER TABLE concrete_orders ADD COLUMN responsible_phone TEXT');
+  }
+  if (!columns.includes('note')) {
+    db.exec('ALTER TABLE concrete_orders ADD COLUMN note TEXT');
   }
 }
 
