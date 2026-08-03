@@ -13,6 +13,7 @@ const { handleChat } = require('./chatHandler');
 const peopleGapsAdminRouter = require('./peopleGapsAdmin');
 const concreteDailyReportRouter = require('./concreteDailyReport');
 const concreteDashboardRouter = require('./concreteDashboard');
+const concreteRequestsBoardRouter = require('./concreteRequestsBoard');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -49,6 +50,7 @@ app.use('/api/admin/people-gaps', peopleGapsAdminRouter);
 // один не совпал.
 app.use('/api/concrete-dashboard', concreteDailyReportRouter);
 app.use('/api/concrete-dashboard', concreteDashboardRouter);
+app.use('/api/concrete-board', concreteRequestsBoardRouter);
 
 initSchema();
 startConcreteSync();

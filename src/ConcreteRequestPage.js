@@ -12,6 +12,7 @@ import {
   floorConstructiveOptions,
   materialGradeOptions
 } from './data/constructionData';
+import ConcretePendingRequestsTable from './components/ConcretePendingRequestsTable';
 
 const emptyConcreteRow = () => ({
   date: '', time: '', category: '', object: '', position: '',
@@ -109,6 +110,9 @@ const ConcreteRequestPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
+  // Увеличивается после каждой успешно поданной заявки, чтобы таблица
+  // неисполненных заявок сразу перезапросила список (см. ConcretePendingRequestsTable).
+  const [pendingRefreshSignal, setPendingRefreshSignal] = useState(0);
 
   useEffect(() => {
     const prefill = location.state?.prefill;
@@ -238,6 +242,18 @@ const ConcreteRequestPage = () => {
       block: '', floor: '', constructive: '', material: '',
       concreteGrade: '', concreteClass: '', quantity: '', note: ''
     }]);
+
+    // Заявка ушла напрямую в Google Apps Script, а не через наш бэкенд —
+    // просим сервер пересинкать таблицу немедленно, не дожидаясь планового
+    // синка, и только потом обновляем список неисполненных заявок.
+    try {
+      await fetch(`${(process.env.REACT_APP_CONCRETE_CHAT_API_URL || 'http://localhost:4000')}/api/concrete-board/resync`, {
+        method: 'POST',
+      });
+    } catch (resyncError) {
+      console.error('Не удалось пересинхронизировать таблицу заявок:', resyncError);
+    }
+    setPendingRefreshSignal((prev) => prev + 1);
   } catch (error) {
     console.error('Ошибка отправки:', error);
     alert('Ошибка при отправке!');
@@ -774,16 +790,7 @@ const ConcreteRequestPage = () => {
           <button type='submit' className={styles.submitButton}>Отправить заявку</button>
         </div>
       </form>
-      <div style={{ marginTop: '40px' }}>
-        <h3>Текущие заявки</h3>
-        <iframe
-          src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTSu48SFcG0-dZpjkW3Z3uN3jJF0QPkpFUroD1YHWRj_8jy7ZwND096Rgd60fDiQGPHMOY8TDVy-_fl/pubhtml?gid=1030005960&single=true&widget=true&headers=false"
-          width="100%"
-          height="600"
-          style={{ border: 'none', backgroundColor: 'white' }}
-          title="Текущие заявки"
-        ></iframe>
-      </div>
+      <ConcretePendingRequestsTable refreshSignal={pendingRefreshSignal} />
       {showModal && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>

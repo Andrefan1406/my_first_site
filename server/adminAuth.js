@@ -39,4 +39,29 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-module.exports = { requireAdmin, ADMIN_EMAIL };
+// Тот же принцип, что и requireAdmin, но со списком разрешённых email вместо
+// одного — для действий, доступных не только главному админу (например,
+// удаление строк в таблице заявок на бетон, см. concreteRequestsBoard.js).
+function requireEmails(allowedEmails) {
+  const allowedSet = new Set(allowedEmails.map((e) => e.toLowerCase()));
+  return async function (req, res, next) {
+    const header = req.headers.authorization || '';
+    const match = header.match(/^Bearer (.+)$/);
+    if (!match) {
+      return res.status(401).json({ error: 'Не передан токен авторизации' });
+    }
+
+    try {
+      const decoded = await getAuth().verifyIdToken(match[1]);
+      if (!decoded.email || !allowedSet.has(decoded.email.toLowerCase())) {
+        return res.status(403).json({ error: 'Доступ запрещён' });
+      }
+      req.userEmail = decoded.email;
+      next();
+    } catch (err) {
+      return res.status(401).json({ error: 'Недействительный или просроченный токен авторизации' });
+    }
+  };
+}
+
+module.exports = { requireAdmin, requireEmails, ADMIN_EMAIL };
