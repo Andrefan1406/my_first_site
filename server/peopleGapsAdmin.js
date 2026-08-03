@@ -161,13 +161,115 @@ router.post('/decisions', (req, res) => {
     decided_by: req.adminEmail,
   });
 
-  rebuildDerivedTables();
+  rebuildDerivedTables({ site });
 
   const updatedGap = db
     .prepare(`SELECT * FROM people_report_gaps WHERE site = ? AND report_date = ?`)
     .get(site, reportDate);
 
   res.json({ gap: updatedGap });
+});
+
+// Массовое принятие ОДНОГО action сразу для нескольких пропусков — кнопки
+// "Применить к выбранным" в админ-панели, чтобы не кликать "Принять решение"
+// по каждой строке отдельно (например, пачка выходных подряд без отчёта).
+// Для action='copy' source_date не передаётся с фронта — сервер сам находит
+// его для КАЖДОГО пропуска отдельно: ближайший реальный отчёт ДО дня, а если
+// такого нет — ближайший ПОСЛЕ (тот же bestGuess, что по умолчанию предлагает
+// одиночная панель решения на фронтенде, см. RowActions в PeopleGapsAdminPage).
+// Битые элементы (нет кандидата для копии, день уже не пропуск и т.п.) не
+// прерывают всю пачку — они просто попадают в errors, остальные применяются.
+router.post('/decisions/bulk', (req, res) => {
+  const { items, action } = req.body || {};
+
+  if (!Array.isArray(items) || !items.length) {
+    return res.status(400).json({ error: 'items должен быть непустым массивом' });
+  }
+  if (!['copy', 'confirm_no_report', 'work_completed'].includes(action)) {
+    return res.status(400).json({ error: "action должен быть 'copy', 'confirm_no_report' или 'work_completed'" });
+  }
+
+  const db = getWriteDb();
+
+  const findGap = db.prepare(`SELECT * FROM people_report_gaps WHERE site = ? AND report_date = ?`);
+  const findBefore = db.prepare(`
+    SELECT report_date FROM people_report_gaps
+    WHERE site = ? AND status = 'real' AND report_date < ?
+    ORDER BY report_date DESC LIMIT 1
+  `);
+  const findAfter = db.prepare(`
+    SELECT report_date FROM people_report_gaps
+    WHERE site = ? AND status = 'real' AND report_date > ?
+    ORDER BY report_date ASC LIMIT 1
+  `);
+  const findSourceReport = db.prepare(`SELECT 1 FROM people_reports WHERE site = ? AND report_date = ? LIMIT 1`);
+  const upsertDecision = db.prepare(`
+    INSERT INTO people_gap_decisions (site, report_date, action, source_date, note, decided_by, decided_at)
+    VALUES (@site, @report_date, @action, @source_date, @note, @decided_by, datetime('now'))
+    ON CONFLICT(site, report_date) DO UPDATE SET
+      action = excluded.action,
+      source_date = excluded.source_date,
+      note = excluded.note,
+      decided_by = excluded.decided_by,
+      decided_at = datetime('now')
+  `);
+
+  const applied = [];
+  const errors = [];
+  const touchedSites = new Set();
+
+  const applyAll = db.transaction(() => {
+    for (const item of items) {
+      const site = item?.site;
+      const reportDate = item?.report_date;
+      if (!site || !reportDate) {
+        errors.push({ site, report_date: reportDate, error: 'site и report_date обязательны' });
+        continue;
+      }
+
+      const gap = findGap.get(site, reportDate);
+      if (!gap) {
+        errors.push({ site, report_date: reportDate, error: 'Пропуск не найден' });
+        continue;
+      }
+      if (gap.status !== 'missing' && !gap.status.startsWith('resolved_')) {
+        errors.push({ site, report_date: reportDate, error: `День не является пропуском (status=${gap.status})` });
+        continue;
+      }
+
+      let sourceDate = null;
+      if (action === 'copy') {
+        const before = findBefore.get(site, reportDate);
+        const after = before ? null : findAfter.get(site, reportDate);
+        sourceDate = (before || after)?.report_date || null;
+        if (!sourceDate || !findSourceReport.get(site, sourceDate)) {
+          errors.push({ site, report_date: reportDate, error: 'Нет реального отчёта для копирования' });
+          continue;
+        }
+      }
+
+      upsertDecision.run({
+        site,
+        report_date: reportDate,
+        action,
+        source_date: sourceDate,
+        note: null,
+        decided_by: req.adminEmail,
+      });
+      touchedSites.add(site);
+      applied.push({ site, report_date: reportDate });
+    }
+  });
+
+  applyAll();
+
+  for (const site of touchedSites) {
+    rebuildDerivedTables({ site });
+  }
+
+  const updatedGaps = applied.map(({ site, report_date: reportDate }) => findGap.get(site, reportDate));
+
+  res.json({ gaps: updatedGaps, errors });
 });
 
 // Отменить ранее принятое решение — пропуск возвращается в 'missing'
@@ -187,7 +289,7 @@ router.delete('/decisions', (req, res) => {
     return res.status(404).json({ error: 'Решение не найдено' });
   }
 
-  rebuildDerivedTables();
+  rebuildDerivedTables({ site });
 
   const updatedGap = db
     .prepare(`SELECT * FROM people_report_gaps WHERE site = ? AND report_date = ?`)

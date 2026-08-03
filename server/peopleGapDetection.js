@@ -215,9 +215,12 @@ function reconstructDailyTimeline(rows, decisions, { dateField, groupField, seri
 }
 
 // Доменная обёртка: строит временную шкалу для сырых строк people_reports
-// (участок/дата/...) и решений people_gap_decisions.
-function reconstructPeopleTimeline(rawRows, decisions) {
-  return reconstructDailyTimeline(rawRows, decisions, { dateField: 'report_date', groupField: 'site' });
+// (участок/дата/...) и решений people_gap_decisions. seriesEndDate можно
+// передать явно — нужно при пересчёте ОДНОГО участка (см. rebuildDerivedTables
+// в syncPeople.js), чтобы его ряд по-прежнему обрывался на самой свежей дате
+// среди ВСЕХ участков, а не только среди строк одного отфильтрованного участка.
+function reconstructPeopleTimeline(rawRows, decisions, { seriesEndDate } = {}) {
+  return reconstructDailyTimeline(rawRows, decisions, { dateField: 'report_date', groupField: 'site', seriesEndDate });
 }
 
 module.exports = { reconstructDailyTimeline, reconstructPeopleTimeline };

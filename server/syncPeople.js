@@ -110,23 +110,46 @@ async function syncRawFromSheet() {
 // над текущим состоянием БД, поэтому безопасно вызывать после каждого
 // изменения решений, не дожидаясь следующего планового синка.
 //
+// site (опционально) — пересчитать только ОДИН участок вместо всех. Ряды
+// участков независимы друг от друга (см. byGroup в peopleGapDetection.js),
+// поэтому решение по одному участку не может повлиять на статусы других —
+// это позволяет после клика по кнопке решения в админ-панели (peopleGapsAdmin.js)
+// не перестраивать пропуски по ВСЕМ участкам разом (это было заметно медленно
+// при большом объёме истории), а тронуть только затронутые строки. Дату,
+// на которой обрывается ряд участка, всё равно берём по ВСЕЙ базе (globalMaxDate),
+// а не только по строкам этого участка — иначе ряд участка, у которого нет
+// сегодняшнего отчёта, обрывался бы раньше, чем должен.
+//
 // Вся логика (обнаружение пропусков + применение решений, включая
 // 'work_completed', которое влияет на статус многих дней вперёд) — в
 // peopleGapDetection.js; здесь только чтение из БД, вызов и запись обратно.
-function rebuildDerivedTables() {
+function rebuildDerivedTables({ site } = {}) {
   const db = getWriteDb();
 
-  const rawRows = db.prepare(`
-    SELECT report_date, site, object_category, object_name, position, contractor, profession, headcount
-    FROM people_reports
-  `).all();
+  const globalMaxDateRow = db.prepare(`SELECT MAX(report_date) AS maxDate FROM people_reports`).get();
+  const seriesEndDate = globalMaxDateRow?.maxDate || null;
 
-  const decisions = db.prepare(`
-    SELECT site, report_date, action, source_date, decided_by, decided_at
-    FROM people_gap_decisions
-  `).all();
+  const rawRows = site
+    ? db.prepare(`
+        SELECT report_date, site, object_category, object_name, position, contractor, profession, headcount
+        FROM people_reports WHERE site = ?
+      `).all(site)
+    : db.prepare(`
+        SELECT report_date, site, object_category, object_name, position, contractor, profession, headcount
+        FROM people_reports
+      `).all();
 
-  const { dayRows, detailRows } = reconstructPeopleTimeline(rawRows, decisions);
+  const decisions = site
+    ? db.prepare(`
+        SELECT site, report_date, action, source_date, decided_by, decided_at
+        FROM people_gap_decisions WHERE site = ?
+      `).all(site)
+    : db.prepare(`
+        SELECT site, report_date, action, source_date, decided_by, decided_at
+        FROM people_gap_decisions
+      `).all();
+
+  const { dayRows, detailRows } = reconstructPeopleTimeline(rawRows, decisions, { seriesEndDate });
 
   const insertGap = db.prepare(`
     INSERT INTO people_report_gaps (
@@ -148,8 +171,13 @@ function rebuildDerivedTables() {
   `);
 
   const replaceDerived = db.transaction(() => {
-    db.prepare('DELETE FROM people_report_gaps').run();
-    db.prepare('DELETE FROM people_reports_resolved').run();
+    if (site) {
+      db.prepare('DELETE FROM people_report_gaps WHERE site = ?').run(site);
+      db.prepare('DELETE FROM people_reports_resolved WHERE site = ?').run(site);
+    } else {
+      db.prepare('DELETE FROM people_report_gaps').run();
+      db.prepare('DELETE FROM people_reports_resolved').run();
+    }
     for (const row of dayRows) insertGap.run(row);
     for (const row of detailRows) insertResolved.run(row);
   });

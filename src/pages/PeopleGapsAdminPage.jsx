@@ -343,6 +343,12 @@ const PeopleGapsAdminPage = () => {
   const [loadingCandidatesFor, setLoadingCandidatesFor] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // Выбор строк для массового применения решения (см. handleBulkApply ниже) —
+  // только для status === 'missing', т.к. смысл кнопок "применить к выбранным"
+  // именно в быстрой обработке пачки ещё нерешённых пропусков.
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
   // Сводка считается из уже загруженного gaps на клиенте (а не хранится
   // отдельным стейтом с сервера) — так она остаётся точной и после точечных
   // локальных обновлений строк в handleDecide/handleUndo, без лишнего
@@ -373,6 +379,7 @@ const PeopleGapsAdminPage = () => {
       const data = await apiFetch(`/api/admin/people-gaps?${params.toString()}`);
       setGaps(data.gaps || []);
       setSites(data.sites || []);
+      setSelected(new Set());
     } catch (err) {
       setError(err.message || "Не удалось загрузить пропуски");
     } finally {
@@ -490,6 +497,57 @@ const PeopleGapsAdminPage = () => {
     }
   };
 
+  const selectableGaps = useMemo(() => gaps.filter((g) => g.status === "missing"), [gaps]);
+  const allSelectableChecked = selectableGaps.length > 0 && selectableGaps.every((g) => selected.has(`${g.site}|${g.report_date}`));
+
+  const toggleSelected = (key) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected(() => {
+      if (allSelectableChecked) return new Set();
+      return new Set(selectableGaps.map((g) => `${g.site}|${g.report_date}`));
+    });
+  };
+
+  // Применяет один action сразу ко всем выбранным пропускам одним запросом
+  // (см. POST /decisions/bulk на сервере) — для action='copy' сервер сам
+  // подбирает source_date на каждый пропуск отдельно (ближайший реальный
+  // отчёт до дня, иначе после), точно так же, как bestGuess по умолчанию
+  // предлагает панель решения для одиночной строки (см. RowActions выше).
+  const handleBulkApply = async (action) => {
+    const items = gaps
+      .filter((g) => selected.has(`${g.site}|${g.report_date}`))
+      .map((g) => ({ site: g.site, report_date: g.report_date }));
+    if (!items.length) return;
+
+    setBulkBusy(true);
+    setError("");
+    try {
+      const data = await apiFetch(`/api/admin/people-gaps/decisions/bulk`, {
+        method: "POST",
+        body: JSON.stringify({ items, action }),
+      });
+      await load(true);
+      if (data.errors?.length) {
+        setError(
+          `Применено: ${data.gaps.length} из ${items.length}. Не удалось (${data.errors.length}): ` +
+            data.errors.map((e) => `${e.site} ${e.report_date} — ${e.error}`).join("; ")
+        );
+      }
+    } catch (err) {
+      setError(err.message || "Не удалось применить массовое решение");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   return (
     <div style={s.page}>
       <div style={s.header}>
@@ -576,6 +634,35 @@ const PeopleGapsAdminPage = () => {
 
       {error && <div style={s.error}>{error}</div>}
 
+      {selected.size > 0 && (
+        <div style={s.bulkBar}>
+          <span style={s.bulkCount}>Выбрано: {selected.size}</span>
+          <button
+            style={s.confirmBtn}
+            disabled={bulkBusy}
+            onClick={() => handleBulkApply("copy")}
+            title="Для каждого пропуска сервер сам подберёт ближайший реальный отчёт того же участка"
+          >
+            Скопировать с ближайшего отчёта
+          </button>
+          <button style={s.confirmBtnAlt} disabled={bulkBusy} onClick={() => handleBulkApply("confirm_no_report")}>
+            Участок не работал
+          </button>
+          <button
+            style={s.confirmBtnCompleted}
+            disabled={bulkBusy}
+            onClick={() => handleBulkApply("work_completed")}
+            title="Все последующие дни этих участков перестанут быть пропусками, пока не появится новый реальный отчёт"
+          >
+            Работы завершены
+          </button>
+          <button style={s.linkBtn} disabled={bulkBusy} onClick={() => setSelected(new Set())}>
+            Снять выделение
+          </button>
+          {bulkBusy && <span style={s.muted}>Применяю...</span>}
+        </div>
+      )}
+
       {loading ? (
         <p>Загрузка...</p>
       ) : gaps.length === 0 ? (
@@ -584,6 +671,11 @@ const PeopleGapsAdminPage = () => {
         <table style={s.table}>
           <thead>
             <tr>
+              <th style={s.th}>
+                {selectableGaps.length > 0 && (
+                  <input type="checkbox" checked={allSelectableChecked} onChange={toggleSelectAll} />
+                )}
+              </th>
               <th style={s.th}>Дата</th>
               <th style={s.th}>Участок</th>
               <th style={s.th}>Статус</th>
@@ -595,6 +687,11 @@ const PeopleGapsAdminPage = () => {
               const key = `${gap.site}|${gap.report_date}`;
               return (
                 <tr key={key}>
+                  <td style={s.td}>
+                    {gap.status === "missing" && (
+                      <input type="checkbox" checked={selected.has(key)} onChange={() => toggleSelected(key)} />
+                    )}
+                  </td>
                   <td style={s.td}>
                     {gap.report_date}
                     {!!gap.is_weekend && <span style={s.weekendTag}>вых.</span>}
@@ -646,6 +743,8 @@ const s = {
   multiSelectOption: { display: "flex", alignItems: "center", gap: "8px", padding: "4px", fontSize: "13px", cursor: "pointer", whiteSpace: "nowrap" },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", fontSize: "13px" },
+  bulkBar: { display: "flex", alignItems: "center", gap: "10px", background: "#eef4ff", border: "1px solid #cfe0ff", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", flexWrap: "wrap", position: "sticky", top: "10px", zIndex: 10, boxShadow: "0 2px 10px rgba(0,0,0,0.12)" },
+  bulkCount: { fontWeight: 600, fontSize: "13px", marginRight: "4px" },
   muted: { color: "#888", fontSize: "13px" },
 
   table: { width: "100%", borderCollapse: "collapse" },
