@@ -568,7 +568,7 @@ const PeopleGapsAdminPage = () => {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <button onClick={() => navigate("/")} style={s.back}>← Назад</button>
+        <button onClick={() => navigate("/admin")} style={s.back}>← Назад</button>
         <h1 style={s.title}>Пропуски в отчётах по людям</h1>
         <button onClick={() => navigate("/admin/users")} style={s.usersLink}>
           Управление пользователями →
@@ -722,7 +722,11 @@ const PeopleGapsAdminPage = () => {
                   </td>
                   <td style={s.td}>
                     {gap.report_date}
-                    {!!gap.is_weekend && <span style={s.weekendTag}>вых.</span>}
+                    {!!gap.is_weekend && (
+                      <span style={s.weekendTag}>
+                        {weekdayName(gap.report_date) === "Сб" ? "сб." : "вск."}
+                      </span>
+                    )}
                   </td>
                   <td style={s.td}>{gap.site}</td>
                   <td style={{ ...s.td, color: STATUS_COLORS[gap.status] || "#333", fontWeight: 600 }}>

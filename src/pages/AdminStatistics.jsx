@@ -9,6 +9,8 @@ import {
 
 import { db } from "../firebase";
 
+import { useNavigate } from "react-router-dom";
+
 const PAGE_NAMES = {
   "/": "Главная",
   "/request": "Заявка на технику",
@@ -76,6 +78,7 @@ export default function AdminStatistics() {
   const [visits, setVisits] = useState([]);
   const [smartRequestUsage, setSmartRequestUsage] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadVisits();
@@ -228,7 +231,12 @@ export default function AdminStatistics() {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.title}>Статистика пользователей</h1>
+      <div style={styles.header}>
+        <button onClick={() => navigate("/admin")} style={styles.back}>← Назад</button>
+        <h1 style={styles.title}>Статистика пользователей</h1>        
+      </div>
+      
+      
 
       <div style={styles.cards}>
         <div style={styles.card}>
@@ -463,5 +471,13 @@ const styles = {
   td: {
     padding: "10px",
     borderBottom: "1px solid #eee",
+  },
+  back: {
+    background: "none", 
+    border: "1px solid #ddd", 
+    borderRadius: "6px", 
+    padding: "6px 12px", 
+    cursor: "pointer", 
+    marginBottom: "12px" 
   },
 };

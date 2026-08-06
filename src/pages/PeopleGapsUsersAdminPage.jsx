@@ -101,7 +101,7 @@ const PeopleGapsUsersAdminPage = () => {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <button onClick={() => navigate("/")} style={s.back}>← Назад</button>
+        <button onClick={() => navigate("/admin")} style={s.back}>← Назад</button>
         <h1 style={s.title}>Управление пользователями</h1>
         <button onClick={() => navigate("/admin/people-gaps")} style={s.gapsLink}>
           Пропуски в отчётах →
