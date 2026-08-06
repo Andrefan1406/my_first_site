@@ -13,6 +13,7 @@ import {
   materialGradeOptions
 } from './data/constructionData';
 import ConcretePendingRequestsTable from './components/ConcretePendingRequestsTable';
+import { fetchMissingGapDates, gapWarningMessage } from './peopleGapsGate';
 
 const emptyConcreteRow = () => ({
   date: '', time: '', category: '', object: '', position: '',
@@ -176,8 +177,20 @@ const ConcreteRequestPage = () => {
   };
   
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
+    try {
+      const missingDates = await fetchMissingGapDates();
+      if (missingDates.length) {
+        alert(gapWarningMessage(missingDates));
+        return;
+      }
+    } catch (err) {
+      // Сама проверка недоступна (сеть/бэкенд) — не блокируем подачу заявки
+      // из-за этого, только логируем.
+      console.error('Не удалось проверить пропуски в отчётах по людям:', err);
+    }
 
     const hasEmptyRequiredField = formRows.some(row => {
       const activeFields = getActiveRequiredFields(row);
@@ -202,6 +215,20 @@ const ConcreteRequestPage = () => {
   if (hasEmptyRequiredField) {
     alert('Пожалуйста, заполните все обязательные поля.');
     return;
+  }
+
+  // Последний рубеж перед фактической отправкой (сам POST в Google Apps
+  // Script ниже) — handleSubmit проверяет то же самое до открытия модалки,
+  // но эта кнопка вызывается напрямую из модалки и должна быть защищена
+  // независимо от того, что произошло на предыдущем шаге.
+  try {
+    const missingDates = await fetchMissingGapDates();
+    if (missingDates.length) {
+      alert(gapWarningMessage(missingDates));
+      return;
+    }
+  } catch (err) {
+    console.error('Не удалось проверить пропуски в отчётах по людям:', err);
   }
 
   // продолжение отправки как прежде:

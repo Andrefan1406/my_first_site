@@ -209,4 +209,4 @@ function startPeopleSync() {
   });
 }
 
-module.exports = { startPeopleSync, runSyncOnce, rebuildDerivedTables, CSV_URL };
+module.exports = { startPeopleSync, runSyncOnce, syncRawFromSheet, rebuildDerivedTables, CSV_URL };

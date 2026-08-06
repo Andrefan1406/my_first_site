@@ -11,6 +11,7 @@ const { startObjectsSync } = require('./syncObjects');
 const { startPeopleSync } = require('./syncPeople');
 const { handleChat } = require('./chatHandler');
 const peopleGapsAdminRouter = require('./peopleGapsAdmin');
+const peopleGapsCheckRouter = require('./peopleGapsCheck');
 const concreteDailyReportRouter = require('./concreteDailyReport');
 const concreteDashboardRouter = require('./concreteDashboard');
 const concreteRequestsBoardRouter = require('./concreteRequestsBoard');
@@ -44,6 +45,7 @@ app.post('/api/smart-request', async (req, res) => {
 
 app.post('/api/chat', handleChat);
 app.use('/api/admin/people-gaps', peopleGapsAdminRouter);
+app.use('/api/people-gaps', peopleGapsCheckRouter);
 // Оба роутера смонтированы на одном префиксе — их пути не пересекаются
 // (daily-report у одного, options/monthly/unexecuted/chart-titles у
 // другого), Express пробует их по очереди и падает в 404 только если ни

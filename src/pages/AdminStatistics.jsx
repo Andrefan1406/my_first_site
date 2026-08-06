@@ -29,6 +29,7 @@ const PAGE_NAMES = {
   "/def-act": "Дефектный акт",
   "/grafiki": "Графики",
   "/admin/statistics": "Статистика администратора",
+  "/smart-request": "Умная заявка",
 };
 
 const EXCLUDED_EMAILS = ["admin@vkdev.kz"];

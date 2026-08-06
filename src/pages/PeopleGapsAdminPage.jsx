@@ -342,6 +342,7 @@ const PeopleGapsAdminPage = () => {
   const [candidatesByGap, setCandidatesByGap] = useState({});
   const [loadingCandidatesFor, setLoadingCandidatesFor] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [resyncLoading, setResyncLoading] = useState(false);
 
   // Выбор строк для массового применения решения (см. handleBulkApply ниже) —
   // только для status === 'missing', т.к. смысл кнопок "применить к выбранным"
@@ -390,6 +391,22 @@ const PeopleGapsAdminPage = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Ручной внеплановый синк отчётов по людям из Google Таблицы (обычно раз
+  // в 2 часа, см. PEOPLE_SYNC_CRON) — нужен, когда кто-то только что заполнил
+  // отчёт и не хочет ждать планового синка, чтобы увидеть результат здесь.
+  const handleResync = async () => {
+    setResyncLoading(true);
+    setError("");
+    try {
+      await apiFetch(`/api/admin/people-gaps/resync`, { method: "POST" });
+      await load(true);
+    } catch (err) {
+      setError(err.message || "Не удалось пересинхронизировать отчёты по людям");
+    } finally {
+      setResyncLoading(false);
+    }
+  };
 
   const loadCandidates = async (site, reportDate) => {
     const key = `${site}|${reportDate}`;
@@ -553,6 +570,9 @@ const PeopleGapsAdminPage = () => {
       <div style={s.header}>
         <button onClick={() => navigate("/")} style={s.back}>← Назад</button>
         <h1 style={s.title}>Пропуски в отчётах по людям</h1>
+        <button onClick={() => navigate("/admin/users")} style={s.usersLink}>
+          Управление пользователями →
+        </button>
       </div>
 
       <div style={s.cards}>
@@ -622,6 +642,14 @@ const PeopleGapsAdminPage = () => {
           </select>
         </label>
         <button onClick={() => load()} disabled={loading}>Обновить</button>
+        <button
+          onClick={handleResync}
+          disabled={resyncLoading}
+          title="Заново скачать отчёты по людям из Google Таблицы, не дожидаясь планового синка (раз в 2 часа)"
+          style={s.resyncBtn}
+        >
+          {resyncLoading ? "Синхронизирую..." : "⟳ Пересинхронизировать"}
+        </button>
         <button
           onClick={handleDownloadPdf}
           disabled={!filterSite.length || pdfLoading}
@@ -726,6 +754,7 @@ const s = {
   header: { display: "flex", alignItems: "center", gap: "16px", marginBottom: "20px" },
   back: { background: "none", border: "1px solid #ddd", borderRadius: "6px", padding: "6px 12px", cursor: "pointer" },
   title: { margin: 0, fontSize: "22px" },
+  usersLink: { marginLeft: "auto", background: "none", border: "none", color: "#007bff", cursor: "pointer", fontSize: "13px", fontWeight: 500 },
 
   cards: { display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr))", gap: "16px", marginBottom: "20px" },
   card: { background: "#fff", borderRadius: "12px", padding: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" },
@@ -734,6 +763,7 @@ const s = {
 
   filters: { display: "flex", gap: "16px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" },
   pdfBtn: { background: "#8e44ad", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 14px", cursor: "pointer", fontSize: "13px" },
+  resyncBtn: { background: "#17a2b8", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 14px", cursor: "pointer", fontSize: "13px" },
 
   filterLabel: { marginRight: "6px" },
   multiSelectWrap: { position: "relative", display: "inline-flex", alignItems: "center" },

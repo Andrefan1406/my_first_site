@@ -6,11 +6,25 @@
 // а не только на фронтенде.
 const express = require('express');
 const { getWriteDb } = require('./db');
-const { rebuildDerivedTables } = require('./syncPeople');
+const { runSyncOnce, rebuildDerivedTables } = require('./syncPeople');
 const { requireAdmin } = require('./adminAuth');
 
 const router = express.Router();
 router.use(requireAdmin);
+
+// Форсирует внеплановый синк отчётов по людям из Google Таблицы (обычно раз
+// в 2 часа, см. PEOPLE_SYNC_CRON в syncPeople.js) — та же runSyncOnce, что и
+// на старте сервера/по крону: тянет свежий CSV и пересчитывает
+// people_report_gaps по ВСЕМ участкам (не по одному, в отличие от
+// server/peopleGapsCheck.js — это админ-страница, ей нужен полный список).
+router.post('/resync', async (req, res) => {
+  try {
+    const rowCount = await runSyncOnce();
+    res.json({ ok: true, rowCount });
+  } catch (err) {
+    res.status(502).json({ error: err.message || 'Не удалось пересинхронизировать отчёты по людям' });
+  }
+});
 
 // Список пропусков/дней с опциональными фильтрами. По умолчанию отдаёт всё,
 // чтобы фронтенд сам фильтровал на клиенте (объём данных небольшой — тысячи
@@ -296,6 +310,55 @@ router.delete('/decisions', (req, res) => {
     .get(site, reportDate);
 
   res.json({ gap: updatedGap });
+});
+
+// CRUD для people_gap_check_rules — какому email какой участок проверять на
+// пропуски при подаче заявок (см. server/peopleGapsCheck.js, зачитывает эту
+// же таблицу). Управляется из src/pages/PeopleGapsUsersAdminPage.jsx —
+// первая часть будущей общей админ-панели управления пользователями/ролями,
+// поэтому роуты уже под своим сегментом /check-rules, а не смешаны с
+// пропусками.
+router.get('/check-rules', (req, res) => {
+  const rules = getWriteDb()
+    .prepare('SELECT * FROM people_gap_check_rules ORDER BY email ASC, site ASC')
+    .all();
+  res.json({ rules });
+});
+
+router.post('/check-rules', (req, res) => {
+  const { email, site } = req.body || {};
+  if (!email || !email.trim() || !site || !site.trim()) {
+    return res.status(400).json({ error: 'email и site обязательны' });
+  }
+
+  const db = getWriteDb();
+  try {
+    db.prepare(`
+      INSERT INTO people_gap_check_rules (email, site, created_by)
+      VALUES (@email, @site, @created_by)
+    `).run({
+      email: email.trim().toLowerCase(),
+      site: site.trim(),
+      created_by: req.adminEmail,
+    });
+  } catch (err) {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({ error: 'Такое правило (email + участок) уже есть' });
+    }
+    throw err;
+  }
+
+  const rules = db.prepare('SELECT * FROM people_gap_check_rules ORDER BY email ASC, site ASC').all();
+  res.json({ rules });
+});
+
+router.delete('/check-rules/:id', (req, res) => {
+  const db = getWriteDb();
+  const result = db.prepare('DELETE FROM people_gap_check_rules WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) {
+    return res.status(404).json({ error: 'Правило не найдено' });
+  }
+  res.json({ ok: true });
 });
 
 module.exports = router;

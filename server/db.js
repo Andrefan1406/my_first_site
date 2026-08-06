@@ -199,6 +199,26 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   key   TEXT PRIMARY KEY,
   value TEXT
 );
+
+-- people_gap_check_rules — конфигурация того, для какого email какой
+-- участок проверять на пропуски в отчётах по людям при подаче заявок (см.
+-- server/peopleGapsCheck.js, src/peopleGapsGate.js). Управляется через
+-- админ-панель /admin/users (см. server/peopleGapsAdmin.js: /check-rules,
+-- src/pages/PeopleGapsUsersAdminPage.jsx) — раньше это был единственный
+-- захардкоженный email+участок, теперь произвольный список. ПОСТОЯННОЕ
+-- хранилище (CREATE TABLE IF NOT EXISTS, без DROP) — правила не должны
+-- пропадать при синке/рестарте, как и people_gap_decisions. Один email
+-- может быть привязан к нескольким участкам (и наоборот) — UNIQUE не даёт
+-- только продублировать одну и ту же пару.
+CREATE TABLE IF NOT EXISTS people_gap_check_rules (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  email      TEXT NOT NULL,
+  site       TEXT NOT NULL,
+  created_by TEXT,    -- email администратора, добавившего правило
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(email, site)
+);
+CREATE INDEX IF NOT EXISTS idx_gap_check_rules_email ON people_gap_check_rules(email);
 `;
 
 let writeDb = null;

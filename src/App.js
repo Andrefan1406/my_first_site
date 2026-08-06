@@ -25,9 +25,12 @@ import SmartRequestPage from './SmartRequestPage';
 import LoginPage from './LoginPage';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
+import PeopleGapsGuard from './components/PeopleGapsGuard';
 import PageTracker from './components/PageTracker';
 import AdminStatistics from "./pages/AdminStatistics";
 import PeopleGapsAdminPage from "./pages/PeopleGapsAdminPage";
+import PeopleGapsUsersAdminPage from "./pages/PeopleGapsUsersAdminPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ConcreteDashboardPage from "./pages/ConcreteDashboardPage";
 
 
@@ -54,7 +57,9 @@ const App = () => {
           path="/request"
           element={
             <Protected>
-              <RequestPage />
+              <PeopleGapsGuard>
+                <RequestPage />
+              </PeopleGapsGuard>
             </Protected>
           }
         />
@@ -63,7 +68,9 @@ const App = () => {
           path="/electricans-request"
           element={
             <Protected>
-              <ElectricansRequestPage />
+              <PeopleGapsGuard>
+                <ElectricansRequestPage />
+              </PeopleGapsGuard>
             </Protected>
           }
         />
@@ -72,7 +79,9 @@ const App = () => {
           path="/geo-request"
           element={
             <Protected>
-              <GeoRequestPage />
+              <PeopleGapsGuard>
+                <GeoRequestPage />
+              </PeopleGapsGuard>
             </Protected>
           }
         />
@@ -81,7 +90,9 @@ const App = () => {
           path="/concrete-request"
           element={
             <Protected>
-              <ConcreteRequestPage />
+              <PeopleGapsGuard>
+                <ConcreteRequestPage />
+              </PeopleGapsGuard>
             </Protected>
           }
         />
@@ -90,7 +101,9 @@ const App = () => {
           path="/blbrequest"
           element={
             <Protected>
-              <BLBRequestPage />
+              <PeopleGapsGuard>
+                <BLBRequestPage />
+              </PeopleGapsGuard>
             </Protected>
           }
         />
@@ -99,7 +112,9 @@ const App = () => {
           path="/znbrequest"
           element={
             <Protected>
-              <ZnbRequestPage />
+              <PeopleGapsGuard>
+                <ZnbRequestPage />
+              </PeopleGapsGuard>
             </Protected>
           }
         />
@@ -108,7 +123,9 @@ const App = () => {
           path="/lab-request"
           element={
             <Protected>
-              <LabTestRequestPaje />
+              <PeopleGapsGuard>
+                <LabTestRequestPaje />
+              </PeopleGapsGuard>
             </Protected>
           }
         />
@@ -150,14 +167,7 @@ const App = () => {
           }
         />
 
-        <Route
-          path="/people-charts"
-          element={
-            <Protected>
-              <PeopleReportCharts />
-            </Protected>
-          }
-        />
+        <Route path="/people-charts" element={<Protected><PeopleReportCharts /></Protected>}/>
 
         <Route
           path="/concrete-report"
@@ -221,6 +231,16 @@ const App = () => {
           }
         />
         <Route
+          path="/admin"
+          element={
+            <Protected>
+              <AdminRoute>
+                <AdminDashboardPage />
+              </AdminRoute>
+            </Protected>
+          }
+        />
+        <Route
           path="/admin/statistics"
           element={
             <Protected>
@@ -234,6 +254,16 @@ const App = () => {
             <Protected>
               <AdminRoute>
                 <PeopleGapsAdminPage />
+              </AdminRoute>
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <Protected>
+              <AdminRoute>
+                <PeopleGapsUsersAdminPage />
               </AdminRoute>
             </Protected>
           }
