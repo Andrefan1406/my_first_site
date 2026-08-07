@@ -7,7 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, LabelList
 } from "recharts";
-import { TbCrane, TbBuildingCommunity, TbUsers, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
+import { TbCrane, TbBuildingCommunity, TbUsers, TbFileAlert, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -60,6 +60,19 @@ const DOMAINS = [
       "Какие участки не сдали отчёт за последнюю неделю?",
       "Покажи динамику численности по участкам за месяц",
       "Процент заполненности отчётности по участкам за июль",
+    ],
+  },
+  {
+    key: "defect-acts",
+    label: "Аналитика по дефектным актам",
+    Icon: TbFileAlert,
+    emptyTitle: "Аналитика по дефектным актам",
+    emptyHint: "Спросите про дефектные акты на естественном языке — например:",
+    placeholder: "Спросите про дефектные акты...",
+    suggestions: [
+      "Сколько дефектных актов открыто по каждому объекту?",
+      "Сколько актов устранено за этот месяц?",
+      "Какие объекты чаще всего фигурируют в дефектных актах?",
     ],
   },
 ];
