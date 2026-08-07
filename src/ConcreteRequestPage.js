@@ -21,6 +21,63 @@ const emptyConcreteRow = () => ({
   concreteGrade: '', concreteClass: '', quantity: '', note: ''
 });
 
+// Стилизованная замена window.confirm() для предупреждения об окне 15:00-17:00
+// (см. handleSubmit/handleFinalSubmit) — та же визуальная логика, что и
+// модалка подтверждения выходного на странице отчёта по людям
+// (см. src/PeopleReportPage.js), только в предупреждающей (красной) палитре,
+// т.к. эта модалка не спрашивает подтверждение, а объясняет отказ: заявка не
+// отправляется независимо от того, как её закрыть.
+const mortarModalStyles = {
+  box: {
+    position: 'relative',
+    background: '#fff',
+    padding: '28px 24px 20px',
+    borderRadius: '14px',
+    width: '360px',
+    maxWidth: '90vw',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: '10px',
+    boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+  },
+  icon: {
+    width: '48px',
+    height: '48px',
+    borderRadius: '50%',
+    background: '#fdeaea',
+    color: '#c0392b',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '22px',
+    marginBottom: '4px',
+  },
+  title: {
+    margin: 0,
+    fontSize: '17px',
+    color: '#333',
+  },
+  text: {
+    margin: 0,
+    fontSize: '14px',
+    color: '#555',
+    lineHeight: 1.5,
+  },
+  okBtn: {
+    marginTop: '8px',
+    padding: '9px 24px',
+    background: '#c0392b',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 600,
+  },
+};
+
 // «Реализация» — единственная категория без цепочки объект/позиция/блок/
 // этаж/конструктив (это не объект строительства, а сбыт), поэтому эти поля
 // для неё не обязательны, а примечание — наоборот, обязательно всегда.
@@ -108,6 +165,7 @@ const ConcreteRequestPage = () => {
   const [formRows, setFormRows] = useState([emptyConcreteRow()]);
 
   const [showModal, setShowModal] = useState(false);
+  const [showMortarWindowModal, setShowMortarWindowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
@@ -132,7 +190,18 @@ const ConcreteRequestPage = () => {
   const formatDate = (date) => date.toISOString().split('T')[0];
   const currentHour = today.getHours();
   const currentTimeInMinutes = today.getHours() * 60 + today.getMinutes();
-  const isTodayWindowOpen = currentTimeInMinutes >= 0 && currentTimeInMinutes <= 15 * 60;
+  // Заявку на завтра обычный (бетонный) поток окна принимает до 15:00; для
+  // раствора окно продлено до 17:00 (см. MORTAR_CUTOFF_MINUTES ниже) — но
+  // материал выбирается в строке ПОСЛЕ даты, поэтому сам date-picker не может
+  // заранее знать, раствор это будет или бетон. Разруливаем так: сам инпут
+  // даты остаётся permissive до более позднего (раствор) окна — 17:00, чтобы
+  // не мешать выбрать "завтра" тем, кто дальше укажет раствор, — а то, что
+  // бетон на "завтра" в 15:00-17:00 на самом деле недопустим, проверяется
+  // отдельно при отправке (см. handleSubmit/handleFinalSubmit).
+  const CONCRETE_CUTOFF_MINUTES = 15 * 60;
+  const MORTAR_CUTOFF_MINUTES = 17 * 60;
+  const isMortarWindowOpen = currentTimeInMinutes >= 0 && currentTimeInMinutes <= MORTAR_CUTOFF_MINUTES;
+  const isMortarExtensionWindow = currentTimeInMinutes > CONCRETE_CUTOFF_MINUTES && currentTimeInMinutes <= MORTAR_CUTOFF_MINUTES;
 
   const auth = getAuth();
   const currentUserEmail = auth.currentUser?.email?.toLowerCase();
@@ -140,9 +209,10 @@ const ConcreteRequestPage = () => {
 
   const minDate = hasUnrestrictedTodayAccess
     ? formatDate(today)
-    : (isTodayWindowOpen ? formatDate(tomorrow) : formatDate(overmorrow));
+    : (isMortarWindowOpen ? formatDate(tomorrow) : formatDate(overmorrow));
   const maxDate = formatDate(nextWeek);
   const todayStr = formatDate(today);
+  const tomorrowStr = formatDate(tomorrow);
 
   const addRow = () => {
     setFormRows(prev => [...prev, emptyConcreteRow()]);
@@ -202,6 +272,20 @@ const ConcreteRequestPage = () => {
       return;
     }
 
+    // С 15:00 до 17:00 "завтра" в date-picker доступно всем (см. minDate
+    // выше), но на самом деле это окно продлено только для раствора — для
+    // бетона по-прежнему действует старая граница 15:00. Ловим это здесь,
+    // когда материал уже точно выбран.
+    if (!hasUnrestrictedTodayAccess && isMortarExtensionWindow) {
+      const hasInvalidConcreteRow = formRows.some(
+        (row) => row.date === tomorrowStr && row.material !== 'Раствор'
+      );
+      if (hasInvalidConcreteRow) {
+        setShowMortarWindowModal(true);
+        return;
+      }
+    }
+
     // ✅ Только если всё ок — открываем модалку
     setShowModal(true);
   };
@@ -215,6 +299,20 @@ const ConcreteRequestPage = () => {
   if (hasEmptyRequiredField) {
     alert('Пожалуйста, заполните все обязательные поля.');
     return;
+  }
+
+  // То же самое ограничение окна 15:00-17:00 для раствора/бетона, что и в
+  // handleSubmit — дублируем здесь по той же причине, что и ниже для
+  // проверки пропусков: эта кнопка вызывается напрямую из модалки.
+  if (!hasUnrestrictedTodayAccess && isMortarExtensionWindow) {
+    const hasInvalidConcreteRow = formRows.some(
+      (row) => row.date === tomorrowStr && row.material !== 'Раствор'
+    );
+    if (hasInvalidConcreteRow) {
+      setShowModal(false);
+      setShowMortarWindowModal(true);
+      return;
+    }
   }
 
   // Последний рубеж перед фактической отправкой (сам POST в Google Apps
@@ -851,6 +949,23 @@ const ConcreteRequestPage = () => {
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Отправка...' : 'Отправить заявку'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showMortarWindowModal && (
+        <div className={styles.modalOverlay}>
+          <div style={mortarModalStyles.box}>
+            <div style={mortarModalStyles.icon}>⛔</div>
+            <h3 style={mortarModalStyles.title}>Заявка на завтра недоступна</h3>
+            <p style={mortarModalStyles.text}>
+              С 15:00 до 17:00 подать заявку на завтра можно только для <strong>раствора</strong>.
+              Для <strong>бетона</strong> такой возможности нет — выберите другую дату
+              или измените материал на «Раствор».
+            </p>
+            <button style={mortarModalStyles.okBtn} onClick={() => setShowMortarWindowModal(false)}>
+              Понятно
             </button>
           </div>
         </div>
