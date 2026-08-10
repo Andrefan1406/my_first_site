@@ -1,12 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAuth } from "firebase/auth";
 
 const ReportsDashboardPage = () => {
   const navigate = useNavigate();
-
-  const currentEmail = getAuth().currentUser?.email?.toLowerCase() || "";
-  const isAdmin = currentEmail === "admin@vkdev.kz";
 
   return (
     <div style={{ padding: '20px', textAlign: 'center' }}>
@@ -47,14 +43,6 @@ const ReportsDashboardPage = () => {
       >
         Дашборд по бетону и раствору
       </button>
-      {isAdmin && (
-        <button
-          onClick={() => navigate('/admin/people-gaps')}
-          style={{ ...styles.button, background: '#444' }}
-        >
-          ⚙ Пропуски в отчётах по людям
-        </button>
-      )}
     </div>
 
   );
