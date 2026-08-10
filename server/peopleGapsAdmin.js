@@ -116,6 +116,29 @@ router.get('/candidates', (req, res) => {
   res.json({ candidates: [before, after].filter(Boolean) });
 });
 
+// Все реальные даты отчётов участка (а не только ближайшие к одному
+// конкретному пропуску, как /candidates) — заполняет выпадающий список в
+// админ-панели, когда нужно вручную выбрать ОДНУ дату-донора и применить её
+// сразу к НЕСКОЛЬКИМ выделенным пропускам (см. POST /decisions/bulk ниже и
+// UI массового копирования в PeopleGapsAdminPage).
+router.get('/site-report-dates', (req, res) => {
+  const { site } = req.query;
+  if (!site) {
+    return res.status(400).json({ error: 'Параметр site обязателен' });
+  }
+
+  const dates = getWriteDb()
+    .prepare(`
+      SELECT report_date, total_headcount, entries_count
+      FROM people_report_gaps
+      WHERE site = ? AND status = 'real'
+      ORDER BY report_date DESC
+    `)
+    .all(site);
+
+  res.json({ dates });
+});
+
 // Принять решение по пропуску: скопировать данные с source_date, подтвердить,
 // что участок в этот день не работал, либо отметить "работы завершены" —
 // последнее закрывает участок на все последующие дни (см.
@@ -187,14 +210,18 @@ router.post('/decisions', (req, res) => {
 // Массовое принятие ОДНОГО action сразу для нескольких пропусков — кнопки
 // "Применить к выбранным" в админ-панели, чтобы не кликать "Принять решение"
 // по каждой строке отдельно (например, пачка выходных подряд без отчёта).
-// Для action='copy' source_date не передаётся с фронта — сервер сам находит
-// его для КАЖДОГО пропуска отдельно: ближайший реальный отчёт ДО дня, а если
-// такого нет — ближайший ПОСЛЕ (тот же bestGuess, что по умолчанию предлагает
-// одиночная панель решения на фронтенде, см. RowActions в PeopleGapsAdminPage).
+// Для action='copy' source_date необязателен: если фронт его не передал,
+// сервер сам находит его для КАЖДОГО пропуска отдельно — ближайший реальный
+// отчёт ДО дня, а если такого нет — ближайший ПОСЛЕ (тот же bestGuess, что по
+// умолчанию предлагает одиночная панель решения, см. RowActions в
+// PeopleGapsAdminPage). Если source_date передан явно (админ выбрал
+// конкретную дату в выпадающем списке для массового копирования), она
+// применяется ко ВСЕМ пропускам как есть — это осознанный выбор администратора,
+// а не автоподбор.
 // Битые элементы (нет кандидата для копии, день уже не пропуск и т.п.) не
 // прерывают всю пачку — они просто попадают в errors, остальные применяются.
 router.post('/decisions/bulk', (req, res) => {
-  const { items, action } = req.body || {};
+  const { items, action, source_date: explicitSourceDate } = req.body || {};
 
   if (!Array.isArray(items) || !items.length) {
     return res.status(400).json({ error: 'items должен быть непустым массивом' });
@@ -253,11 +280,21 @@ router.post('/decisions/bulk', (req, res) => {
 
       let sourceDate = null;
       if (action === 'copy') {
-        const before = findBefore.get(site, reportDate);
-        const after = before ? null : findAfter.get(site, reportDate);
-        sourceDate = (before || after)?.report_date || null;
+        if (explicitSourceDate) {
+          sourceDate = explicitSourceDate;
+        } else {
+          const before = findBefore.get(site, reportDate);
+          const after = before ? null : findAfter.get(site, reportDate);
+          sourceDate = (before || after)?.report_date || null;
+        }
         if (!sourceDate || !findSourceReport.get(site, sourceDate)) {
-          errors.push({ site, report_date: reportDate, error: 'Нет реального отчёта для копирования' });
+          errors.push({
+            site,
+            report_date: reportDate,
+            error: explicitSourceDate
+              ? `За ${explicitSourceDate} нет реального отчёта по участку "${site}"`
+              : 'Нет реального отчёта для копирования',
+          });
           continue;
         }
       }

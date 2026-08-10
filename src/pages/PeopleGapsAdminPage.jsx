@@ -350,6 +350,16 @@ const PeopleGapsAdminPage = () => {
   const [selected, setSelected] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
 
+  // Ручной выбор даты-донора для массового копирования (в отличие от кнопки
+  // "ближайший отчёт", которая на сервере сама подбирает дату КАЖДОМУ
+  // пропуску отдельно) — доступен только когда все выделенные строки
+  // относятся к одному участку, т.к. дата-донор имеет смысл в рамках одного
+  // участка. Список дат подгружается заново при смене этого единственного
+  // участка.
+  const [bulkSourceOptions, setBulkSourceOptions] = useState([]);
+  const [bulkSourceDate, setBulkSourceDate] = useState("");
+  const [bulkSourceLoading, setBulkSourceLoading] = useState(false);
+
   // Сводка считается из уже загруженного gaps на клиенте (а не хранится
   // отдельным стейтом с сервера) — так она остаётся точной и после точечных
   // локальных обновлений строк в handleDecide/handleUndo, без лишнего
@@ -517,6 +527,40 @@ const PeopleGapsAdminPage = () => {
   const selectableGaps = useMemo(() => gaps.filter((g) => g.status === "missing"), [gaps]);
   const allSelectableChecked = selectableGaps.length > 0 && selectableGaps.every((g) => selected.has(`${g.site}|${g.report_date}`));
 
+  // Единственный участок среди выделенных строк — null, если выделение
+  // пустое или охватывает несколько разных участков (тогда ручной выбор
+  // даты-донора не показывается, см. bulkSourceOptions выше).
+  const bulkSingleSite = useMemo(() => {
+    const sitesInSelection = new Set(
+      gaps.filter((g) => selected.has(`${g.site}|${g.report_date}`)).map((g) => g.site)
+    );
+    return sitesInSelection.size === 1 ? [...sitesInSelection][0] : null;
+  }, [gaps, selected]);
+
+  useEffect(() => {
+    if (!bulkSingleSite) {
+      setBulkSourceOptions([]);
+      setBulkSourceDate("");
+      return;
+    }
+    let cancelled = false;
+    setBulkSourceLoading(true);
+    apiFetch(`/api/admin/people-gaps/site-report-dates?site=${encodeURIComponent(bulkSingleSite)}`)
+      .then((data) => {
+        if (cancelled) return;
+        const dates = data.dates || [];
+        setBulkSourceOptions(dates);
+        setBulkSourceDate(dates[0]?.report_date || "");
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || "Не удалось загрузить даты участка");
+      })
+      .finally(() => {
+        if (!cancelled) setBulkSourceLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [bulkSingleSite]);
+
   const toggleSelected = (key) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -534,11 +578,13 @@ const PeopleGapsAdminPage = () => {
   };
 
   // Применяет один action сразу ко всем выбранным пропускам одним запросом
-  // (см. POST /decisions/bulk на сервере) — для action='copy' сервер сам
-  // подбирает source_date на каждый пропуск отдельно (ближайший реальный
-  // отчёт до дня, иначе после), точно так же, как bestGuess по умолчанию
-  // предлагает панель решения для одиночной строки (см. RowActions выше).
-  const handleBulkApply = async (action) => {
+  // (см. POST /decisions/bulk на сервере). Для action='copy' есть два режима:
+  // если sourceDate не передан — сервер сам подбирает его на каждый пропуск
+  // отдельно (ближайший реальный отчёт до дня, иначе после), как и bestGuess
+  // по умолчанию в панели решения одиночной строки (см. RowActions выше);
+  // если sourceDate передан явно (админ выбрал дату в выпадающем списке над
+  // кнопкой) — та же самая дата применяется ко всем выбранным строкам.
+  const handleBulkApply = async (action, sourceDate) => {
     const items = gaps
       .filter((g) => selected.has(`${g.site}|${g.report_date}`))
       .map((g) => ({ site: g.site, report_date: g.report_date }));
@@ -549,7 +595,7 @@ const PeopleGapsAdminPage = () => {
     try {
       const data = await apiFetch(`/api/admin/people-gaps/decisions/bulk`, {
         method: "POST",
-        body: JSON.stringify({ items, action }),
+        body: JSON.stringify({ items, action, ...(sourceDate ? { source_date: sourceDate } : {}) }),
       });
       await load(true);
       if (data.errors?.length) {
@@ -673,6 +719,38 @@ const PeopleGapsAdminPage = () => {
           >
             Скопировать с ближайшего отчёта
           </button>
+          {bulkSingleSite ? (
+            <span style={s.bulkCopyPicker}>
+              <select
+                value={bulkSourceDate}
+                onChange={(e) => setBulkSourceDate(e.target.value)}
+                disabled={bulkSourceLoading || !bulkSourceOptions.length}
+                style={{ ...s.select, flex: "0 0 190px" }}
+              >
+                {bulkSourceLoading && <option value="">Загрузка дат...</option>}
+                {!bulkSourceLoading && !bulkSourceOptions.length && <option value="">Нет реальных отчётов</option>}
+                {bulkSourceOptions.map((c) => (
+                  <option key={c.report_date} value={c.report_date}>
+                    {c.report_date} ({c.total_headcount ?? 0} чел.)
+                  </option>
+                ))}
+              </select>
+              <button
+                style={s.confirmBtn}
+                disabled={bulkBusy || !bulkSourceDate}
+                onClick={() => handleBulkApply("copy", bulkSourceDate)}
+                title="Применить одну и ту же дату-донора ко всем выбранным пропускам этого участка"
+              >
+                Заполнить выбранной копией
+              </button>
+            </span>
+          ) : (
+            selected.size > 1 && (
+              <span style={s.muted} title="Ручной выбор даты-донора доступен только когда выбраны пропуски одного участка">
+                Чтобы выбрать конкретную дату — оставьте пропуски только одного участка
+              </span>
+            )
+          )}
           <button style={s.confirmBtnAlt} disabled={bulkBusy} onClick={() => handleBulkApply("confirm_no_report")}>
             Участок не работал
           </button>
@@ -779,6 +857,7 @@ const s = {
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", fontSize: "13px" },
   bulkBar: { display: "flex", alignItems: "center", gap: "10px", background: "#eef4ff", border: "1px solid #cfe0ff", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", flexWrap: "wrap", position: "sticky", top: "10px", zIndex: 10, boxShadow: "0 2px 10px rgba(0,0,0,0.12)" },
   bulkCount: { fontWeight: 600, fontSize: "13px", marginRight: "4px" },
+  bulkCopyPicker: { display: "flex", alignItems: "center", gap: "6px" },
   muted: { color: "#888", fontSize: "13px" },
 
   table: { width: "100%", borderCollapse: "collapse" },
