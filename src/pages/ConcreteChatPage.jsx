@@ -242,13 +242,45 @@ const nodeToCanvas = (node) => html2canvas(node, { scale: 2, backgroundColor: "#
 
 const exportNodeToPdf = async (node, filename) => {
   const canvas = await nodeToCanvas(node);
-  const imgData = canvas.toDataURL("image/png");
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 10;
   const imgWidth = pageWidth - margin * 2;
   const imgHeight = (canvas.height * imgWidth) / canvas.width;
-  pdf.addImage(imgData, "PNG", margin, margin, imgWidth, imgHeight);
+  const usableHeight = pageHeight - margin * 2;
+
+  if (imgHeight <= usableHeight) {
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, imgHeight);
+    pdf.save(filename);
+    return;
+  }
+
+  // Контент выше одной страницы (длинная таблица/график) — раньше он просто
+  // обрезался по низу первой страницы, потому что addImage не умеет сам
+  // переносить содержимое на следующую. Режем исходный canvas на полосы по
+  // высоте страницы и кладём каждую полосу на свою страницу PDF.
+  const pxPerMm = canvas.width / imgWidth;
+  const pageSliceHeightPx = Math.floor(usableHeight * pxPerMm);
+  const sliceCanvas = document.createElement("canvas");
+  sliceCanvas.width = canvas.width;
+  const ctx = sliceCanvas.getContext("2d");
+
+  let renderedPx = 0;
+  let pageIndex = 0;
+  while (renderedPx < canvas.height) {
+    const sliceHeightPx = Math.min(pageSliceHeightPx, canvas.height - renderedPx);
+    sliceCanvas.height = sliceHeightPx;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, sliceCanvas.width, sliceHeightPx);
+    ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+
+    if (pageIndex > 0) pdf.addPage();
+    pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, sliceHeightPx / pxPerMm);
+
+    renderedPx += sliceHeightPx;
+    pageIndex += 1;
+  }
   pdf.save(filename);
 };
 
