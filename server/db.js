@@ -93,6 +93,42 @@ CREATE TABLE objects (
 CREATE INDEX IF NOT EXISTS idx_objects_type   ON objects(object_type);
 CREATE INDEX IF NOT EXISTS idx_objects_status ON objects(status);
 
+-- defect_acts — чистое зеркало реестра дефектных актов (одна строка = один
+-- акт). Та же стратегия, что и у objects/concrete_orders: DROP+CREATE,
+-- полная перезапись синком (см. syncDefectActs.js), у строк исходной
+-- таблицы нет стабильного ID. embedding_synced_at отдельно от synced_at:
+-- проставляется ПОСЛЕ того, как для строки посчитан и загружен в Qdrant
+-- эмбеддинг (см. server/embeddings.js) — по нему синк находит новые/
+-- изменившиеся строки, которые ещё не проиндексированы для RAG-поиска,
+-- не пересчитывая эмбеддинги заново для всех 1000+ строк на каждый синк.
+DROP TABLE IF EXISTS defect_acts;
+CREATE TABLE defect_acts (
+  id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+  act_number                TEXT,    -- "№" — не гарантированно уникален/последователен, просто как в реестре
+  act_date                  TEXT,    -- дата дефектного акта, 'YYYY-MM-DD' (NULL, если не распарсилась)
+  act_date_raw              TEXT,    -- исходная строка даты как есть (на случай нераспознанного формата)
+  object_position            TEXT,   -- "Объект, позиция" (объект и позиция вместе, свободный текст из реестра)
+  defect_description         TEXT,   -- "Описание дефекта"
+  responsible_occurrence     TEXT,   -- "Ответственный за возникновение дефекта"
+  responsible_fix            TEXT,   -- "Ответственный за устранение дефекта"
+  pto_engineer                TEXT,  -- "инж.ПТО"
+  commission_conclusion       TEXT,  -- "Заключение комиссии"
+  fix_mark                    TEXT,  -- "Отметка об устранении дефекта" — непусто обычно значит, что устранено
+  total_cost                  REAL,  -- "Общие затраты на устранение дефекта"
+  amount_to_withhold          REAL,  -- "К удержанию"
+  amount_withheld              REAL, -- "Удержано"
+  withhold_date                TEXT, -- "Дата удержания", 'YYYY-MM-DD'
+  invoice_number                TEXT, -- "№ накладной"
+  withhold_status                TEXT, -- 'удержано' | 'подлежит удержанию' | 'не подлежит удержанию' | NULL
+  withhold_reason_na             TEXT, -- "Причина по которой не подлежит удержанию"
+  note                            TEXT, -- "Примечание"
+  embedding_synced_at             TEXT, -- когда для строки последний раз посчитан и загружен эмбеддинг в Qdrant; NULL = ещё не проиндексирована
+  synced_at                       TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_defect_acts_date            ON defect_acts(act_date);
+CREATE INDEX IF NOT EXISTS idx_defect_acts_object_position ON defect_acts(object_position);
+CREATE INDEX IF NOT EXISTS idx_defect_acts_withhold_status ON defect_acts(withhold_status);
+
 -- people_reports — чистое зеркало ежедневных отчётов начальников участков
 -- по людям (кто, где, сколько человек), без восстановления пропусков.
 -- Пересоздаётся при каждом старте по той же причине, что и objects.

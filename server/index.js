@@ -9,6 +9,7 @@ const { initSchema } = require('./db');
 const { startConcreteSync } = require('./syncConcrete');
 const { startObjectsSync } = require('./syncObjects');
 const { startPeopleSync } = require('./syncPeople');
+const { startDefectActsSync } = require('./syncDefectActs');
 const { handleChat } = require('./chatHandler');
 const peopleGapsAdminRouter = require('./peopleGapsAdmin');
 const peopleGapsCheckRouter = require('./peopleGapsCheck');
@@ -58,6 +59,7 @@ initSchema();
 startConcreteSync();
 startObjectsSync();
 startPeopleSync();
+startDefectActsSync();
 
 // Render передаёт порт через PORT — слушаем его в первую очередь,
 // SMART_REQUEST_PROXY_PORT остаётся для локального оверрайда.

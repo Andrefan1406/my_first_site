@@ -7,7 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, LabelList
 } from "recharts";
-import { TbCrane, TbBuildingCommunity, TbUsers, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
+import { TbCrane, TbBuildingCommunity, TbUsers, TbFileAlert, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -62,6 +62,19 @@ const DOMAINS = [
       "Процент заполненности отчётности по участкам за июль",
     ],
   },
+  {
+    key: "defect-acts",
+    label: "Аналитика по дефектным актам",
+    Icon: TbFileAlert,
+    emptyTitle: "Аналитика по дефектным актам",
+    emptyHint: "Спросите про дефектные акты на естественном языке — например:",
+    placeholder: "Спросите про дефектные акты...",
+    suggestions: [
+      "Сколько дефектных актов открыто по каждому объекту?",
+      "Сколько актов устранено за этот месяц?",
+      "Какие объекты чаще всего фигурируют в дефектных актах?",
+    ],
+  },
 ];
 const DEFAULT_DOMAIN = DOMAINS[0].key;
 
@@ -83,6 +96,20 @@ const logChatUsage = (question, domain) => {
 };
 
 const SERIES_COLORS = ["#10a37f", "#378ADD", "#EF9F27", "#D4537E", "#7F77DD", "#E24B4A"];
+
+// Модель иногда кладёт в chart.data уже отформатированную строку ("8 634 870",
+// в т.ч. с неразрывным пробелом  , как у toLocaleString('ru-RU')) вместо
+// сырого числа — Recharts в этом случае не может посчитать домен оси Y и
+// вообще не рисует деления (полностью пустая ось, без каких-либо чисел).
+// Прогоняем через это на входе, чтобы Recharts всегда получал настоящие
+// числа, независимо от того, как их отформатировала модель.
+const toNumber = (value) => {
+  if (typeof value === "number") return value;
+  if (value === null || value === undefined) return 0;
+  const cleaned = String(value).replace(/[\s ]/g, "").replace(",", ".");
+  const num = parseFloat(cleaned);
+  return Number.isNaN(num) ? 0 : num;
+};
 
 // Большие числа — целыми и с разделителем разрядов, чтобы подписи не превращались в простыню цифр.
 const formatValue = (value) => {
@@ -121,22 +148,40 @@ const ChartAnswer = ({ chart }) => {
   const Chart = isBar ? BarChart : LineChart;
   const SeriesEl = isBar ? Bar : Line;
 
-  const maxValue = Math.max(
-    0,
-    ...chart.data.flatMap((row) => (chart.series || []).map((s) => Math.abs(Number(row[s.key]) || 0)))
-  );
+  // Гарантируем, что все значения серий — настоящие числа (см. toNumber
+  // выше), а не строки, которые ломают расчёт оси Y у Recharts.
+  const seriesKeys = (chart.series || []).map((s) => s.key);
+  const data = chart.data.map((row) => {
+    const next = { ...row };
+    seriesKeys.forEach((key) => {
+      next[key] = toNumber(row[key]);
+    });
+    return next;
+  });
+
+  const maxValue = Math.max(0, ...data.flatMap((row) => seriesKeys.map((key) => Math.abs(row[key]))));
   // Длинный график (много категорий по X) сужает столбики, и даже
   // не самые большие числа начинают наезжать друг на друга — поворачиваем
   // подписи и при большом значении, и при длинном графике, не только
   // при первом.
-  const rotateLabels = maxValue >= 10000 || chart.data.length > 8;
+  const rotateLabels = maxValue >= 10000 || data.length > 8;
+
+  // Recharts сам резервирует ширину оси Y по подписям делений, но считает
+  // её ДО того, как узнаёт формат самого длинного деления (у нас это
+  // максимум, отформатированный через formatValue) — если верхнее деление
+  // на цифру длиннее прочих (напр. переход с 9 000 000 на 12 000 000),
+  // зарезервированной ширины не хватает буквально на несколько пикселей, и
+  // край SVG обрезает первую цифру подписи. Задаём ширину сами, по самой
+  // длинной подписи с запасом — это не даёт Recharts угадывать неверно.
+  const longestTickLabel = formatValue(maxValue);
+  const yAxisWidth = Math.max(40, longestTickLabel.length * 7.5 + 14);
 
   return (
     <ResponsiveContainer width="100%" height={rotateLabels ? 300 : 260}>
-      <Chart data={chart.data} margin={{ top: rotateLabels ? 36 : 20, right: 8, left: 0, bottom: 0 }}>
+      <Chart data={data} margin={{ top: rotateLabels ? 36 : 20, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
         <XAxis dataKey={chart.xKey} fontSize={12} stroke="#8e8ea0" />
-        <YAxis fontSize={12} stroke="#8e8ea0" tickFormatter={formatValue} />
+        <YAxis fontSize={12} stroke="#8e8ea0" tickFormatter={formatValue} width={yAxisWidth} />
         <Tooltip formatter={(value) => formatValue(value)} />
         <Legend />
         {(chart.series || []).map((series, i) => {
@@ -197,13 +242,45 @@ const nodeToCanvas = (node) => html2canvas(node, { scale: 2, backgroundColor: "#
 
 const exportNodeToPdf = async (node, filename) => {
   const canvas = await nodeToCanvas(node);
-  const imgData = canvas.toDataURL("image/png");
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 10;
   const imgWidth = pageWidth - margin * 2;
   const imgHeight = (canvas.height * imgWidth) / canvas.width;
-  pdf.addImage(imgData, "PNG", margin, margin, imgWidth, imgHeight);
+  const usableHeight = pageHeight - margin * 2;
+
+  if (imgHeight <= usableHeight) {
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, imgHeight);
+    pdf.save(filename);
+    return;
+  }
+
+  // Контент выше одной страницы (длинная таблица/график) — раньше он просто
+  // обрезался по низу первой страницы, потому что addImage не умеет сам
+  // переносить содержимое на следующую. Режем исходный canvas на полосы по
+  // высоте страницы и кладём каждую полосу на свою страницу PDF.
+  const pxPerMm = canvas.width / imgWidth;
+  const pageSliceHeightPx = Math.floor(usableHeight * pxPerMm);
+  const sliceCanvas = document.createElement("canvas");
+  sliceCanvas.width = canvas.width;
+  const ctx = sliceCanvas.getContext("2d");
+
+  let renderedPx = 0;
+  let pageIndex = 0;
+  while (renderedPx < canvas.height) {
+    const sliceHeightPx = Math.min(pageSliceHeightPx, canvas.height - renderedPx);
+    sliceCanvas.height = sliceHeightPx;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, sliceCanvas.width, sliceHeightPx);
+    ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+
+    if (pageIndex > 0) pdf.addPage();
+    pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, sliceHeightPx / pxPerMm);
+
+    renderedPx += sliceHeightPx;
+    pageIndex += 1;
+  }
   pdf.save(filename);
 };
 
@@ -592,9 +669,9 @@ const s = {
   typingDot: { width: "6px", height: "6px", borderRadius: "50%", background: "#8e8ea0", animation: "concreteChatBounce 1.2s infinite ease-in-out" },
 
   tableWrap: { overflowX: "auto", marginTop: "8px" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "13px" },
-  th: { textAlign: "left", color: "#6e6e80", fontWeight: 600, padding: "6px 12px 6px 0", borderBottom: "1px solid #eceef0", whiteSpace: "nowrap" },
-  td: { padding: "6px 12px 6px 0", color: "#0d0d0d", borderBottom: "1px solid #f4f4f5", whiteSpace: "nowrap" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "13px", tableLayout: "fixed" },
+  th: { textAlign: "left", color: "#6e6e80", fontWeight: 600, padding: "6px 12px 6px 0", borderBottom: "1px solid #eceef0", whiteSpace: "normal", wordBreak: "break-word" },
+  td: { padding: "6px 12px 6px 0", color: "#0d0d0d", borderBottom: "1px solid #f4f4f5", whiteSpace: "normal", wordBreak: "break-word", overflowWrap: "break-word" },
 
   exportArea: { background: "#fff" },
   actionsRow: { display: "flex", gap: "8px", marginTop: "10px" },

@@ -4,43 +4,12 @@ import { signOut, getAuth } from "firebase/auth";
 import { auth } from "./firebase";
 import { fetchMissingGapDates, gapWarningMessage } from './peopleGapsGate';
 
-// Тестовая группа для «Умной заявки» — пока фича обкатывается, кнопка на
-// главной показывается только этим email. Остальные видят обычную главную.
-const SMART_REQUEST_TESTERS = [
-  "admin@vkdev.kz",
-  "adamenko24051991@gmail.com",
-  "nach.razv@vkdevgroup.kz",
-  "b.azimhan@vkdevgroup.kz",
-  "f.bayahmetov_eu@vkdevgroup.kz",
-  "a.bizhumanov@vkdevgroup.kz",
-  "pom.pto@vkdevgroup.kz",
-  "r.jakenulas@vkdevgroup.kz",
-  "zhumabaev016@icloud.com",
-  "d.kisselev@vkdevgroup.kz",
-  "nachit@vkdevgroup.kz",
-  "e.makazhanov_eu@vkdevgroup.kz",
-  "manarbekovanuar242@gmail.com",
-  "b.mashut_eu@vkdevgroup.kz",
-  "mendybayev93@mail.ru",
-  "d.merzlov@vkdevgroup.kz",
-  "vk.master@vkdevgroup.kz",
-  "manat.vko.best@gmail.com",
-  "d.salangin@vkdevgroup.kz",
-  "salauatsamatov84@gmail.com",
-  "xaxaxafaf05@gmail.com",
-  "stepanenkomikhail0@gmail.com",
-  "v.titarenko@vkdevgroup.kz",
-  "nach.ovvk@vkdevgroup.kz",
-  "geo9@vkdevgroup.kz",
-];
-
 const ADMIN_EMAIL = "admin@vkdev.kz";
 
 const HomePage = () => {
   const navigate = useNavigate();
 
   const currentEmail = getAuth().currentUser?.email?.toLowerCase() || "";
-  const canUseSmartRequest = SMART_REQUEST_TESTERS.includes(currentEmail);
   const isAdmin = currentEmail === ADMIN_EMAIL;
 
   // Показываем предупреждение сразу на главной (а не только в момент
@@ -102,11 +71,9 @@ const HomePage = () => {
         <div style={styles.gapWarning}>{gapWarningMessage(missingGapDates)}</div>
       )}
 
-      {canUseSmartRequest && (
-        <button onClick={() => navigate('/smart-request')} style={styles.smartButton}>
-          ✦ Умная заявка (AI)
-        </button>
-      )}
+      <button onClick={() => navigate('/smart-request')} style={styles.smartButton}>
+        ✦ Умная заявка (AI)
+      </button>
 
       <button
         onClick={() => navigate('/request')}
