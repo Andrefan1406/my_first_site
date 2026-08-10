@@ -97,6 +97,20 @@ const logChatUsage = (question, domain) => {
 
 const SERIES_COLORS = ["#10a37f", "#378ADD", "#EF9F27", "#D4537E", "#7F77DD", "#E24B4A"];
 
+// Модель иногда кладёт в chart.data уже отформатированную строку ("8 634 870",
+// в т.ч. с неразрывным пробелом  , как у toLocaleString('ru-RU')) вместо
+// сырого числа — Recharts в этом случае не может посчитать домен оси Y и
+// вообще не рисует деления (полностью пустая ось, без каких-либо чисел).
+// Прогоняем через это на входе, чтобы Recharts всегда получал настоящие
+// числа, независимо от того, как их отформатировала модель.
+const toNumber = (value) => {
+  if (typeof value === "number") return value;
+  if (value === null || value === undefined) return 0;
+  const cleaned = String(value).replace(/[\s ]/g, "").replace(",", ".");
+  const num = parseFloat(cleaned);
+  return Number.isNaN(num) ? 0 : num;
+};
+
 // Большие числа — целыми и с разделителем разрядов, чтобы подписи не превращались в простыню цифр.
 const formatValue = (value) => {
   if (value === undefined || value === null || Number.isNaN(value)) return "";
@@ -134,22 +148,40 @@ const ChartAnswer = ({ chart }) => {
   const Chart = isBar ? BarChart : LineChart;
   const SeriesEl = isBar ? Bar : Line;
 
-  const maxValue = Math.max(
-    0,
-    ...chart.data.flatMap((row) => (chart.series || []).map((s) => Math.abs(Number(row[s.key]) || 0)))
-  );
+  // Гарантируем, что все значения серий — настоящие числа (см. toNumber
+  // выше), а не строки, которые ломают расчёт оси Y у Recharts.
+  const seriesKeys = (chart.series || []).map((s) => s.key);
+  const data = chart.data.map((row) => {
+    const next = { ...row };
+    seriesKeys.forEach((key) => {
+      next[key] = toNumber(row[key]);
+    });
+    return next;
+  });
+
+  const maxValue = Math.max(0, ...data.flatMap((row) => seriesKeys.map((key) => Math.abs(row[key]))));
   // Длинный график (много категорий по X) сужает столбики, и даже
   // не самые большие числа начинают наезжать друг на друга — поворачиваем
   // подписи и при большом значении, и при длинном графике, не только
   // при первом.
-  const rotateLabels = maxValue >= 10000 || chart.data.length > 8;
+  const rotateLabels = maxValue >= 10000 || data.length > 8;
+
+  // Recharts сам резервирует ширину оси Y по подписям делений, но считает
+  // её ДО того, как узнаёт формат самого длинного деления (у нас это
+  // максимум, отформатированный через formatValue) — если верхнее деление
+  // на цифру длиннее прочих (напр. переход с 9 000 000 на 12 000 000),
+  // зарезервированной ширины не хватает буквально на несколько пикселей, и
+  // край SVG обрезает первую цифру подписи. Задаём ширину сами, по самой
+  // длинной подписи с запасом — это не даёт Recharts угадывать неверно.
+  const longestTickLabel = formatValue(maxValue);
+  const yAxisWidth = Math.max(40, longestTickLabel.length * 7.5 + 14);
 
   return (
     <ResponsiveContainer width="100%" height={rotateLabels ? 300 : 260}>
-      <Chart data={chart.data} margin={{ top: rotateLabels ? 36 : 20, right: 8, left: 0, bottom: 0 }}>
+      <Chart data={data} margin={{ top: rotateLabels ? 36 : 20, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
         <XAxis dataKey={chart.xKey} fontSize={12} stroke="#8e8ea0" />
-        <YAxis fontSize={12} stroke="#8e8ea0" tickFormatter={formatValue} />
+        <YAxis fontSize={12} stroke="#8e8ea0" tickFormatter={formatValue} width={yAxisWidth} />
         <Tooltip formatter={(value) => formatValue(value)} />
         <Legend />
         {(chart.series || []).map((series, i) => {
@@ -605,9 +637,9 @@ const s = {
   typingDot: { width: "6px", height: "6px", borderRadius: "50%", background: "#8e8ea0", animation: "concreteChatBounce 1.2s infinite ease-in-out" },
 
   tableWrap: { overflowX: "auto", marginTop: "8px" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "13px" },
-  th: { textAlign: "left", color: "#6e6e80", fontWeight: 600, padding: "6px 12px 6px 0", borderBottom: "1px solid #eceef0", whiteSpace: "nowrap" },
-  td: { padding: "6px 12px 6px 0", color: "#0d0d0d", borderBottom: "1px solid #f4f4f5", whiteSpace: "nowrap" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "13px", tableLayout: "fixed" },
+  th: { textAlign: "left", color: "#6e6e80", fontWeight: 600, padding: "6px 12px 6px 0", borderBottom: "1px solid #eceef0", whiteSpace: "normal", wordBreak: "break-word" },
+  td: { padding: "6px 12px 6px 0", color: "#0d0d0d", borderBottom: "1px solid #f4f4f5", whiteSpace: "normal", wordBreak: "break-word", overflowWrap: "break-word" },
 
   exportArea: { background: "#fff" },
   actionsRow: { display: "flex", gap: "8px", marginTop: "10px" },
