@@ -349,6 +349,9 @@ const PeopleGapsAdminPage = () => {
   // именно в быстрой обработке пачки ещё нерешённых пропусков.
   const [selected, setSelected] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Последняя строка, по которой кликнули (не через shift) — опорная точка
+  // для диапазона при следующем shift-клике (см. toggleSelected ниже).
+  const [lastSelectedKey, setLastSelectedKey] = useState(null);
 
   // Ручной выбор даты-донора для массового копирования (в отличие от кнопки
   // "ближайший отчёт", которая на сервере сама подбирает дату КАЖДОМУ
@@ -561,13 +564,35 @@ const PeopleGapsAdminPage = () => {
     return () => { cancelled = true; };
   }, [bulkSingleSite]);
 
-  const toggleSelected = (key) => {
+  // shiftKey=true и есть опорная строка от предыдущего клика — выделяем
+  // диапазон между опорной строкой и текущей (по порядку отображения среди
+  // ВЫБираемых строк, т.е. status === 'missing' — так же, как shift-выбор
+  // работает в проводнике/почте). Обычный клик — просто переключает одну
+  // строку и запоминает её как новую опорную для следующего shift-клика.
+  const toggleSelected = (key, shiftKey) => {
+    if (shiftKey && lastSelectedKey) {
+      const orderedKeys = selectableGaps.map((g) => `${g.site}|${g.report_date}`);
+      const fromIdx = orderedKeys.indexOf(lastSelectedKey);
+      const toIdx = orderedKeys.indexOf(key);
+      if (fromIdx !== -1 && toIdx !== -1) {
+        const [start, end] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+        const rangeKeys = orderedKeys.slice(start, end + 1);
+        setSelected((prev) => {
+          const next = new Set(prev);
+          rangeKeys.forEach((k) => next.add(k));
+          return next;
+        });
+        setLastSelectedKey(key);
+        return;
+      }
+    }
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
+    setLastSelectedKey(key);
   };
 
   const toggleSelectAll = () => {
@@ -779,7 +804,7 @@ const PeopleGapsAdminPage = () => {
             <tr>
               <th style={s.th}>
                 {selectableGaps.length > 0 && (
-                  <input type="checkbox" checked={allSelectableChecked} onChange={toggleSelectAll} />
+                  <input type="checkbox" checked={allSelectableChecked} onChange={toggleSelectAll} style={s.checkbox} />
                 )}
               </th>
               <th style={s.th}>Дата</th>
@@ -791,11 +816,28 @@ const PeopleGapsAdminPage = () => {
           <tbody>
             {gaps.map((gap) => {
               const key = `${gap.site}|${gap.report_date}`;
+              const selectable = gap.status === "missing";
+              // Клик в любом месте строки ставит/снимает галочку — кроме
+              // кликов по самому чекбоксу (у него свой обработчик, иначе
+              // клик обработался бы дважды) и по интерактивным элементам
+              // колонки "Решение" (кнопки/список выбора даты), чтобы работа
+              // с панелью принятия решения не сбивала выделение строки.
+              const handleRowClick = selectable
+                ? (e) => {
+                    if (e.target.closest("input, button, select, a, textarea")) return;
+                    toggleSelected(key, e.shiftKey);
+                  }
+                : undefined;
               return (
-                <tr key={key}>
+                <tr key={key} onClick={handleRowClick} style={selectable ? s.trSelectable : undefined}>
                   <td style={s.td}>
-                    {gap.status === "missing" && (
-                      <input type="checkbox" checked={selected.has(key)} onChange={() => toggleSelected(key)} />
+                    {selectable && (
+                      <input
+                        type="checkbox"
+                        checked={selected.has(key)}
+                        onChange={(e) => toggleSelected(key, e.nativeEvent.shiftKey)}
+                        style={s.checkbox}
+                      />
                     )}
                   </td>
                   <td style={s.td}>
@@ -863,6 +905,8 @@ const s = {
   table: { width: "100%", borderCollapse: "collapse" },
   th: { textAlign: "left", padding: "10px", borderBottom: "2px solid #ddd", background: "#fafafa" },
   td: { padding: "10px", borderBottom: "1px solid #eee", verticalAlign: "top" },
+  trSelectable: { cursor: "pointer" },
+  checkbox: { width: "20px", height: "20px", cursor: "pointer" },
 
   actionBtn: { background: "#007bff", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px" },
   decisionPanel: { display: "flex", flexDirection: "column", gap: "8px", maxWidth: "320px" },
