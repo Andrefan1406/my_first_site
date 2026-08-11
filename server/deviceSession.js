@@ -277,7 +277,9 @@ router.get('/check', async (req, res) => {
     .get(userId, deviceType);
 
   if (!existing || existing.refresh_token_hash !== hashDeviceId(deviceId)) {
-    return res.status(401).json({ error: 'Сессия завершена администратором или с этого устройства уже выполнен вход в другой аккаунт' });
+    return res.status(401).json({
+      error: 'Сессия на этом устройстве завершена — в этот аккаунт выполнен вход с другого устройства, либо администратор освободил слот. Если это были не вы — обратитесь к администратору.',
+    });
   }
 
   db.prepare(`UPDATE active_sessions SET last_active_at = datetime('now') WHERE id = ?`).run(existing.id);
