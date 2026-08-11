@@ -2,13 +2,18 @@ import React, { useState } from "react";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth } from "./firebase";
 import { useNavigate } from "react-router-dom";
-import { registerDeviceSession, DeviceSlotTakenError } from "./deviceSession";
+import { registerDeviceSession, takeoverDeviceSession, DeviceSlotTakenError } from "./deviceSession";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  // Заполняется, когда слот устройства занят другим устройством — тогда вместо
+  // формы показываем диалог "аккаунт уже используется — отключить его?" (по
+  // образцу WhatsApp Web), см. handleTakeover/handleCancelTakeover ниже.
+  const [slotMessage, setSlotMessage] = useState("");
+  const [takingOver, setTakingOver] = useState(false);
 
   const navigate = useNavigate();
 
@@ -37,8 +42,10 @@ export default function LoginPage() {
       await registerDeviceSession();
     } catch (slotErr) {
       if (slotErr instanceof DeviceSlotTakenError) {
-        await signOut(auth).catch(() => {});
-        setError(slotErr.message);
+        // НЕ разлогиниваем сразу — Firebase-сессия должна остаться живой,
+        // чтобы кнопка "Отключить и войти" в диалоге ниже могла подтвердить
+        // takeover тем же токеном. Если пользователь откажется — тогда выйдем.
+        setSlotMessage(slotErr.message);
         return;
       }
       console.error(slotErr);
@@ -48,6 +55,56 @@ export default function LoginPage() {
 
     navigate("/");
   };
+
+  const handleTakeover = async () => {
+    setTakingOver(true);
+    setError("");
+    try {
+      await takeoverDeviceSession();
+      setSlotMessage("");
+      navigate("/");
+    } catch (err) {
+      setError(err.message || "Не удалось отключить другое устройство. Попробуйте ещё раз.");
+    } finally {
+      setTakingOver(false);
+    }
+  };
+
+  const handleCancelTakeover = async () => {
+    await signOut(auth).catch(() => {});
+    setSlotMessage("");
+  };
+
+  if (slotMessage) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <h2>Аккаунт уже используется</h2>
+          <p style={styles.slotText}>{slotMessage}</p>
+          <p style={styles.slotText}>Отключить другое устройство и войти здесь?</p>
+
+          {error && <div style={styles.error}>{error}</div>}
+
+          <button
+            type="button"
+            style={styles.button}
+            disabled={takingOver}
+            onClick={handleTakeover}
+          >
+            {takingOver ? "Отключаю..." : "Отключить и войти"}
+          </button>
+          <button
+            type="button"
+            style={styles.cancelButton}
+            disabled={takingOver}
+            onClick={handleCancelTakeover}
+          >
+            Отмена
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
@@ -151,6 +208,25 @@ const styles = {
     color: "#fff",
     cursor: "pointer",
     fontSize: "16px"
+  },
+
+  cancelButton: {
+    width: "100%",
+    padding: "12px",
+    marginTop: "10px",
+    border: "1px solid #ccc",
+    borderRadius: "8px",
+    background: "#fff",
+    color: "#333",
+    cursor: "pointer",
+    fontSize: "16px"
+  },
+
+  slotText: {
+    color: "#333",
+    fontSize: "14px",
+    lineHeight: 1.5,
+    marginBottom: "15px"
   },
 
   error: {

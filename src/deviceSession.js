@@ -21,8 +21,7 @@ export class DeviceSlotTakenError extends Error {
   }
 }
 
-const DEFAULT_BLOCK_MESSAGE =
-  "Вход с этого устройства невозможен — аккаунт уже используется. Обратитесь к администратору для получения собственной учётной записи.";
+const DEFAULT_BLOCK_MESSAGE = "Этот аккаунт уже используется на другом устройстве.";
 
 async function parseSlotTakenError(res) {
   const data = await res.json().catch(() => ({}));
@@ -32,8 +31,10 @@ async function parseSlotTakenError(res) {
 // Вызывается сразу после успешного входа в Firebase (см. src/LoginPage.jsx) —
 // создаёт слот устройства, если он свободен, подтверждает его, если уже наш,
 // либо бросает DeviceSlotTakenError, если слот занят другим устройством того
-// же типа. Вызывающий код обязан на DeviceSlotTakenError тут же сделать
-// signOut(auth) — в приложение пользователя пускать нельзя.
+// же типа. На DeviceSlotTakenError вызывающий код (LoginPage.jsx) показывает
+// диалог "аккаунт уже используется — отключить другое устройство?" (по
+// образцу WhatsApp Web) — takeoverDeviceSession() ниже выполняет подтверждённое
+// отключение, signOut нужен только если пользователь откажется.
 export async function registerDeviceSession() {
   const user = getAuth().currentUser;
   if (!user) return;
@@ -61,6 +62,39 @@ export async function registerDeviceSession() {
     throw await parseSlotTakenError(res);
   }
   if (!res.ok) return; // сетевая/серверная ошибка — не блокируем пользователя из-за нашей же ошибки
+
+  lastCheckedAt = Date.now();
+  lastCheckedUid = user.uid;
+}
+
+// Вызывается только после явного подтверждения пользователем в диалоге
+// "аккаунт уже используется на другом устройстве — отключить его?" (см.
+// src/LoginPage.jsx). Безусловно забирает слот у того устройства, независимо
+// от того, кто им владел — валидный Firebase-токен здесь и есть
+// подтверждение (человек только что ввёл правильный пароль от ЭТОГО
+// аккаунта). Бросает обычную Error (не DeviceSlotTakenError — тут конфликта
+// уже нет, только сетевая/серверная ошибка).
+export async function takeoverDeviceSession() {
+  const user = getAuth().currentUser;
+  if (!user) return;
+
+  const token = await user.getIdToken();
+  let res;
+  try {
+    res = await fetch(`${API_URL}/api/session/takeover`, {
+      method: "POST",
+      credentials: "include",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (networkErr) {
+    console.error("Не удалось отключить другое устройство (сеть/CORS):", networkErr);
+    throw new Error("Не удалось подключиться к серверу. Попробуйте ещё раз.");
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Не удалось отключить другое устройство. Попробуйте ещё раз.");
+  }
 
   lastCheckedAt = Date.now();
   lastCheckedUid = user.uid;

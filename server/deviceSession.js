@@ -9,20 +9,26 @@
 // Firebase уже аутентифицировал пользователя. Вместо этого используется
 // POST-AUTH проверка: фронтенд сразу после успешного входа в Firebase дёргает
 // POST /api/session/register с Firebase ID-токеном; если слот занят другим
-// устройством — 409, и фронтенд обязан тут же сделать signOut(auth) (см.
-// src/deviceSession.js, src/LoginPage.jsx, src/components/PrivateRoute.jsx).
+// устройством — 409, и фронтенд предлагает пользователю самому "отключить"
+// старое устройство (по образцу WhatsApp Web), а не сразу жёстко блокирует
+// (см. src/deviceSession.js, src/LoginPage.jsx, src/components/PrivateRoute.jsx).
 //
-// Два разных эндпоинта на разное поведение:
-//   POST /register — используется в момент входа: создаёт запись, если слота
+// Три эндпоинта на разное поведение:
+//   POST /register  — используется в момент входа: создаёт запись, если слота
 //     ещё нет; подтверждает, если слот уже наш (тот же device_id); отклоняет
 //     (409), если слот занят другим устройством. Пишет в active_sessions.
-//   GET  /check     — используется для постоянной проверки уже открытой
+//   POST /takeover   — вызывается только после явного подтверждения
+//     пользователем в диалоге "аккаунт уже используется, отключить?" —
+//     безусловно забирает слот у текущего устройства, независимо от того, кто
+//     им владел. Не проверяет конфликт — сам факт вызова с валидным Firebase-
+//     токеном И является подтверждением (тот же человек, что ввёл пароль).
+//   GET  /check      — используется для постоянной проверки уже открытой
 //     сессии (при заходе на защищённую страницу, см. PrivateRoute.jsx).
 //     СТРОГО проверяет, что запись всё ещё существует и device_id совпадает —
-//     если администратор освободил слот (DELETE .../sessions/:deviceType) или
-//     слот вообще пуст, НЕ создаёт новую запись сам, а отдаёт 401. Иначе устройство,
-//     у которого просто отобрали слот, тут же само его себе вернуло бы на
-//     следующей проверке, и освобождение слота администратором ничего не значило бы.
+//     если слот забрали через /takeover, администратор освободил его (DELETE
+//     .../sessions/:deviceType) или слот вообще пуст, НЕ создаёт новую запись
+//     сам, а отдаёт 401. Иначе устройство, у которого только что отобрали
+//     слот, тут же само себе вернуло бы его на следующей проверке.
 const crypto = require('crypto');
 const express = require('express');
 const { UAParser } = require('ua-parser-js');
@@ -32,8 +38,7 @@ const { getWriteDb } = require('./db');
 const DEVICE_ID_COOKIE = 'device_id';
 const DEVICE_ID_MAX_AGE_MS = 10 * 365 * 24 * 60 * 60 * 1000; // ~10 лет, как в задаче
 
-const DEVICE_SLOT_TAKEN_MESSAGE =
-  'Вход с этого устройства невозможен — аккаунт уже используется. Обратитесь к администратору для получения собственной учётной записи.';
+const DEVICE_SLOT_TAKEN_MESSAGE = 'Этот аккаунт уже используется на другом устройстве.';
 
 // Фронтенд (Netlify) и backend (Render) — разные origin, поэтому httpOnly
 // cookie с device_id может дойти только при кросс-сайтовом запросе с
@@ -196,6 +201,52 @@ router.post('/register', async (req, res) => {
       ip_address: ipAddress,
     });
   }
+
+  res.json({ ok: true, deviceType });
+});
+
+// Вызывается ТОЛЬКО после того, как пользователь сам подтвердил в диалоге
+// "аккаунт уже используется на другом устройстве — отключить его?" (см.
+// src/LoginPage.jsx). Валидный Firebase ID-токен здесь и есть подтверждение —
+// значит человек только что ввёл правильный пароль от ЭТОГО аккаунта, а
+// значит имеет право сам решить, какое из своих устройств оставить активным.
+// Безусловно перезаписывает слот (ON CONFLICT DO UPDATE), не проверяя,
+// совпадает ли текущий device_id — в этом и весь смысл эндпоинта.
+router.post('/takeover', async (req, res) => {
+  let decoded;
+  try {
+    decoded = await verifyFirebaseUser(req);
+  } catch (err) {
+    return res.status(err.status || 401).json({ error: err.message });
+  }
+  if (!decoded.email) {
+    return res.status(400).json({ error: 'У пользователя не задан email' });
+  }
+
+  const userId = decoded.email.toLowerCase();
+  const userAgent = req.headers['user-agent'] || '';
+  const deviceType = detectDeviceType(userAgent);
+  const deviceId = getOrCreateDeviceId(req, res);
+  const deviceIdHash = hashDeviceId(deviceId);
+  const ipAddress = getClientIp(req);
+
+  getWriteDb().prepare(`
+    INSERT INTO active_sessions (user_id, device_type, device_id, refresh_token_hash, user_agent, ip_address)
+    VALUES (@user_id, @device_type, @device_id, @refresh_token_hash, @user_agent, @ip_address)
+    ON CONFLICT(user_id, device_type) DO UPDATE SET
+      device_id = excluded.device_id,
+      refresh_token_hash = excluded.refresh_token_hash,
+      user_agent = excluded.user_agent,
+      ip_address = excluded.ip_address,
+      last_active_at = datetime('now')
+  `).run({
+    user_id: userId,
+    device_type: deviceType,
+    device_id: deviceId,
+    refresh_token_hash: deviceIdHash,
+    user_agent: userAgent,
+    ip_address: ipAddress,
+  });
 
   res.json({ ok: true, deviceType });
 });
