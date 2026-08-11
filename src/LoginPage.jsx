@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth } from "./firebase";
 import { useNavigate } from "react-router-dom";
+import { registerDeviceSession, DeviceSlotTakenError } from "./deviceSession";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -13,6 +14,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError("");
 
     try {
       await signInWithEmailAndPassword(
@@ -20,6 +22,23 @@ export default function LoginPage() {
         email,
         password
       );
+
+      // Ограничение "не более 2 устройств на аккаунт" (одно мобильное, одно
+      // десктопное) — проверяется здесь, ПОСЛЕ входа в Firebase, потому что
+      // сам логин идёт напрямую в Firebase и наш backend его не видит (см.
+      // src/deviceSession.js). Если слот занят другим устройством — тут же
+      // разлогиниваем и показываем сообщение без права "попробовать снова"
+      // без администратора.
+      try {
+        await registerDeviceSession();
+      } catch (slotErr) {
+        if (slotErr instanceof DeviceSlotTakenError) {
+          await signOut(auth).catch(() => {});
+          setError(slotErr.message);
+          return;
+        }
+        throw slotErr;
+      }
 
       navigate("/");
     } catch (err) {

@@ -255,6 +255,52 @@ CREATE TABLE IF NOT EXISTS people_gap_check_rules (
   UNIQUE(email, site)
 );
 CREATE INDEX IF NOT EXISTS idx_gap_check_rules_email ON people_gap_check_rules(email);
+
+-- active_sessions — не более одной активной сессии на пару (user_id, device_type),
+-- device_type ∈ {'mobile','desktop'} (см. server/deviceSession.js). Вход в
+-- приложение идёт напрямую через Firebase Auth с клиента (см. src/LoginPage.jsx) —
+-- наш backend сам логин не видит и не может заблокировать его синхронно ДО
+-- того, как Firebase уже аутентифицировал пользователя. Поэтому это не
+-- "настоящий" login-gate, а POST-AUTH проверка: фронтенд сразу после успешного
+-- signInWithEmailAndPassword дёргает POST /api/session/register с Firebase
+-- ID-токеном; если слот занят другим устройством — 409, и фронтенд обязан
+-- тут же вызвать signOut() (пользователь формально был залогинен в Firebase
+-- долю секунды, но в приложение не попадает).
+-- refresh_token_hash в этой адаптации — это sha256(device_id) из httpOnly
+-- cookie браузера, а НЕ хэш настоящего refresh/access токена (тех у нас нет —
+-- токенами полностью управляет Firebase SDK). Именно по этому хэшу
+-- GET /api/session/check на каждой защищённой странице проверяет, что запрос
+-- пришёл с того же браузера, который занимает слот.
+-- ПОСТОЯННОЕ хранилище (CREATE TABLE IF NOT EXISTS, без DROP) — как
+-- people_gap_decisions: должно пережить рестарт/деплой.
+CREATE TABLE IF NOT EXISTS active_sessions (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id             TEXT NOT NULL, -- email пользователя (Firebase decoded.email)
+  device_type         TEXT NOT NULL, -- 'mobile' | 'desktop'
+  device_id           TEXT NOT NULL, -- случайный id из httpOnly cookie конкретного браузера
+  refresh_token_hash  TEXT NOT NULL, -- sha256(device_id) — см. комментарий выше
+  user_agent          TEXT,
+  ip_address          TEXT,
+  created_at          TEXT DEFAULT (datetime('now')),
+  last_active_at      TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_id, device_type)
+);
+CREATE INDEX IF NOT EXISTS idx_active_sessions_user ON active_sessions(user_id);
+
+-- blocked_login_attempts — журнал попыток входа, отклонённых из-за занятого
+-- слота устройства (см. active_sessions выше и POST /api/session/register) —
+-- чтобы администратор видел, кто и с какого устройства пытался зайти "мимо"
+-- уже занятого слота.
+CREATE TABLE IF NOT EXISTS blocked_login_attempts (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id             TEXT NOT NULL,
+  device_type         TEXT NOT NULL,
+  attempted_device_id TEXT,
+  user_agent          TEXT,
+  ip_address          TEXT,
+  created_at          TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_blocked_attempts_user ON blocked_login_attempts(user_id);
 `;
 
 let writeDb = null;
