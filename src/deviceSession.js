@@ -39,11 +39,23 @@ export async function registerDeviceSession() {
   if (!user) return;
 
   const token = await user.getIdToken();
-  const res = await fetch(`${API_URL}/api/session/register`, {
-    method: "POST",
-    credentials: "include",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}/api/session/register`, {
+      method: "POST",
+      credentials: "include",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (networkErr) {
+    // fetch() сам бросает (не HTTP-статус, а именно исключение) при сетевой
+    // ошибке или блокировке CORS — например, если origin не попал в
+    // allowlist на бэкенде (см. server/deviceSession.js). Раньше это
+    // исключение улетало наверх и в LoginPage.jsx ошибочно показывалось как
+    // "Неверный логин или пароль", хотя Firebase-логин уже прошёл успешно.
+    // Не блокируем пользователя из-за нашей же инфраструктурной проблемы.
+    console.error("Не удалось проверить сессию устройства (сеть/CORS):", networkErr);
+    return;
+  }
 
   if (res.status === 409) {
     throw await parseSlotTakenError(res);
@@ -69,11 +81,19 @@ export async function checkDeviceSession({ force = false } = {}) {
   }
 
   const token = await user.getIdToken();
-  const res = await fetch(`${API_URL}/api/session/check`, {
-    method: "GET",
-    credentials: "include",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}/api/session/check`, {
+      method: "GET",
+      credentials: "include",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (networkErr) {
+    // См. аналогичный catch в registerDeviceSession выше — сетевая/CORS
+    // ошибка не должна выкидывать пользователя из уже открытой сессии.
+    console.error("Не удалось проверить сессию устройства (сеть/CORS):", networkErr);
+    return;
+  }
 
   if (res.status === 401) {
     throw await parseSlotTakenError(res);

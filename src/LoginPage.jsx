@@ -22,29 +22,31 @@ export default function LoginPage() {
         email,
         password
       );
-
-      // Ограничение "не более 2 устройств на аккаунт" (одно мобильное, одно
-      // десктопное) — проверяется здесь, ПОСЛЕ входа в Firebase, потому что
-      // сам логин идёт напрямую в Firebase и наш backend его не видит (см.
-      // src/deviceSession.js). Если слот занят другим устройством — тут же
-      // разлогиниваем и показываем сообщение без права "попробовать снова"
-      // без администратора.
-      try {
-        await registerDeviceSession();
-      } catch (slotErr) {
-        if (slotErr instanceof DeviceSlotTakenError) {
-          await signOut(auth).catch(() => {});
-          setError(slotErr.message);
-          return;
-        }
-        throw slotErr;
-      }
-
-      navigate("/");
     } catch (err) {
       setError("Неверный логин или пароль");
       console.error(err);
+      return;
     }
+
+    // Firebase-логин уже прошёл успешно на этом месте — дальше только
+    // ограничение "не более 2 устройств на аккаунт" (одно мобильное, одно
+    // десктопное), см. src/deviceSession.js. Отдельный try/catch, чтобы
+    // любая ошибка здесь не подписывалась как "Неверный логин или пароль" —
+    // это вводило бы в заблуждение, раз пароль как раз верный.
+    try {
+      await registerDeviceSession();
+    } catch (slotErr) {
+      if (slotErr instanceof DeviceSlotTakenError) {
+        await signOut(auth).catch(() => {});
+        setError(slotErr.message);
+        return;
+      }
+      console.error(slotErr);
+      setError("Не удалось проверить сессию устройства. Попробуйте ещё раз.");
+      return;
+    }
+
+    navigate("/");
   };
 
   return (

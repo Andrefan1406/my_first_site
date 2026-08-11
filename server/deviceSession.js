@@ -48,9 +48,20 @@ const ALLOWED_ORIGINS = (
   .map((s) => s.trim())
   .filter(Boolean);
 
+// Netlify branch/PR-превью получают URL вида
+// "<ветка>--vkdevelopment.netlify.app" — отдельный origin на каждую ветку,
+// который невозможно перечислить заранее через ALLOWED_ORIGINS. Разрешаем
+// его отдельным regex-паттерном (тот же сайт, просто другой поддомен), не
+// открывая CORS вообще всем подряд доменам.
+const NETLIFY_PREVIEW_ORIGIN = /^https:\/\/[a-z0-9-]+--vkdevelopment\.netlify\.app$/;
+
+function isAllowedOrigin(origin) {
+  return ALLOWED_ORIGINS.includes(origin) || NETLIFY_PREVIEW_ORIGIN.test(origin);
+}
+
 function sessionCors(req, res, next) {
   const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+  if (origin && isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Vary', 'Origin');
