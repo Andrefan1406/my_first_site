@@ -73,6 +73,20 @@ const SOURCES = [
     // НЖ3), не отдельная работа. См. блок-трекинг в fetchAndParseSource.
     blockMarkerRe: /^Блок\s+\d+/i,
   },
+  {
+    key: 'sport2',
+    label: 'ГПР Спорт 2',
+    spreadsheetId: '1I1zCQjPKGjZmRp2yIr23shae6SXMV-I6YO-rDGzvBgA',
+    sheetName: 'ГПР',
+    // Вся вкладка целиком — 6 позиций (73,75, 74, 76, 93, 100, 101). У листа
+    // есть доп. колонка "план/факт/прогноз" (B) и строки-материалы (тип
+    // "Материал" в последней колонке) вперемешку со строками-работами —
+    // но и у "Позиция N"-сводок, и у строк-материалов колонка A (позиция)
+    // пустая, так что оба вида уже отсеиваются общей проверкой
+    // POSITION_MARKER_RE, без доп. фильтров.
+    includePosition: () => true,
+    excludeWorkNames: new Set(),
+  },
 ];
 
 const CRON_SCHEDULE = process.env.GPR_REPORT_SYNC_CRON || '0 */6 * * *';

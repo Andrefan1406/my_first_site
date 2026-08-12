@@ -23,6 +23,7 @@ const GPR_SOURCES = [
   { key: "poz64_72", label: "ГПР 64,72 (поз.64)" },
   { key: "nz3", label: "ГПР НЖ3 (ОВ, ВК)" },
   { key: "facades", label: "Фасады" },
+  { key: "sport2", label: "ГПР Спорт 2" },
 ];
 
 async function getIdToken() {
