@@ -19,6 +19,8 @@ import ZnbRequestPage from './ZnbRequestPage';
 import LabTestRequestPaje from "./LabTestRequestPaje";
 import DefectActPage from "./pages/DefectActPage";
 import GrafikiPage from "./pages/GrafikiPage";
+import GprPosition64Page from "./pages/GprPosition64Page";
+import GprBuilderPage from "./pages/GprBuilderPage";
 import RemarksPage from "./remarks/RemarksPage";
 
 import SmartRequestPage from './SmartRequestPage';
@@ -227,6 +229,24 @@ const App = () => {
           element={
             <Protected>
               <GrafikiPage />
+            </Protected>
+          }
+        />
+        {/* Пока без ссылки/кнопки перехода откуда-либо — только прямой URL,
+            по явной просьбе (см. историю чата про ветку work-schedule-charts). */}
+        <Route
+          path="/gpr-64"
+          element={
+            <Protected>
+              <GprPosition64Page />
+            </Protected>
+          }
+        />
+        <Route
+          path="/gpr-builder"
+          element={
+            <Protected>
+              <GprBuilderPage />
             </Protected>
           }
         />
