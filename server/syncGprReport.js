@@ -23,7 +23,7 @@ const { getUnformattedValues } = require('./googleSheetsClient');
 const LABELS_ROW_INDEX = 3; // 0-индекс: строка 4 — подписи колонок, последняя перед датами — "Окончание"
 const HEADER_ROW_INDEX = 5; // 0-индекс: строка 6 — Excel-serial-даты
 const FIRST_DATA_ROW_INDEX = 7; // 0-индекс: строка 8 — первая строка с данными
-const DATA_RANGE = 'A1:CZ400'; // с запасом и по строкам, и по колонкам
+const DATA_RANGE = 'A1:CZ600'; // с запасом и по строкам (лист "план_processed" доходит до строки 454), и по колонкам
 
 const POSITION_MARKER_RE = /^поз\.\d+/;
 
@@ -33,8 +33,11 @@ const SOURCES = [
     label: 'ГПР 64,72',
     spreadsheetId: '1eC80R11Hp26IVfLLa4M-_wnYGqTRHEi6k2_XG5Goqf0',
     sheetName: '64,72',
-    // Только поз.64 — явное решение пользователя, поз.72 того же листа пока не нужна.
-    includePosition: (pos) => pos === 'поз.64',
+    // поз.64 и поз.72 — основные (не "коммерческие") блоки этого листа. Есть
+    // ещё 'поз.64 ком.'/'поз.72 ком.' (отдельные строки-маркеры для
+    // коммерческих помещений тех же позиций) — их намеренно не включаем,
+    // не просили.
+    includePosition: (pos) => pos === 'поз.64' || pos === 'поз.72',
     // Строки-разделы без данных (заголовок группы работ, а не отдельная работа).
     excludeWorkNames: new Set(['Кровельные работы', 'Окна и витражи', 'ВК и ОВ']),
   },
@@ -53,6 +56,22 @@ const SOURCES = [
     // пусто. В листе "64,72" эти же названия — реальные конечные позиции,
     // их исключение отсюда не касается (разные source, разные списки).
     excludeWorkNames: new Set(['Водоснабжение и канализация', 'Отопление']),
+  },
+  {
+    key: 'facades',
+    label: 'Фасады',
+    spreadsheetId: '1WcB1F8B8vdth1DHwa6UkKSfMag1UmDzRWcuHik9kUEA',
+    sheetName: 'план_processed',
+    // Вся вкладка целиком — 5 объектов (Нурлы Жол 3, Спорт, Экополис, Лицей,
+    // Ледовый каток), 16 позиций (56, 59, 63, 64, 65, 69, 72, 74, 76,
+    // "73,75", 93, 100, 101, 103, 104, 105).
+    includePosition: () => true,
+    excludeWorkNames: new Set(),
+    // У части позиций есть несколько блоков (например, поз.59 — 4 блока):
+    // строка "Блок N" в колонке "Конструктивы" — промежуточный итог по
+    // своим дочерним строкам (та же природа, что "Позиция N"/подытоги в
+    // НЖ3), не отдельная работа. См. блок-трекинг в fetchAndParseSource.
+    blockMarkerRe: /^Блок\s+\d+/i,
   },
 ];
 
@@ -80,6 +99,11 @@ async function fetchAndParseSource(source) {
   }
   const firstDateCol = endColIndex + 1;
 
+  const workNameColIndex = labelsRow.findIndex((v) => typeof v === 'string' && v.trim() === 'Конструктивы');
+  if (workNameColIndex === -1) {
+    throw new Error(`[${source.key}] не найдена колонка "Конструктивы" в строке заголовков листа "${source.sheetName}"`);
+  }
+
   const headerRow = raw[HEADER_ROW_INDEX] || [];
   // Колонки без числа в заголовке (пустой хвост таблицы) — не настоящие
   // недельные колонки, пропускаем их.
@@ -92,16 +116,29 @@ async function fetchAndParseSource(source) {
   }
 
   const rows = [];
+  let currentPosition = '';
+  let currentBlock = '';
   for (let r = FIRST_DATA_ROW_INDEX; r < raw.length; r++) {
     const row = raw[r];
     if (!row || !row.length) continue;
 
     const position = (row[0] || '').toString().trim();
     if (!position || !POSITION_MARKER_RE.test(position)) continue; // "Позиция N" — итоговая строка, не данные
+    if (position !== currentPosition) {
+      currentPosition = position;
+      currentBlock = '';
+    }
     if (!source.includePosition(position)) continue;
 
-    const workName = (row[2] || '').toString().trim();
-    if (!workName || source.excludeWorkNames.has(workName)) continue;
+    const workName = (row[workNameColIndex] || '').toString().trim();
+    if (!workName) continue;
+
+    if (source.blockMarkerRe && source.blockMarkerRe.test(workName)) {
+      currentBlock = workName; // подытог блока, не отдельная работа — только запоминаем контекст
+      continue;
+    }
+
+    if (source.excludeWorkNames.has(workName)) continue;
 
     for (const { colIndex, reportDate } of dateColumns) {
       const cell = row[colIndex];
@@ -117,6 +154,7 @@ async function fetchAndParseSource(source) {
         source_key: source.key,
         source_label: source.label,
         position,
+        block: currentBlock,
         work_name: workName,
         report_date: reportDate,
         percent,
@@ -139,8 +177,8 @@ async function fetchAndParse() {
 function storeValues(rows) {
   const db = getWriteDb();
   const insert = db.prepare(`
-    INSERT INTO gpr_report_values (source_key, source_label, position, work_name, report_date, percent)
-    VALUES (@source_key, @source_label, @position, @work_name, @report_date, @percent)
+    INSERT INTO gpr_report_values (source_key, source_label, position, block, work_name, report_date, percent)
+    VALUES (@source_key, @source_label, @position, @block, @work_name, @report_date, @percent)
   `);
   const upsertMeta = db.prepare(`
     INSERT INTO sync_meta (key, value) VALUES (@key, @value)
@@ -193,16 +231,16 @@ function computeGprReportGaps({ asOf } = {}) {
 
   const rows = db
     .prepare(
-      `SELECT source_key, source_label, position, work_name, report_date, percent
+      `SELECT source_key, source_label, position, block, work_name, report_date, percent
        FROM gpr_report_values
        WHERE report_date <= ?
-       ORDER BY source_key, position, work_name, report_date`
+       ORDER BY source_key, position, block, work_name, report_date`
     )
     .all(cutoff);
 
   const byGroup = new Map();
   for (const row of rows) {
-    const key = `${row.source_key}|${row.position}|${row.work_name}`;
+    const key = `${row.source_key}|${row.position}|${row.block}|${row.work_name}`;
     if (!byGroup.has(key)) byGroup.set(key, { meta: row, entries: [] });
     byGroup.get(key).entries.push(row);
   }
@@ -221,6 +259,7 @@ function computeGprReportGaps({ asOf } = {}) {
         source_key: meta.source_key,
         source_label: meta.source_label,
         position: meta.position,
+        block: meta.block,
         work_name: meta.work_name,
         last_filled_date: entries[lastFilledIndex].report_date,
         last_filled_percent: entries[lastFilledIndex].percent,

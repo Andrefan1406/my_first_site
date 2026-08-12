@@ -268,19 +268,31 @@ CREATE INDEX IF NOT EXISTS idx_gap_check_rules_email ON people_gap_check_rules(e
 -- computeGprReportGaps в syncGprReport.js). DROP+CREATE, как у
 -- defect_acts/objects — у строк исходника нет стабильного ID, при каждом
 -- синке проще перезаписать всё целиком.
+-- block — используется только источниками с "Блок N" (см. blockMarkerRe в
+-- SOURCES, сейчас — 'facades'/"план_processed"): строка "Блок N" в колонке
+-- "Конструктивы" сама по себе не работа, а агрегат по своим дочерним
+-- строкам (та же природа, что и "Позиция N"/"Отопление"-подытог в НЖ3) —
+-- её процент НЕ сохраняется отдельной строкой, а её текст запоминается и
+-- проставляется в колонку block всем последующим работам этой позиции,
+-- пока не встретится следующий "Блок N" или новая позиция. '' (не NULL!) —
+-- принципиально: у позиций без явного блока (значит, блок один и он не
+-- поименован) block = '' у всех строк, а NULL в UNIQUE-ограничении SQLite
+-- считает НЕ равным другому NULL — с '' повторный синк корректно
+-- перезаписывает те же строки, а не плодит дубликаты.
 DROP TABLE IF EXISTS gpr_report_values;
 CREATE TABLE gpr_report_values (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_key   TEXT,    -- 'poz64_72' | 'nz3' — какой источник/лист (см. SOURCES)
+  source_key   TEXT,    -- 'poz64_72' | 'nz3' | 'facades' — какой источник/лист (см. SOURCES)
   source_label TEXT,    -- человекочитаемая подпись источника, для админ-панели
   position     TEXT,    -- 'поз.64', 'поз.56' и т.п. — сырой маркер позиции из колонки A
+  block        TEXT NOT NULL DEFAULT '', -- 'Блок 1'/'Блок 2' и т.п.; '' — блоков нет (один неявный блок)
   work_name    TEXT,    -- "Конструктив" (например, "Оконные блоки")
   report_date  TEXT,    -- 'YYYY-MM-DD', всегда пятница
   percent      REAL,    -- 0-100; NULL, если ячейка в исходнике пустая
   synced_at    TEXT DEFAULT (datetime('now')),
-  UNIQUE(source_key, position, work_name, report_date)
+  UNIQUE(source_key, position, block, work_name, report_date)
 );
-CREATE INDEX IF NOT EXISTS idx_gpr_values_source_position ON gpr_report_values(source_key, position, work_name);
+CREATE INDEX IF NOT EXISTS idx_gpr_values_source_position ON gpr_report_values(source_key, position, block, work_name);
 CREATE INDEX IF NOT EXISTS idx_gpr_values_date ON gpr_report_values(report_date);
 
 -- gpr_report_check_rules — email'ы, для которых подача заявок блокируется,
