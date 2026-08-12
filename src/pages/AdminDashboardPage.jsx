@@ -19,6 +19,12 @@ const SECTIONS = [
     color: "#17a2b8",
   },
   {
+    title: "Пропуски в отчётах ГПР",
+    description: "Конструктивы позиции 64, не заполненные за прошлую пятницу или раньше",
+    path: "/admin/gpr-report-gaps",
+    color: "#e67e22",
+  },
+  {
     title: "Админ-статистика",
     description: "Общая статистика по системе",
     path: "/admin/statistics",

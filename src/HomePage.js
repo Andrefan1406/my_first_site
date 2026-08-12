@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { signOut, getAuth } from "firebase/auth";
 import { auth } from "./firebase";
 import { fetchMissingGapDates, gapWarningMessage } from './peopleGapsGate';
+import { fetchGprReportBlock, gprBlockMessage } from './gprReportGate';
 
 const ADMIN_EMAIL = "admin@vkdev.kz";
 
@@ -25,7 +26,29 @@ const HomePage = () => {
       .catch((err) => console.error('Не удалось проверить пропуски в отчётах по людям:', err));
   }, [currentEmail]);
 
-  const isRequestsBlocked = missingGapDates.length > 0;
+  // Отдельная, независимая проверка — блокировка за незакрытый пропуск в
+  // ГПР (позиция 64), см. gprReportGate.js. Свой список email
+  // (gpr_report_check_rules) и своё сообщение — но та же механика "нельзя
+  // подать заявку, пока не закрыто", что и у пропусков по людям выше.
+  const [gprBlocked, setGprBlocked] = useState(false);
+  const [gprGaps, setGprGaps] = useState([]);
+
+  useEffect(() => {
+    if (!currentEmail) return;
+    fetchGprReportBlock()
+      .then(({ blocked, gaps }) => {
+        setGprBlocked(blocked);
+        setGprGaps(gaps);
+      })
+      .catch((err) => console.error('Не удалось проверить пропуски в отчётах ГПР:', err));
+  }, [currentEmail]);
+
+  const isRequestsBlocked = missingGapDates.length > 0 || gprBlocked;
+  const blockedTitle = missingGapDates.length > 0
+    ? gapWarningMessage(missingGapDates)
+    : gprBlocked
+      ? gprBlockMessage(gprGaps)
+      : undefined;
 
   const handleLogout = async () => {
     if (!window.confirm('Вы уверены, что хотите выйти?')) return;
@@ -71,6 +94,10 @@ const HomePage = () => {
         <div style={styles.gapWarning}>{gapWarningMessage(missingGapDates)}</div>
       )}
 
+      {gprBlocked && (
+        <div style={styles.gapWarning}>{gprBlockMessage(gprGaps)}</div>
+      )}
+
       <button onClick={() => navigate('/smart-request')} style={styles.smartButton}>
         ✦ Умная заявка (AI)
       </button>
@@ -79,7 +106,7 @@ const HomePage = () => {
         onClick={() => navigate('/request')}
         disabled={isRequestsBlocked}
         style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={isRequestsBlocked ? gapWarningMessage(missingGapDates) : undefined}
+        title={blockedTitle}
       >
         Заявка на технику
       </button>
@@ -88,7 +115,7 @@ const HomePage = () => {
         onClick={() => navigate('/concrete-request')}
         disabled={isRequestsBlocked}
         style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={isRequestsBlocked ? gapWarningMessage(missingGapDates) : undefined}
+        title={blockedTitle}
       >
         Заявка на бетон и раствор
       </button>
@@ -97,7 +124,7 @@ const HomePage = () => {
         onClick={() => navigate('/electricans-request')}
         disabled={isRequestsBlocked}
         style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={isRequestsBlocked ? gapWarningMessage(missingGapDates) : undefined}
+        title={blockedTitle}
       >
         Заявка электриков
       </button>
@@ -106,7 +133,7 @@ const HomePage = () => {
         onClick={() => navigate('/geo-request')}
         disabled={isRequestsBlocked}
         style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={isRequestsBlocked ? gapWarningMessage(missingGapDates) : undefined}
+        title={blockedTitle}
       >
         Заявка геодезистов
       </button>
@@ -115,7 +142,7 @@ const HomePage = () => {
         onClick={() => navigate('/lab-request')}
         disabled={isRequestsBlocked}
         style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={isRequestsBlocked ? gapWarningMessage(missingGapDates) : undefined}
+        title={blockedTitle}
       >
         Лабораторные испытания
       </button>
@@ -124,7 +151,7 @@ const HomePage = () => {
         onClick={() => navigate('/blbrequest')}
         disabled={isRequestsBlocked}
         style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={isRequestsBlocked ? gapWarningMessage(missingGapDates) : undefined}
+        title={blockedTitle}
       >
         Заявка на брусчатку
       </button>
@@ -133,7 +160,7 @@ const HomePage = () => {
         onClick={() => navigate('/znbrequest')}
         disabled={isRequestsBlocked}
         style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={isRequestsBlocked ? gapWarningMessage(missingGapDates) : undefined}
+        title={blockedTitle}
       >
         Заявка на ж/б изделия
       </button>

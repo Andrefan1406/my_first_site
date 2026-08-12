@@ -10,9 +10,12 @@ const { startConcreteSync } = require('./syncConcrete');
 const { startObjectsSync } = require('./syncObjects');
 const { startPeopleSync } = require('./syncPeople');
 const { startDefectActsSync } = require('./syncDefectActs');
+const { startGprReportSync } = require('./syncGprReport');
 const { handleChat } = require('./chatHandler');
 const peopleGapsAdminRouter = require('./peopleGapsAdmin');
 const peopleGapsCheckRouter = require('./peopleGapsCheck');
+const gprReportAdminRouter = require('./gprReportAdmin');
+const gprReportCheckRouter = require('./gprReportCheck');
 const concreteDailyReportRouter = require('./concreteDailyReport');
 const concreteDashboardRouter = require('./concreteDashboard');
 const concreteRequestsBoardRouter = require('./concreteRequestsBoard');
@@ -47,6 +50,8 @@ app.post('/api/smart-request', async (req, res) => {
 app.post('/api/chat', handleChat);
 app.use('/api/admin/people-gaps', peopleGapsAdminRouter);
 app.use('/api/people-gaps', peopleGapsCheckRouter);
+app.use('/api/admin/gpr-report', gprReportAdminRouter);
+app.use('/api/gpr-report', gprReportCheckRouter);
 // Оба роутера смонтированы на одном префиксе — их пути не пересекаются
 // (daily-report у одного, options/monthly/unexecuted/chart-titles у
 // другого), Express пробует их по очереди и падает в 404 только если ни
@@ -60,6 +65,7 @@ startConcreteSync();
 startObjectsSync();
 startPeopleSync();
 startDefectActsSync();
+startGprReportSync();
 
 // Render передаёт порт через PORT — слушаем его в первую очередь,
 // SMART_REQUEST_PROXY_PORT остаётся для локального оверрайда.
