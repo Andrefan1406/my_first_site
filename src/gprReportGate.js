@@ -15,7 +15,10 @@ const GAP_LIST_THRESHOLD = 5;
 // "поз.64 / Витражи" — work_name один и тот же может встречаться у разных
 // позиций и источников (например, "Отопление" почти у каждой позиции НЖ3),
 // поэтому в сообщении всегда указываем позицию, а не только конструктив.
-const gapLabel = (g) => `${g.position} / ${g.work_name}`;
+// Блок (только у "Фасады" — см. SOURCES[].blockMarkerRe) добавляем, только
+// если он есть: у позиции может быть несколько блоков с одинаковым
+// work_name, без блока сообщение было бы неоднозначным.
+const gapLabel = (g) => `${g.position}${g.block ? ` / ${g.block}` : ''} / ${g.work_name}`;
 
 export const gprBlockMessage = (gaps) => {
   const labels = gaps.map(gapLabel);

@@ -145,6 +145,7 @@ const GprReportGapsAdminPage = () => {
             <tr>
               <th style={s.th}>Источник</th>
               <th style={s.th}>Позиция</th>
+              <th style={s.th}>Блок</th>
               <th style={s.th}>Конструктив</th>
               <th style={s.th}>Последнее заполнение</th>
               <th style={s.th}>Пропущено недель</th>
@@ -153,9 +154,10 @@ const GprReportGapsAdminPage = () => {
           </thead>
           <tbody>
             {gaps.map((g) => (
-              <tr key={`${g.source_key}|${g.position}|${g.work_name}`}>
+              <tr key={`${g.source_key}|${g.position}|${g.block}|${g.work_name}`}>
                 <td style={s.td}>{g.source_label}</td>
                 <td style={s.td}>{g.position}</td>
+                <td style={s.td}>{g.block || "—"}</td>
                 <td style={s.td}>{g.work_name}</td>
                 <td style={s.td}>
                   {formatDate(g.last_filled_date)} ({formatPercent(g.last_filled_percent)})

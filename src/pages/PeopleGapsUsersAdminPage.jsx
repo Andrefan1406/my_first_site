@@ -22,6 +22,7 @@ const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost
 const GPR_SOURCES = [
   { key: "poz64_72", label: "ГПР 64,72 (поз.64)" },
   { key: "nz3", label: "ГПР НЖ3 (ОВ, ВК)" },
+  { key: "facades", label: "Фасады" },
 ];
 
 async function getIdToken() {
