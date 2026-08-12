@@ -255,6 +255,28 @@ CREATE TABLE IF NOT EXISTS people_gap_check_rules (
   UNIQUE(email, site)
 );
 CREATE INDEX IF NOT EXISTS idx_gap_check_rules_email ON people_gap_check_rules(email);
+
+-- gpr_report_values — чистое зеркало еженедельных % готовности из графика
+-- производства работ (ГПР), лист "64,72" (см. syncGprReport.js), только
+-- строки с маркером 'поз.64' в первой колонке (позиция 72 того же листа
+-- пока не нужна — по явному решению пользователя). Один столбец исходной
+-- таблицы = одна пятница; ячейка может быть пустой (percent IS NULL) —
+-- это НЕ 0%, а "ещё не заполнено", и есть основа для обнаружения пропусков
+-- (см. computeGprReportGaps в syncGprReport.js). DROP+CREATE, как у
+-- defect_acts/objects — у строк исходника нет стабильного ID, при каждом
+-- синке проще перезаписать всё целиком.
+DROP TABLE IF EXISTS gpr_report_values;
+CREATE TABLE gpr_report_values (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  position    TEXT,    -- 'поз.64' — задел на будущее расширение на другие позиции того же листа
+  work_name   TEXT,    -- "Конструктив" (например, "Оконные блоки")
+  report_date TEXT,    -- 'YYYY-MM-DD', всегда пятница
+  percent     REAL,    -- 0-100; NULL, если ячейка в исходнике пустая
+  synced_at   TEXT DEFAULT (datetime('now')),
+  UNIQUE(position, work_name, report_date)
+);
+CREATE INDEX IF NOT EXISTS idx_gpr_values_position_work ON gpr_report_values(position, work_name);
+CREATE INDEX IF NOT EXISTS idx_gpr_values_date ON gpr_report_values(report_date);
 `;
 
 let writeDb = null;

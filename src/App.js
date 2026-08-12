@@ -29,6 +29,7 @@ import PeopleGapsGuard from './components/PeopleGapsGuard';
 import PageTracker from './components/PageTracker';
 import AdminStatistics from "./pages/AdminStatistics";
 import PeopleGapsAdminPage from "./pages/PeopleGapsAdminPage";
+import GprReportGapsAdminPage from "./pages/GprReportGapsAdminPage";
 import PeopleGapsUsersAdminPage from "./pages/PeopleGapsUsersAdminPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ConcreteDashboardPage from "./pages/ConcreteDashboardPage";
@@ -254,6 +255,16 @@ const App = () => {
             <Protected>
               <AdminRoute>
                 <PeopleGapsAdminPage />
+              </AdminRoute>
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin/gpr-report-gaps"
+          element={
+            <Protected>
+              <AdminRoute>
+                <GprReportGapsAdminPage />
               </AdminRoute>
             </Protected>
           }
