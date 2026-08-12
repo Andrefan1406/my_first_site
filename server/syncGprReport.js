@@ -1,33 +1,60 @@
-// Синхронизация процента готовности из графика производства работ (ГПР),
-// лист "64,72", только строки позиции 'поз.64' (позиция 72 того же листа
-// пока не нужна — явное решение пользователя, легко расширить позже).
-// Логика разбора 1:1 повторяет исходный Python-парсер на ноутбуке
-// (см. историю задачи "парсер ГПР поз.64.ipynb"), переписанный на Node,
-// чтобы встроить в тот же процесс, что и остальные синки этого проекта.
+// Синхронизация процента готовности из графиков производства работ (ГПР) —
+// нескольких источников сразу (см. SOURCES ниже). Логика разбора одного
+// листа 1:1 повторяет исходный Python-парсер на ноутбуке (см. историю
+// задачи "парсер ГПР поз.64.ipynb"), переписанный на Node и обобщённый на
+// произвольное число листов после добавления второго источника (НЖ3).
 //
-// Формат исходника (googlesheets, тот же файл, что и ссылка "ГПР 64, 72" на
-// /grafiki): строка 6 (0-индекс 5) — заголовок с датами (Excel-serial-числа,
-// одна колонка = одна пятница, начиная с колонки F/индекс 5); данные — с
-// строки 8 (0-индекс 7). Колонка A содержит маркер 'поз.64' у КАЖДОЙ строки
-// этой позиции (включая три строки-разделы без данных — "Кровельные
-// работы"/"Окна и витражи"/"ВК и ОВ" — их исключаем по имени, как и
-// ноутбук). Ячейка "Процент" пустая = работа этой недели ещё НЕ занесена в
-// отчёт (не путать с 0% — ноль тоже явно проставляется, когда работы ещё не
-// начаты, см. комментарий у computeGprReportGaps ниже).
+// Формат исходника — общий шаблон компании, стабильный между листами, хоть
+// сами колонки до дат и отличаются числом (лист НЖ3 добавляет колонку
+// "Подрядчик"): строка 4 (0-индекс 3) — подписи колонок, где последняя перед
+// датами всегда называется "Окончание" (по ней ищем, с какой колонки
+// начинаются даты — не хардкодим номер колонки на каждый лист); строка 6
+// (0-индекс 5) — сами Excel-serial-даты (одна колонка = одна пятница);
+// данные — с строки 8 (0-индекс 7). Колонка A содержит маркер 'поз.NN' у
+// каждой строки данных этой позиции; у строк-разделов без данных (например,
+// "Кровельные работы" на листе "64,72") колонка A ВСЁ РАВНО содержит маркер
+// позиции — их приходится исключать по имени (source.excludeWorkNames), а
+// не по пустой колонке A. У строк-заголовков "Позиция N" (итоговая сводка)
+// колонка A, наоборот, пустая — их отсеивает POSITION_MARKER_RE.
 const cron = require('node-cron');
 const { getWriteDb } = require('./db');
 const { getUnformattedValues } = require('./googleSheetsClient');
 
-const SPREADSHEET_ID = '1eC80R11Hp26IVfLLa4M-_wnYGqTRHEi6k2_XG5Goqf0';
-const SHEET_NAME = '64,72';
-const POSITION = 'поз.64';
-const DATA_RANGE = 'A1:CA200'; // с запасом по строкам; реальных строк позиции — 19
-
-const HEADER_ROW_INDEX = 5; // 0-индекс: строка 6 в таблице — Excel-serial-даты
+const LABELS_ROW_INDEX = 3; // 0-индекс: строка 4 — подписи колонок, последняя перед датами — "Окончание"
+const HEADER_ROW_INDEX = 5; // 0-индекс: строка 6 — Excel-serial-даты
 const FIRST_DATA_ROW_INDEX = 7; // 0-индекс: строка 8 — первая строка с данными
-const FIRST_DATE_COL_INDEX = 5; // 0-индекс: колонка F — первая недельная колонка
+const DATA_RANGE = 'A1:CZ400'; // с запасом и по строкам, и по колонкам
 
-const SECTION_HEADERS = new Set(['Кровельные работы', 'Окна и витражи', 'ВК и ОВ']);
+const POSITION_MARKER_RE = /^поз\.\d+/;
+
+const SOURCES = [
+  {
+    key: 'poz64_72',
+    label: 'ГПР 64,72',
+    spreadsheetId: '1eC80R11Hp26IVfLLa4M-_wnYGqTRHEi6k2_XG5Goqf0',
+    sheetName: '64,72',
+    // Только поз.64 — явное решение пользователя, поз.72 того же листа пока не нужна.
+    includePosition: (pos) => pos === 'поз.64',
+    // Строки-разделы без данных (заголовок группы работ, а не отдельная работа).
+    excludeWorkNames: new Set(['Кровельные работы', 'Окна и витражи', 'ВК и ОВ']),
+  },
+  {
+    key: 'nz3',
+    label: 'ГПР НЖ3 (ОВ, ВК)',
+    spreadsheetId: '160_Nmmj4p0jX5NdJLTpRntoFHDHoxiyZptEVdp0U3mE',
+    sheetName: 'НЖ3',
+    // Вся вкладка целиком — любая позиция с маркером поз.NN (56, 72, 69, 64, 63, 59, 65).
+    includePosition: () => true,
+    // "Водоснабжение и канализация" и "Отопление" здесь — промежуточные
+    // итоги (агрегат по своим же дочерним строкам: "Ливневая канализация"/
+    // "Пожарный водопровод"/"Канализация"/"ХВС"/"ГВС" и "Отопление
+    // (стояки)"/"...(разводка и радиаторы)"/"...(тепловой узел)"
+    // соответственно) — НЕ отдельная работа, поэтому не пропуск, если
+    // пусто. В листе "64,72" эти же названия — реальные конечные позиции,
+    // их исключение отсюда не касается (разные source, разные списки).
+    excludeWorkNames: new Set(['Водоснабжение и канализация', 'Отопление']),
+  },
+];
 
 const CRON_SCHEDULE = process.env.GPR_REPORT_SYNC_CRON || '0 */6 * * *';
 
@@ -43,14 +70,21 @@ function excelSerialToISODate(serial) {
   return `${y}-${m}-${day}`;
 }
 
-async function fetchAndParse() {
-  const raw = await getUnformattedValues(SPREADSHEET_ID, SHEET_NAME, DATA_RANGE);
+async function fetchAndParseSource(source) {
+  const raw = await getUnformattedValues(source.spreadsheetId, source.sheetName, DATA_RANGE);
+
+  const labelsRow = raw[LABELS_ROW_INDEX] || [];
+  const endColIndex = labelsRow.findIndex((v) => typeof v === 'string' && v.trim() === 'Окончание');
+  if (endColIndex === -1) {
+    throw new Error(`[${source.key}] не найдена колонка "Окончание" в строке заголовков листа "${source.sheetName}"`);
+  }
+  const firstDateCol = endColIndex + 1;
 
   const headerRow = raw[HEADER_ROW_INDEX] || [];
   // Колонки без числа в заголовке (пустой хвост таблицы) — не настоящие
-  // недельные колонки, пропускаем их (тот же фильтр, что в ноутбуке).
+  // недельные колонки, пропускаем их.
   const dateColumns = [];
-  for (let c = FIRST_DATE_COL_INDEX; c < headerRow.length; c++) {
+  for (let c = firstDateCol; c < headerRow.length; c++) {
     const serial = headerRow[c];
     if (typeof serial === 'number' && Number.isFinite(serial)) {
       dateColumns.push({ colIndex: c, reportDate: excelSerialToISODate(serial) });
@@ -61,10 +95,13 @@ async function fetchAndParse() {
   for (let r = FIRST_DATA_ROW_INDEX; r < raw.length; r++) {
     const row = raw[r];
     if (!row || !row.length) continue;
-    if (row[0] !== POSITION) continue;
+
+    const position = (row[0] || '').toString().trim();
+    if (!position || !POSITION_MARKER_RE.test(position)) continue; // "Позиция N" — итоговая строка, не данные
+    if (!source.includePosition(position)) continue;
 
     const workName = (row[2] || '').toString().trim();
-    if (!workName || SECTION_HEADERS.has(workName)) continue;
+    if (!workName || source.excludeWorkNames.has(workName)) continue;
 
     for (const { colIndex, reportDate } of dateColumns) {
       const cell = row[colIndex];
@@ -76,18 +113,34 @@ async function fetchAndParse() {
         if (!Number.isNaN(parsed)) percent = parsed * 100;
       }
       // cell === undefined/''/null -> percent остаётся null (пусто в исходнике)
-      rows.push({ position: POSITION, work_name: workName, report_date: reportDate, percent });
+      rows.push({
+        source_key: source.key,
+        source_label: source.label,
+        position,
+        work_name: workName,
+        report_date: reportDate,
+        percent,
+      });
     }
   }
 
   return rows;
 }
 
+async function fetchAndParse() {
+  const all = [];
+  for (const source of SOURCES) {
+    const rows = await fetchAndParseSource(source);
+    all.push(...rows);
+  }
+  return all;
+}
+
 function storeValues(rows) {
   const db = getWriteDb();
   const insert = db.prepare(`
-    INSERT INTO gpr_report_values (position, work_name, report_date, percent)
-    VALUES (@position, @work_name, @report_date, @percent)
+    INSERT INTO gpr_report_values (source_key, source_label, position, work_name, report_date, percent)
+    VALUES (@source_key, @source_label, @position, @work_name, @report_date, @percent)
   `);
   const upsertMeta = db.prepare(`
     INSERT INTO sync_meta (key, value) VALUES (@key, @value)
@@ -95,7 +148,7 @@ function storeValues(rows) {
   `);
 
   const replaceAll = db.transaction((allRows) => {
-    db.prepare(`DELETE FROM gpr_report_values WHERE position = ?`).run(POSITION);
+    db.prepare(`DELETE FROM gpr_report_values`).run();
     for (const row of allRows) insert.run(row);
     upsertMeta.run({ key: 'gpr_report_last_synced_at', value: new Date().toISOString() });
     upsertMeta.run({ key: 'gpr_report_row_count', value: String(allRows.length) });
@@ -123,14 +176,16 @@ function toISODate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Пропуск = конструктив, у которого ЕСТЬ хоть одна заполненная неделя
-// раньше (значит, работа реально идёт — это не "ещё не начали"), но после
-// последней заполненной недели и вплоть до контрольной пятницы остались
-// пустые ячейки. Проверено на реальных данных исходника: конструктивы,
-// дошедшие до 100%, продолжают явно перезаполняться каждую неделю (100%
-// повторяется, а не оставляется пустым) — пустой хвост появляется только у
-// ещё незавершённых работ, то есть это настоящий "забыли занести", а не
-// "работа закончена, дальше нечего репортить".
+// Пропуск = (источник, позиция, конструктив), у которого ЕСТЬ хоть одна
+// заполненная неделя раньше (значит, работа реально идёт — это не "ещё не
+// начали"), но после последней заполненной недели и вплоть до контрольной
+// пятницы остались пустые ячейки. Проверено на реальных данных исходника:
+// конструктивы, дошедшие до 100%, продолжают явно перезаполняться каждую
+// неделю (100% повторяется, а не оставляется пустым) — пустой хвост
+// появляется только у ещё незавершённых работ, то есть это настоящий
+// "забыли занести", а не "работа закончена, дальше нечего репортить".
+// Считает СРАЗУ по всем источникам (SOURCES) — вызывающий код (админ-панель,
+// проверка блокировки email) не завязан на конкретный лист/позицию.
 function computeGprReportGaps({ asOf } = {}) {
   const db = getWriteDb();
   const cutoffDate = lastFridayOnOrBefore(asOf || new Date());
@@ -138,21 +193,22 @@ function computeGprReportGaps({ asOf } = {}) {
 
   const rows = db
     .prepare(
-      `SELECT work_name, report_date, percent
+      `SELECT source_key, source_label, position, work_name, report_date, percent
        FROM gpr_report_values
-       WHERE position = ? AND report_date <= ?
-       ORDER BY work_name, report_date`
+       WHERE report_date <= ?
+       ORDER BY source_key, position, work_name, report_date`
     )
-    .all(POSITION, cutoff);
+    .all(cutoff);
 
-  const byWork = new Map();
+  const byGroup = new Map();
   for (const row of rows) {
-    if (!byWork.has(row.work_name)) byWork.set(row.work_name, []);
-    byWork.get(row.work_name).push(row);
+    const key = `${row.source_key}|${row.position}|${row.work_name}`;
+    if (!byGroup.has(key)) byGroup.set(key, { meta: row, entries: [] });
+    byGroup.get(key).entries.push(row);
   }
 
   const gaps = [];
-  for (const [workName, entries] of byWork) {
+  for (const { meta, entries } of byGroup.values()) {
     let lastFilledIndex = -1;
     for (let i = 0; i < entries.length; i++) {
       if (entries[i].percent !== null) lastFilledIndex = i;
@@ -162,7 +218,10 @@ function computeGprReportGaps({ asOf } = {}) {
     const missingDates = entries.slice(lastFilledIndex + 1).map((e) => e.report_date);
     if (missingDates.length) {
       gaps.push({
-        work_name: workName,
+        source_key: meta.source_key,
+        source_label: meta.source_label,
+        position: meta.position,
+        work_name: meta.work_name,
         last_filled_date: entries[lastFilledIndex].report_date,
         last_filled_percent: entries[lastFilledIndex].percent,
         missing_dates: missingDates,
@@ -170,13 +229,13 @@ function computeGprReportGaps({ asOf } = {}) {
     }
   }
 
-  return { position: POSITION, cutoff, gaps };
+  return { cutoff, gaps };
 }
 
 async function runSyncOnce() {
   const rows = await fetchAndParse();
   const count = storeValues(rows);
-  console.log(`[gpr-report-sync] загружено ${count} значений (${POSITION})`);
+  console.log(`[gpr-report-sync] загружено ${count} значений (${SOURCES.map((s) => s.key).join(', ')})`);
   return count;
 }
 
@@ -192,7 +251,5 @@ module.exports = {
   runSyncOnce,
   computeGprReportGaps,
   lastFridayOnOrBefore,
-  POSITION,
-  SPREADSHEET_ID,
-  SHEET_NAME,
+  SOURCES,
 };

@@ -256,40 +256,50 @@ CREATE TABLE IF NOT EXISTS people_gap_check_rules (
 );
 CREATE INDEX IF NOT EXISTS idx_gap_check_rules_email ON people_gap_check_rules(email);
 
--- gpr_report_values — чистое зеркало еженедельных % готовности из графика
--- производства работ (ГПР), лист "64,72" (см. syncGprReport.js), только
--- строки с маркером 'поз.64' в первой колонке (позиция 72 того же листа
--- пока не нужна — по явному решению пользователя). Один столбец исходной
--- таблицы = одна пятница; ячейка может быть пустой (percent IS NULL) —
--- это НЕ 0%, а "ещё не заполнено", и есть основа для обнаружения пропусков
--- (см. computeGprReportGaps в syncGprReport.js). DROP+CREATE, как у
+-- gpr_report_values — чистое зеркало еженедельных % готовности из графиков
+-- производства работ (ГПР) — НЕСКОЛЬКИХ источников/листов сразу (см. SOURCES
+-- в syncGprReport.js: сейчас лист "64,72" — только 'поз.64', и отдельный
+-- лист "НЖ3" (ОВ+ВК) — все позиции). source_key различает источники —
+-- одинаковый work_name+position может встретиться в РАЗНЫХ источниках
+-- (например, "поз.64" есть и на листе "64,72", и как блок внутри "НЖ3") и
+-- это разные строки, а не дубликаты. Один столбец исходной таблицы = одна
+-- пятница; ячейка может быть пустой (percent IS NULL) — это НЕ 0%, а "ещё
+-- не заполнено", и есть основа для обнаружения пропусков (см.
+-- computeGprReportGaps в syncGprReport.js). DROP+CREATE, как у
 -- defect_acts/objects — у строк исходника нет стабильного ID, при каждом
 -- синке проще перезаписать всё целиком.
 DROP TABLE IF EXISTS gpr_report_values;
 CREATE TABLE gpr_report_values (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  position    TEXT,    -- 'поз.64' — задел на будущее расширение на другие позиции того же листа
-  work_name   TEXT,    -- "Конструктив" (например, "Оконные блоки")
-  report_date TEXT,    -- 'YYYY-MM-DD', всегда пятница
-  percent     REAL,    -- 0-100; NULL, если ячейка в исходнике пустая
-  synced_at   TEXT DEFAULT (datetime('now')),
-  UNIQUE(position, work_name, report_date)
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_key   TEXT,    -- 'poz64_72' | 'nz3' — какой источник/лист (см. SOURCES)
+  source_label TEXT,    -- человекочитаемая подпись источника, для админ-панели
+  position     TEXT,    -- 'поз.64', 'поз.56' и т.п. — сырой маркер позиции из колонки A
+  work_name    TEXT,    -- "Конструктив" (например, "Оконные блоки")
+  report_date  TEXT,    -- 'YYYY-MM-DD', всегда пятница
+  percent      REAL,    -- 0-100; NULL, если ячейка в исходнике пустая
+  synced_at    TEXT DEFAULT (datetime('now')),
+  UNIQUE(source_key, position, work_name, report_date)
 );
-CREATE INDEX IF NOT EXISTS idx_gpr_values_position_work ON gpr_report_values(position, work_name);
+CREATE INDEX IF NOT EXISTS idx_gpr_values_source_position ON gpr_report_values(source_key, position, work_name);
 CREATE INDEX IF NOT EXISTS idx_gpr_values_date ON gpr_report_values(report_date);
 
 -- gpr_report_check_rules — email'ы, для которых подача заявок блокируется,
--- пока в ГПР (позиция 64, см. gpr_report_values/computeGprReportGaps) есть
--- незакрытый пропуск — тот же принцип, что и people_gap_check_rules, только
--- без "участка": проверяемая позиция сейчас всегда одна ('поз.64'), поэтому
--- достаточно списка email без второго измерения. ПОСТОЯННОЕ хранилище
--- (CREATE TABLE IF NOT EXISTS, без DROP) — правила не должны пропадать при
--- синке/рестарте, как и people_gap_check_rules/people_gap_decisions.
+-- пока в ГПР есть незакрытый пропуск — тот же принцип, что и
+-- people_gap_check_rules, только "источник" (source_key, см. SOURCES в
+-- syncGprReport.js) вместо "участка": за разные листы ГПР (64,72 и НЖ3)
+-- отвечают разные люди, поэтому правило привязано к конкретному источнику,
+-- а не блокирует по любому пропуску сразу везде. UNIQUE(email, source_key) —
+-- один и тот же email МОЖЕТ быть отдельно назначен на оба источника (если
+-- вдруг один человек отвечает за оба), но не дважды на один и тот же.
+-- ПОСТОЯННОЕ хранилище (CREATE TABLE IF NOT EXISTS, без DROP) — правила не
+-- должны пропадать при синке/рестарте, как и people_gap_check_rules.
 CREATE TABLE IF NOT EXISTS gpr_report_check_rules (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  email      TEXT NOT NULL UNIQUE,
+  email      TEXT NOT NULL,
+  source_key TEXT NOT NULL,
   created_by TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(email, source_key)
 );
 `;
 
@@ -330,6 +340,35 @@ function migrateSchema(db) {
   }
   if (!columns.includes('note')) {
     db.exec('ALTER TABLE concrete_orders ADD COLUMN note TEXT');
+  }
+
+  // gpr_report_check_rules раньше блокировала по email без источника
+  // (UNIQUE(email) — одно правило сразу на все листы ГПР). После появления
+  // второго источника (НЖ3) выяснилось, что за разные листы отвечают разные
+  // люди — понадобилась колонка source_key и составной UNIQUE(email,
+  // source_key). SQLite не даёт менять table-level UNIQUE через ALTER TABLE
+  // напрямую, поэтому пересобираем таблицу целиком (стандартный для SQLite
+  // приём), перенося уже добавленные администратором правила — старые
+  // правила (заведённые до разделения) относим к 'poz64_72' как к первому/
+  // основному источнику, чтобы не снять блокировку молча; если правило
+  // должно действовать и на НЖ3, администратор добавит его туда явно ещё
+  // раз через /admin/users.
+  const gprRuleColumns = db.prepare("PRAGMA table_info(gpr_report_check_rules)").all().map((c) => c.name);
+  if (!gprRuleColumns.includes('source_key')) {
+    db.exec(`
+      CREATE TABLE gpr_report_check_rules_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        email      TEXT NOT NULL,
+        source_key TEXT NOT NULL,
+        created_by TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(email, source_key)
+      );
+      INSERT INTO gpr_report_check_rules_new (id, email, source_key, created_by, created_at)
+        SELECT id, email, 'poz64_72', created_by, created_at FROM gpr_report_check_rules;
+      DROP TABLE gpr_report_check_rules;
+      ALTER TABLE gpr_report_check_rules_new RENAME TO gpr_report_check_rules;
+    `);
   }
 }
 

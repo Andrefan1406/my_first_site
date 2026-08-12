@@ -3,7 +3,9 @@
 // что и у остальных /api/admin/* роутов этого проекта.
 const express = require('express');
 const { requireAdmin } = require('./adminAuth');
-const { computeGprReportGaps, runSyncOnce } = require('./syncGprReport');
+const { computeGprReportGaps, runSyncOnce, SOURCES } = require('./syncGprReport');
+
+const SOURCE_KEYS = new Set(SOURCES.map((s) => s.key));
 const { getWriteDb } = require('./db');
 
 const router = express.Router();
@@ -33,41 +35,51 @@ router.post('/resync', async (req, res) => {
 });
 
 // CRUD для gpr_report_check_rules — email'ы, для которых подача заявок
-// блокируется, пока в ГПР (позиция 64) есть незакрытый пропуск (см.
+// блокируется, пока в конкретном ИСТОЧНИКЕ ГПР (source_key — 'poz64_72' |
+// 'nz3', см. SOURCES в syncGprReport.js) есть незакрытый пропуск. За разные
+// источники отвечают разные люди, поэтому правило всегда привязано к
+// source_key, а не блокирует по любому пропуску сразу везде (см.
 // server/gprReportCheck.js — публичная проверка без requireAdmin,
 // используемая самой формой заявки/главной страницей). Управляется из
 // src/pages/PeopleGapsUsersAdminPage.jsx, тем же экраном, что и правила
 // для людей — это один и тот же концептуально раздел "кого проверять".
+// ?source_key= в GET — необязательный фильтр (страница вызывает его
+// отдельно на каждый источник, чтобы не тащить и не разбирать всё разом).
 router.get('/check-rules', (req, res) => {
-  const rules = getWriteDb()
-    .prepare('SELECT * FROM gpr_report_check_rules ORDER BY email ASC')
-    .all();
+  const { source_key: sourceKey } = req.query;
+  const rules = sourceKey
+    ? getWriteDb().prepare('SELECT * FROM gpr_report_check_rules WHERE source_key = ? ORDER BY email ASC').all(sourceKey)
+    : getWriteDb().prepare('SELECT * FROM gpr_report_check_rules ORDER BY source_key ASC, email ASC').all();
   res.json({ rules });
 });
 
 router.post('/check-rules', (req, res) => {
-  const { email } = req.body || {};
+  const { email, source_key: sourceKey } = req.body || {};
   if (!email || !email.trim()) {
     return res.status(400).json({ error: 'email обязателен' });
+  }
+  if (!sourceKey || !SOURCE_KEYS.has(sourceKey)) {
+    return res.status(400).json({ error: `source_key обязателен и должен быть одним из: ${[...SOURCE_KEYS].join(', ')}` });
   }
 
   const db = getWriteDb();
   try {
     db.prepare(`
-      INSERT INTO gpr_report_check_rules (email, created_by)
-      VALUES (@email, @created_by)
+      INSERT INTO gpr_report_check_rules (email, source_key, created_by)
+      VALUES (@email, @source_key, @created_by)
     `).run({
       email: email.trim().toLowerCase(),
+      source_key: sourceKey,
       created_by: req.adminEmail,
     });
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      return res.status(409).json({ error: 'Такое правило (email) уже есть' });
+      return res.status(409).json({ error: 'Такое правило (email + источник) уже есть' });
     }
     throw err;
   }
 
-  const rules = db.prepare('SELECT * FROM gpr_report_check_rules ORDER BY email ASC').all();
+  const rules = db.prepare('SELECT * FROM gpr_report_check_rules WHERE source_key = ? ORDER BY email ASC').all(sourceKey);
   res.json({ rules });
 });
 

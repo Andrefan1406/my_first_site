@@ -2,9 +2,11 @@
 // отчётах по людям (см. server/peopleGapsCheck.js/peopleGapsGate.js: для
 // email из списка people_gap_check_rules подача заявок блокируется, пока по
 // закреплённому за ним участку есть незакрытый пропуск) и правила проверки
-// пропусков в ГПР (позиция 64, см. server/gprReportCheck.js/gprReportGate.js:
-// та же механика блокировки, но по gpr_report_check_rules — списку email без
-// привязки к участку, поскольку отслеживаемая позиция сейчас одна). Оба CRUD
+// пропусков в ГПР — ОТДЕЛЬНО по каждому источнику (лист "64,72" — только
+// поз.64, лист "НЖ3" — все его позиции, ОВ+ВК), потому что за разные листы
+// отвечают разные люди — правило привязано к конкретному source_key (см.
+// SOURCES в server/syncGprReport.js), а не блокирует по любому пропуску
+// сразу везде (см. server/gprReportCheck.js/gprReportGate.js). Оба CRUD
 // вынесены каждый в свой сегмент на сервере (peopleGapsAdmin.js/check-rules,
 // gprReportAdmin.js/check-rules), чтобы не переплетаться друг с другом.
 import React, { useCallback, useEffect, useState } from "react";
@@ -13,6 +15,14 @@ import { getAuth } from "firebase/auth";
 import { peopleSiteOptions } from "../data/peopleSites";
 
 const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost:4000";
+
+// Держим в синхроне с SOURCES в server/syncGprReport.js — там источник
+// правды по КАКИМ листам вообще идёт синк, здесь просто подписи для формы
+// (сервер и сам проверяет source_key на допустимые значения).
+const GPR_SOURCES = [
+  { key: "poz64_72", label: "ГПР 64,72 (поз.64)" },
+  { key: "nz3", label: "ГПР НЖ3 (ОВ, ВК)" },
+];
 
 async function getIdToken() {
   const user = getAuth().currentUser;
@@ -37,6 +47,124 @@ async function apiFetch(path, options = {}) {
   return data;
 }
 
+// Один источник ГПР = один независимый список email + своя форма/таблица.
+// Переиспользуем этот блок дважды (по одному на каждый source_key), чтобы
+// не дублировать один и тот же код руками.
+const GprCheckRulesSection = ({ sourceKey, sourceLabel }) => {
+  const [rules, setRules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiFetch(`/api/admin/gpr-report/check-rules?source_key=${encodeURIComponent(sourceKey)}`);
+      setRules(data.rules || []);
+    } catch (err) {
+      setError(err.message || "Не удалось загрузить правила");
+    } finally {
+      setLoading(false);
+    }
+  }, [sourceKey]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!newEmail.trim()) {
+      setError("Заполните email.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      const data = await apiFetch("/api/admin/gpr-report/check-rules", {
+        method: "POST",
+        body: JSON.stringify({ email: newEmail.trim(), source_key: sourceKey }),
+      });
+      setRules(data.rules || []);
+      setNewEmail("");
+    } catch (err) {
+      setError(err.message || "Не удалось добавить правило");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Удалить это правило?")) return;
+    setError("");
+    try {
+      await apiFetch(`/api/admin/gpr-report/check-rules/${id}`, { method: "DELETE" });
+      setRules((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      setError(err.message || "Не удалось удалить правило");
+    }
+  };
+
+  return (
+    <section style={{ ...s.section, marginTop: "20px" }}>
+      <h2 style={s.sectionTitle}>Проверка пропусков — {sourceLabel}</h2>
+      <p style={s.hint}>
+        Для email из списка ниже подача любых заявок блокируется, пока в графике
+        производства работ «{sourceLabel}» есть незаполненный % готовности за прошлую
+        пятницу или раньше. Как только отчёт заполнят — блокировка снимается сама. Это
+        отдельный список от других источников ГПР — за них отвечают разные люди.
+      </p>
+
+      <form onSubmit={handleAdd} style={s.form}>
+        <input
+          type="email"
+          placeholder="email пользователя"
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+          style={s.input}
+        />
+        <button type="submit" disabled={saving} style={s.addBtn}>
+          {saving ? "Добавляю..." : "Добавить"}
+        </button>
+      </form>
+
+      {error && <div style={s.error}>{error}</div>}
+
+      {loading ? (
+        <p>Загрузка...</p>
+      ) : rules.length === 0 ? (
+        <p style={s.muted}>Правил пока нет — проверка ни на кого не распространяется.</p>
+      ) : (
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Email</th>
+              <th style={s.th}>Добавил</th>
+              <th style={s.th}>Когда</th>
+              <th style={s.th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rules.map((rule) => (
+              <tr key={rule.id}>
+                <td style={s.td}>{rule.email}</td>
+                <td style={s.td}>{rule.created_by || "—"}</td>
+                <td style={s.td}>{(rule.created_at || "").replace("T", " ").slice(0, 16)}</td>
+                <td style={s.td}>
+                  <button onClick={() => handleDelete(rule.id)} style={s.deleteBtn}>Удалить</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+};
+
 const PeopleGapsUsersAdminPage = () => {
   const navigate = useNavigate();
 
@@ -46,12 +174,6 @@ const PeopleGapsUsersAdminPage = () => {
   const [saving, setSaving] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newSite, setNewSite] = useState("");
-
-  const [gprRules, setGprRules] = useState([]);
-  const [gprLoading, setGprLoading] = useState(true);
-  const [gprError, setGprError] = useState("");
-  const [gprSaving, setGprSaving] = useState(false);
-  const [newGprEmail, setNewGprEmail] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,23 +188,9 @@ const PeopleGapsUsersAdminPage = () => {
     }
   }, []);
 
-  const loadGpr = useCallback(async () => {
-    setGprLoading(true);
-    setGprError("");
-    try {
-      const data = await apiFetch("/api/admin/gpr-report/check-rules");
-      setGprRules(data.rules || []);
-    } catch (err) {
-      setGprError(err.message || "Не удалось загрузить правила");
-    } finally {
-      setGprLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     load();
-    loadGpr();
-  }, [load, loadGpr]);
+  }, [load]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -116,40 +224,6 @@ const PeopleGapsUsersAdminPage = () => {
       setRules((prev) => prev.filter((r) => r.id !== id));
     } catch (err) {
       setError(err.message || "Не удалось удалить правило");
-    }
-  };
-
-  const handleAddGpr = async (e) => {
-    e.preventDefault();
-    if (!newGprEmail.trim()) {
-      setGprError("Заполните email.");
-      return;
-    }
-
-    setGprSaving(true);
-    setGprError("");
-    try {
-      const data = await apiFetch("/api/admin/gpr-report/check-rules", {
-        method: "POST",
-        body: JSON.stringify({ email: newGprEmail.trim() }),
-      });
-      setGprRules(data.rules || []);
-      setNewGprEmail("");
-    } catch (err) {
-      setGprError(err.message || "Не удалось добавить правило");
-    } finally {
-      setGprSaving(false);
-    }
-  };
-
-  const handleDeleteGpr = async (id) => {
-    if (!window.confirm("Удалить это правило?")) return;
-    setGprError("");
-    try {
-      await apiFetch(`/api/admin/gpr-report/check-rules/${id}`, { method: "DELETE" });
-      setGprRules((prev) => prev.filter((r) => r.id !== id));
-    } catch (err) {
-      setGprError(err.message || "Не удалось удалить правило");
     }
   };
 
@@ -223,58 +297,9 @@ const PeopleGapsUsersAdminPage = () => {
         )}
       </section>
 
-      <section style={{ ...s.section, marginTop: "20px" }}>
-        <h2 style={s.sectionTitle}>Проверка пропусков в ГПР (позиция 64)</h2>
-        <p style={s.hint}>
-          Для email из списка ниже подача любых заявок блокируется, пока в графике
-          производства работ (позиция 64) есть незаполненный % готовности за прошлую
-          пятницу или раньше. Как только отчёт заполнят — блокировка снимается сама.
-        </p>
-
-        <form onSubmit={handleAddGpr} style={s.form}>
-          <input
-            type="email"
-            placeholder="email пользователя"
-            value={newGprEmail}
-            onChange={(e) => setNewGprEmail(e.target.value)}
-            style={s.input}
-          />
-          <button type="submit" disabled={gprSaving} style={s.addBtn}>
-            {gprSaving ? "Добавляю..." : "Добавить"}
-          </button>
-        </form>
-
-        {gprError && <div style={s.error}>{gprError}</div>}
-
-        {gprLoading ? (
-          <p>Загрузка...</p>
-        ) : gprRules.length === 0 ? (
-          <p style={s.muted}>Правил пока нет — проверка ни на кого не распространяется.</p>
-        ) : (
-          <table style={s.table}>
-            <thead>
-              <tr>
-                <th style={s.th}>Email</th>
-                <th style={s.th}>Добавил</th>
-                <th style={s.th}>Когда</th>
-                <th style={s.th}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {gprRules.map((rule) => (
-                <tr key={rule.id}>
-                  <td style={s.td}>{rule.email}</td>
-                  <td style={s.td}>{rule.created_by || "—"}</td>
-                  <td style={s.td}>{(rule.created_at || "").replace("T", " ").slice(0, 16)}</td>
-                  <td style={s.td}>
-                    <button onClick={() => handleDeleteGpr(rule.id)} style={s.deleteBtn}>Удалить</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+      {GPR_SOURCES.map((src) => (
+        <GprCheckRulesSection key={src.key} sourceKey={src.key} sourceLabel={src.label} />
+      ))}
     </div>
   );
 };
