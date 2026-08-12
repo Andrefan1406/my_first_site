@@ -77,7 +77,7 @@ const GprReportGapsAdminPage = () => {
     }
   };
 
-  const allGaps = data?.gaps || [];
+  const allGaps = useMemo(() => data?.gaps || [], [data]);
 
   const sourceOptions = useMemo(() => {
     const map = new Map();
