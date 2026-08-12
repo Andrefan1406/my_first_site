@@ -1,12 +1,14 @@
-// Админ-страница пропусков в еженедельном % готовности ГПР (позиция 64) —
-// упрощённый аналог /admin/people-gaps: здесь только ОБНАРУЖЕНИЕ пропусков
+// Админ-страница пропусков в еженедельном % готовности ГПР — сразу по
+// НЕСКОЛЬКИМ источникам (см. SOURCES в server/syncGprReport.js: лист
+// "64,72" — только поз.64, и лист "НЖ3" (ОВ+ВК) — все его позиции).
+// Упрощённый аналог /admin/people-gaps: здесь только ОБНАРУЖЕНИЕ пропусков
 // (нет workflow "принять решение", как у людей — это чисто отчёт для
 // администратора, кто забыл занести % за прошлую пятницу или раньше).
-// Пропуск = конструктив, у которого была хотя бы одна заполненная неделя
-// раньше (значит работа реально идёт), но после последней заполненной
-// недели и вплоть до контрольной пятницы остались пустые ячейки — см.
-// server/syncGprReport.js:computeGprReportGaps.
-import React, { useCallback, useEffect, useState } from "react";
+// Пропуск = (источник, позиция, конструктив), у которого была хотя бы одна
+// заполненная неделя раньше (значит работа реально идёт), но после
+// последней заполненной недели и вплоть до контрольной пятницы остались
+// пустые ячейки — см. server/syncGprReport.js:computeGprReportGaps.
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAuth } from "firebase/auth";
 
@@ -43,6 +45,7 @@ const GprReportGapsAdminPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [resyncLoading, setResyncLoading] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,18 +77,26 @@ const GprReportGapsAdminPage = () => {
     }
   };
 
-  const gaps = data?.gaps || [];
+  const allGaps = data?.gaps || [];
+
+  const sourceOptions = useMemo(() => {
+    const map = new Map();
+    for (const g of allGaps) map.set(g.source_key, g.source_label);
+    return [...map.entries()];
+  }, [allGaps]);
+
+  const gaps = sourceFilter ? allGaps.filter((g) => g.source_key === sourceFilter) : allGaps;
 
   return (
     <div style={s.page}>
       <div style={s.header}>
         <button onClick={() => navigate("/admin")} style={s.back}>← Назад</button>
-        <h1 style={s.title}>Пропуски в отчётах ГПР — позиция 64</h1>
+        <h1 style={s.title}>Пропуски в отчётах ГПР</h1>
       </div>
 
       <div style={s.cards}>
         <div style={s.card}>
-          <div style={s.cardLabel}>Конструктивов с пропуском</div>
+          <div style={s.cardLabel}>Пропусков{sourceFilter ? " (в фильтре)" : ""}</div>
           <div style={{ ...s.cardValue, color: gaps.length ? "#c0392b" : "#1a7f37" }}>{gaps.length}</div>
         </div>
         <div style={s.card}>
@@ -105,11 +116,19 @@ const GprReportGapsAdminPage = () => {
         <button
           onClick={handleResync}
           disabled={resyncLoading}
-          title="Заново скачать ГПР из Google Таблицы, не дожидаясь планового синка (раз в 6 часов)"
+          title="Заново скачать ГПР из Google Таблиц, не дожидаясь планового синка (раз в 6 часов)"
           style={s.resyncBtn}
         >
           {resyncLoading ? "Синхронизирую..." : "⟳ Пересинхронизировать"}
         </button>
+        {sourceOptions.length > 1 && (
+          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={s.select}>
+            <option value="">Все источники</option>
+            {sourceOptions.map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {error && <div style={s.error}>{error}</div>}
@@ -118,12 +137,14 @@ const GprReportGapsAdminPage = () => {
         <p>Загрузка...</p>
       ) : gaps.length === 0 ? (
         <p style={s.muted}>
-          Пропусков нет — все конструктивы позиции 64 заполнены по {data ? formatDate(data.cutoff) : "…"} включительно.
+          Пропусков нет — всё заполнено по {data ? formatDate(data.cutoff) : "…"} включительно.
         </p>
       ) : (
         <table style={s.table}>
           <thead>
             <tr>
+              <th style={s.th}>Источник</th>
+              <th style={s.th}>Позиция</th>
               <th style={s.th}>Конструктив</th>
               <th style={s.th}>Последнее заполнение</th>
               <th style={s.th}>Пропущено недель</th>
@@ -132,7 +153,9 @@ const GprReportGapsAdminPage = () => {
           </thead>
           <tbody>
             {gaps.map((g) => (
-              <tr key={g.work_name}>
+              <tr key={`${g.source_key}|${g.position}|${g.work_name}`}>
+                <td style={s.td}>{g.source_label}</td>
+                <td style={s.td}>{g.position}</td>
                 <td style={s.td}>{g.work_name}</td>
                 <td style={s.td}>
                   {formatDate(g.last_filled_date)} ({formatPercent(g.last_filled_percent)})
@@ -151,7 +174,7 @@ const GprReportGapsAdminPage = () => {
 };
 
 const s = {
-  page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1000px", margin: "0 auto" },
+  page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1100px", margin: "0 auto" },
   header: { display: "flex", alignItems: "center", gap: "16px", marginBottom: "20px" },
   back: { background: "none", border: "1px solid #ddd", borderRadius: "6px", padding: "6px 12px", cursor: "pointer" },
   title: { margin: 0, fontSize: "22px" },
@@ -162,8 +185,9 @@ const s = {
   cardValue: { fontSize: "24px", fontWeight: 700 },
   cardValueSmall: { fontSize: "14px", fontWeight: 600, color: "#444" },
 
-  actions: { display: "flex", gap: "10px", marginBottom: "16px" },
+  actions: { display: "flex", gap: "10px", marginBottom: "16px", alignItems: "center" },
   resyncBtn: { background: "#17a2b8", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 12px", cursor: "pointer" },
+  select: { padding: "6px 10px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "13px", marginLeft: "auto" },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", fontSize: "13px" },
   muted: { color: "#888", fontSize: "14px" },

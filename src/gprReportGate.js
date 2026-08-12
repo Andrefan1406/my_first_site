@@ -1,22 +1,28 @@
 // Общая логика блокировки подачи заявок для пользователей, у которых есть
-// незакрытый пропуск в ГПР (позиция 64, см. server/gprReportCheck.js) —
-// тот же принцип, что и src/peopleGapsGate.js, только по своему списку
-// email (server/db.js: gpr_report_check_rules, управляется через
-// /admin/users, см. server/gprReportAdmin.js: /check-rules). Для email без
-// правил fetchGprReportBlock просто вернёт blocked:false — проверка
-// прозрачна для всех остальных пользователей.
+// незакрытый пропуск в ГПР — сразу по нескольким источникам (см. SOURCES в
+// server/syncGprReport.js: лист "64,72" — только поз.64, лист "НЖ3" — все
+// его позиции). Тот же принцип, что и src/peopleGapsGate.js, только по
+// своему списку email (server/db.js: gpr_report_check_rules, управляется
+// через /admin/users, см. server/gprReportAdmin.js: /check-rules). Для
+// email без правил fetchGprReportBlock просто вернёт blocked:false —
+// проверка прозрачна для всех остальных пользователей.
 import { getAuth } from 'firebase/auth';
 
 const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || 'http://localhost:4000';
 
 const GAP_LIST_THRESHOLD = 5;
 
+// "поз.64 / Витражи" — work_name один и тот же может встречаться у разных
+// позиций и источников (например, "Отопление" почти у каждой позиции НЖ3),
+// поэтому в сообщении всегда указываем позицию, а не только конструктив.
+const gapLabel = (g) => `${g.position} / ${g.work_name}`;
+
 export const gprBlockMessage = (gaps) => {
-  const names = gaps.map((g) => g.work_name);
-  if (names.length > GAP_LIST_THRESHOLD) {
-    return `Не заполнен отчёт по ГПР 64. Не хватает данных по ${names.length} конструктивам за прошлую пятницу или раньше.`;
+  const labels = gaps.map(gapLabel);
+  if (labels.length > GAP_LIST_THRESHOLD) {
+    return `Не заполнен отчёт по ГПР. Не хватает данных по ${labels.length} позициям/конструктивам за прошлую пятницу или раньше.`;
   }
-  return `Не заполнен отчёт по ГПР 64. Внесите % готовности за прошлую пятницу или раньше по: ${names.join(', ')}.`;
+  return `Не заполнен отчёт по ГПР. Внесите % готовности за прошлую пятницу или раньше по: ${labels.join(', ')}.`;
 };
 
 // Возвращает { blocked, gaps } для текущего залогиненного пользователя.
