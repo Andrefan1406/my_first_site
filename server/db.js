@@ -277,6 +277,20 @@ CREATE TABLE gpr_report_values (
 );
 CREATE INDEX IF NOT EXISTS idx_gpr_values_position_work ON gpr_report_values(position, work_name);
 CREATE INDEX IF NOT EXISTS idx_gpr_values_date ON gpr_report_values(report_date);
+
+-- gpr_report_check_rules — email'ы, для которых подача заявок блокируется,
+-- пока в ГПР (позиция 64, см. gpr_report_values/computeGprReportGaps) есть
+-- незакрытый пропуск — тот же принцип, что и people_gap_check_rules, только
+-- без "участка": проверяемая позиция сейчас всегда одна ('поз.64'), поэтому
+-- достаточно списка email без второго измерения. ПОСТОЯННОЕ хранилище
+-- (CREATE TABLE IF NOT EXISTS, без DROP) — правила не должны пропадать при
+-- синке/рестарте, как и people_gap_check_rules/people_gap_decisions.
+CREATE TABLE IF NOT EXISTS gpr_report_check_rules (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  email      TEXT NOT NULL UNIQUE,
+  created_by TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `;
 
 let writeDb = null;
