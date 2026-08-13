@@ -34,7 +34,7 @@ const LABELS_SEARCH_ROWS = 10; // сколько первых строк лис�
 const MIN_DATE_SERIAL = 40000; // Excel-serial дат начиная примерно с 2009 года
 const MAX_DATE_SERIAL = 60000; // ...и примерно по 2064 год — обе границы просто отсекают заведомо не-даты
                                 // (доли 0..1, суммы в тенге и т.п.), которые тоже могут быть числами
-const DATA_RANGE = 'A1:FZ1000'; // с запасом и по строкам, и по колонкам (лист "факт" использует до ~150 колонок)
+const DATA_RANGE = 'A1:JZ1500'; // с запасом и по строкам, и по колонкам (лист "брик таун 3" использует до ~216 колонок)
 
 const POSITION_MARKER_RE = /^поз\.\d+/;
 const STAGE_MARKER_RE = /^\d+\s*этап/i; // 'N этап' — верхний уровень группировки у sheet.stagedSections
@@ -121,7 +121,7 @@ const SOURCES = [
   },
   {
     key: 'nz5',
-    label: 'ГПР Нурлы Жол 5',
+    label: 'ГПР Нурлы Жол 5 и Ледовый каток',
     // Два листа под одним источником — один и тот же ответственный человек,
     // но структурно разные таблицы: "план" — обычные позиции поз.4.X, а
     // "ГПР" (Каток) вообще без колонки "позиция" — см. sectionsArePositions.
@@ -182,6 +182,72 @@ const SOURCES = [
     // дистанционного контроля сетей теплоснабжения" (у него нет других
     // строк-работ вообще, только этот агрегат) — не отдельная работа.
     excludeWorkNames: new Set(['ИТОГО: %']),
+  },
+  {
+    key: 'brick2',
+    label: 'Brick Town 2',
+    sheets: [
+      {
+        spreadsheetId: '1k7zGcNHeM1qXXNzEBO7NCNowSp_rd2oxxl0t86dElRY',
+        sheetName: 'брик таун 2',
+        // Позиции — "Пятно 1/2/3", "Гараж", "Подпорные стены" (никакого
+        // поз.NN), поэтому POSITION_MARKER_RE не подходит — принимаем
+        // любую непустую ячейку.
+        positionMarkerRe: /^.+/,
+        // Колонка A заполняется ТОЛЬКО на первой строке каждой группы
+        // работ, дальше пустая до следующей группы — "липкая" позиция
+        // (в отличие от поз.NN-листов, где A повторяется на каждой
+        // строке). См. sheet.stickyPosition в fetchAndParseSheet: блок-
+        // подытоги ("Пятно 3 3.1 блок") и "анонсы" следующей позиции без
+        // блока ("Гараж"/"Подпорные стены" перед своей же строкой) — тоже
+        // с пустой колонкой A, их приходится отличать от настоящих
+        // строк-данных.
+        stickyPosition: true,
+      },
+    ],
+    includePosition: () => true,
+    // "Пятно N X.Y блок" / "Пятно N Блок X.Y" — подытог блока (аналог
+    // "Блок N" на "Фасадах"), не отдельная работа; здесь, в отличие от
+    // "Фасадов", у такой строки ВСЕГДА пустая колонка A (см.
+    // stickyPosition выше). Именно этот якорный шаблон, а не просто
+    // /блок/i — тот же корень есть и у настоящей работы "Оконные блоки",
+    // которую нельзя принять за подытог.
+    blockMarkerRe: /^Пятно\s+\d+\s+(Блок\s+)?[\d.]/i,
+    // Материалы (арматура/бетон/кирпич/плиты/утеплитель) вперемешку с
+    // работами, без колонки "Категория" — исключаем по имени явно.
+    // "ИТОГО:"/"В том числе:" — подытоги, не отдельные работы.
+    excludeWorkNames: new Set([
+      'Арматура АI Ø10', 'Арматура АI Ø6', 'Арматура АI Ø8',
+      'Арматура АIII Ø10', 'Арматура АIII Ø12', 'Арматура АIII Ø14', 'Арматура АIII Ø16', 'Арматура АIII Ø20',
+      'Арматура, тн', 'Арматура; тн',
+      'Бетон (фундамент, пояс обвязки); м3', 'Бетон(плиты, а/п, сердечников); м3', 'Бетон, м3', 'Бетон; м3',
+      'Кирпич; шт', 'Плиты м2', 'Плиты фцп; м2', 'Утеплитель; м3',
+      'ИТОГО:', 'В том числе:',
+    ]),
+  },
+  {
+    key: 'brick3',
+    label: 'Brick Town 3',
+    sheets: [
+      {
+        spreadsheetId: '1k7zGcNHeM1qXXNzEBO7NCNowSp_rd2oxxl0t86dElRY',
+        sheetName: 'брик таун 3',
+        // Тот же шаблон, что и "брик таун 2" (см. комментарии там) — 3
+        // позиции ("Пятно 1/2/3"), без "Гаража"/"Подпорных стен".
+        positionMarkerRe: /^.+/,
+        stickyPosition: true,
+      },
+    ],
+    includePosition: () => true,
+    blockMarkerRe: /^Пятно\s+\d+\s+(Блок\s+)?[\d.]/i,
+    excludeWorkNames: new Set([
+      'Арматура АI Ø10', 'Арматура АI Ø6', 'Арматура АI Ø8',
+      'Арматура АIII Ø10', 'Арматура АIII Ø12', 'Арматура АIII Ø14', 'Арматура АIII Ø16', 'Арматура АIII Ø20',
+      'Арматура; тн',
+      'Бетон (фундамент, пояс обвязки); м3', 'Бетон(плиты, а/п, сердечников); м3', 'Бетон; м3',
+      'Кирпич; шт', 'Плиты м2', 'Плиты фцп; м2', 'Утеплитель; м3',
+      'ИТОГО:', 'В том числе:',
+    ]),
   },
 ];
 
@@ -298,7 +364,7 @@ async function fetchAndParseSheet(source, sheet) {
     const pos0 = (row[0] || '').toString().trim();
     const workCell = (row[workNameColIndex] || '').toString().trim();
     const isDataBoundary =
-      sheet.sectionsArePositions || sheet.stagedSections
+      sheet.sectionsArePositions || sheet.stagedSections || sheet.stickyPosition
         ? pos0 !== '' || workCell !== ''
         : POSITION_MARKER_RE.test(pos0) || /^Позиция\s/i.test(workCell);
     if (isDataBoundary) {
@@ -311,9 +377,38 @@ async function fetchAndParseSheet(source, sheet) {
   const rows = [];
   let currentPosition = '';
   let currentBlock = '';
+  // true сразу после того, как строка-заголовок блока (blockMarkerRe, без
+  // своей позиции в колонке A — см. sheet.stickyPosition) установила
+  // currentBlock, до ближайшей строки, которая заново укажет позицию в
+  // колонке A. Не даёт стандартному сбросу блока при "смене" позиции
+  // затереть только что установленный блок — на "Брик Таун" маркер блока
+  // всегда идёт ПЕРЕД строкой, повторно указывающей ту же позицию.
+  let blockJustSet = false;
+  // Две строки-подытога блока подряд без единой строки данных между ними
+  // — не бывает в реальных данных (на "Брик Таун 3" между подытогами
+  // всегда десятки строк работ) — встречается только в хвостовом мусоре
+  // исходника (см. лист "брик таун 3": в конце список подытогов блоков
+  // повторяется без самих данных, со старой "залипшей" позицией — если
+  // это не отловить, часть строк получит неверную позицию, а часть даст
+  // дубликат ключа и упадёт на UNIQUE-ограничении). При обнаружении —
+  // считаем, что реальные данные листа закончились, и останавливаемся.
+  let lastWasBlockMarker = false;
+  // Две ПОЛНОСТЬЮ пустые строки подряд (ни одной заполненной ячейки нигде)
+  // — тоже сигнал конца реальных данных (см. "брик таун 3": после
+  // подытога последнего блока идёт 6 таких строк, а за ними — ещё раз
+  // пустой повтор списка работ без единого значения, и только потом уже
+  // хвостовой список подытогов блоков, который ловит lastWasBlockMarker
+  // выше). Внутри настоящих данных обоих листов "Брик Таун" такого не
+  // встречается — проверено сканированием всего листа.
+  let consecutiveBlankRows = 0;
   for (let r = firstDataRowIndex; r < raw.length; r++) {
     const row = raw[r];
-    if (!row || !row.length) continue;
+    if (!row || !row.length) {
+      consecutiveBlankRows++;
+      if (consecutiveBlankRows >= 2) break;
+      continue;
+    }
+    consecutiveBlankRows = 0;
 
     let position;
     let workName;
@@ -362,22 +457,57 @@ async function fetchAndParseSheet(source, sheet) {
         continue; // ни заголовок, ни данные (например, полностью пустая строка)
       }
     } else {
-      position = (row[0] || '').toString().trim();
-      if (!position || !POSITION_MARKER_RE.test(position)) continue; // "Позиция N" — итоговая строка, не данные
-      if (position !== currentPosition) {
-        currentPosition = position;
-        currentBlock = '';
+      const pos0 = (row[0] || '').toString().trim();
+      const workCellRaw = (row[workNameColIndex] || '').toString().trim();
+      const positionMarkerRe = sheet.positionMarkerRe || POSITION_MARKER_RE;
+
+      if (!pos0 && sheet.stickyPosition) {
+        // Строка-заголовок без своей позиции в колонке A (например "Брик
+        // Таун" — колонка A заполняется только на ПЕРВОЙ строке каждой
+        // группы, дальше пустая до следующей группы). Тут это либо
+        // подытог блока (например "Пятно 3 3.1 блок" — см.
+        // source.blockMarkerRe), либо "анонс" следующей позиции без
+        // блока (например "Гараж"/"Подпорные стены" — та же строка, что
+        // появится в колонке A уже на следующей строке). Ни то, ни
+        // другое не данные — пропускаем, не трогая уже накопленные
+        // currentPosition/currentBlock.
+        if (source.blockMarkerRe && source.blockMarkerRe.test(workCellRaw)) {
+          if (lastWasBlockMarker) break; // хвостовой мусор — см. комментарий у lastWasBlockMarker
+          currentBlock = workCellRaw;
+          blockJustSet = true;
+          lastWasBlockMarker = true;
+          continue;
+        }
+        const nextPos0 = ((raw[r + 1] || [])[0] || '').toString().trim();
+        if (nextPos0 && workCellRaw === nextPos0) continue; // анонс следующей позиции, без блока
       }
-      workName = (row[workNameColIndex] || '').toString().trim();
+
+      if (pos0) {
+        if (!positionMarkerRe.test(pos0)) continue; // "Позиция N" — итоговая строка, не данные
+        if (pos0 !== currentPosition) {
+          currentPosition = pos0;
+          if (!blockJustSet) currentBlock = '';
+        }
+        blockJustSet = false;
+      } else if (!sheet.stickyPosition) {
+        continue; // без stickyPosition пустая колонка A = не данные (например "Позиция N")
+      }
+
+      position = currentPosition;
+      if (!position) continue; // строка данных раньше первой позиции — не должно происходить
+      workName = workCellRaw;
       if (!workName) continue;
     }
 
     if (!source.includePosition(position)) continue;
 
     if (source.blockMarkerRe && source.blockMarkerRe.test(workName)) {
+      if (lastWasBlockMarker) break; // хвостовой мусор — см. комментарий у lastWasBlockMarker
       currentBlock = workName; // подытог блока, не отдельная работа — только запоминаем контекст
+      lastWasBlockMarker = true;
       continue;
     }
+    lastWasBlockMarker = false;
 
     if (source.excludeWorkNames.has(workName)) continue;
 
