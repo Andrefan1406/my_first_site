@@ -296,6 +296,28 @@ const SOURCES = [
       'Оконные блоки Предоплата', 'Отопление Предоплата', 'Фасад Предоплата и закуп фасадных люлек',
     ]),
   },
+  {
+    key: 'biztsentr',
+    label: 'ГПР Бизнес центр',
+    sheets: [
+      {
+        spreadsheetId: '1v1wi9oqjsmgBVaEh3jQSdSZK-dBT6bSaQlMO8DO3s3c',
+        sheetName: 'план',
+        // Позиции здесь — "БЦ" (бизнес-центр) и "Паркинг", не поз.NN.
+        positionMarkerRe: /^.+/,
+      },
+    ],
+    // Тот же шаблон, что и "ГПР Экополис поз.103,104,105" (см. комментарий
+    // там про повторы работ и "Предоплата"). Материалы (арматура по
+    // диаметрам, бетон, кирпич, плиты) без колонки "Категория" —
+    // исключаем по имени явно.
+    includePosition: () => true,
+    excludeWorkNames: new Set([
+      'Арматура; тн', 'Бетон С20/25', 'Бетон С8/10', 'Бетон; м3', 'Кирпич; шт', 'Плита АКП, м2',
+      'Ф10 А240', 'Ф10 А400', 'Ф12 А400', 'Ф16 А400', 'Ф18 А400', 'Ф20 А400', 'Ф22 А400', 'Ф6 А240', 'Ф8 А240',
+      'Витражное остекление Предоплата', 'Лифт Предоплата 70%',
+    ]),
+  },
 ];
 
 const CRON_SCHEDULE = process.env.GPR_REPORT_SYNC_CRON || '0 */6 * * *';
@@ -420,7 +442,7 @@ async function fetchAndParseSheet(source, sheet) {
     const isDataBoundary =
       sheet.sectionsArePositions || sheet.stagedSections || sheet.stickyPosition
         ? pos0 !== '' || workCell !== ''
-        : POSITION_MARKER_RE.test(pos0) || /^Позиция\s/i.test(workCell);
+        : (sheet.positionMarkerRe || POSITION_MARKER_RE).test(pos0) || /^Позиция\s/i.test(workCell);
     if (isDataBoundary) {
       firstDataRowIndex = r;
       break;
