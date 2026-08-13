@@ -249,6 +249,32 @@ const SOURCES = [
       'ИТОГО:', 'В том числе:',
     ]),
   },
+  {
+    key: 'kos',
+    label: 'ГПР КОС',
+    sheets: [
+      {
+        spreadsheetId: '1WcwgMl16rUmxa9OgK0-RuOlbAAs-PjwqDgHIkYXEGuY',
+        sheetName: 'план',
+        // Тут "Конструктивы" — колонка ПОЗИЦИИ ("Осн.корпус", "КНС-1" и
+        // т.п. — очистные сооружения, никакого поз.NN), а название самой
+        // работы — в отдельной "Наименование работ" правее. Обе колонки
+        // заданы явно, автопоиск по "Конструктивы" тут дал бы неверный
+        // (не тот) индекс.
+        positionColIndex: 1,
+        workNameColIndex: 2,
+        positionMarkerRe: /^.+/,
+        // Колонка позиции заполнена только на первой строке каждой
+        // группы работ, дальше пустая — как на "Брик Таун".
+        stickyPosition: true,
+      },
+    ],
+    includePosition: () => true,
+    // "ВСЕГО:" — подытог позиции "Осн.корпус", не отдельная работа.
+    // Материалы (без колонки "Категория") в конце листа, общие на весь
+    // объект — исключаем по имени явно.
+    excludeWorkNames: new Set(['ВСЕГО:', 'Бетон', 'Арматура', 'Кирпич', 'Утеплитель']),
+  },
 ];
 
 const CRON_SCHEDULE = process.env.GPR_REPORT_SYNC_CRON || '0 */6 * * *';
@@ -301,6 +327,13 @@ async function fetchAndParseSheet(source, sheet) {
       throw new Error(`[${source.key}] не найдена колонка "Конструктивы" в строке заголовков листа "${sheet.sheetName}"`);
     }
   }
+
+  // Колонка позиции — обычно A (0); на "ГПР КОС" сама подпись
+  // "Конструктивы" (обычно означающая название работы) на самом деле —
+  // колонка позиции ("Осн.корпус", "КНС-1" и т.п.), а название работы —
+  // в отдельной "Наименование работ" правее, поэтому обе колонки заданы
+  // явно через sheet.workNameColIndex/positionColIndex, без автопоиска.
+  const positionColIndex = sheet.positionColIndex ?? 0;
 
   // Категория строки ("Работа"/"Материал") — есть не у всех листов; если
   // колонки нет, ниже просто ничего не фильтруется по ней.
@@ -361,7 +394,7 @@ async function fetchAndParseSheet(source, sheet) {
   let firstDataRowIndex = labelsRowIndex + 1;
   for (let r = labelsRowIndex + 1; r < raw.length; r++) {
     const row = raw[r] || [];
-    const pos0 = (row[0] || '').toString().trim();
+    const pos0 = (row[positionColIndex] || '').toString().trim();
     const workCell = (row[workNameColIndex] || '').toString().trim();
     const isDataBoundary =
       sheet.sectionsArePositions || sheet.stagedSections || sheet.stickyPosition
@@ -457,18 +490,18 @@ async function fetchAndParseSheet(source, sheet) {
         continue; // ни заголовок, ни данные (например, полностью пустая строка)
       }
     } else {
-      const pos0 = (row[0] || '').toString().trim();
+      const pos0 = (row[positionColIndex] || '').toString().trim();
       const workCellRaw = (row[workNameColIndex] || '').toString().trim();
       const positionMarkerRe = sheet.positionMarkerRe || POSITION_MARKER_RE;
 
       if (!pos0 && sheet.stickyPosition) {
-        // Строка-заголовок без своей позиции в колонке A (например "Брик
-        // Таун" — колонка A заполняется только на ПЕРВОЙ строке каждой
-        // группы, дальше пустая до следующей группы). Тут это либо
+        // Строка-заголовок без своей позиции в колонке позиции (например
+        // "Брик Таун" — колонка A заполняется только на ПЕРВОЙ строке
+        // каждой группы, дальше пустая до следующей группы). Тут это либо
         // подытог блока (например "Пятно 3 3.1 блок" — см.
         // source.blockMarkerRe), либо "анонс" следующей позиции без
         // блока (например "Гараж"/"Подпорные стены" — та же строка, что
-        // появится в колонке A уже на следующей строке). Ни то, ни
+        // появится в колонке позиции уже на следующей строке). Ни то, ни
         // другое не данные — пропускаем, не трогая уже накопленные
         // currentPosition/currentBlock.
         if (source.blockMarkerRe && source.blockMarkerRe.test(workCellRaw)) {
@@ -478,7 +511,7 @@ async function fetchAndParseSheet(source, sheet) {
           lastWasBlockMarker = true;
           continue;
         }
-        const nextPos0 = ((raw[r + 1] || [])[0] || '').toString().trim();
+        const nextPos0 = ((raw[r + 1] || [])[positionColIndex] || '').toString().trim();
         if (nextPos0 && workCellRaw === nextPos0) continue; // анонс следующей позиции, без блока
       }
 

@@ -29,6 +29,7 @@ const GPR_SOURCES = [
   { key: "razvyazka", label: "ГПР Развязка" },
   { key: "brick2", label: "Brick Town 2" },
   { key: "brick3", label: "Brick Town 3" },
+  { key: "kos", label: "ГПР КОС" },
 ];
 
 async function getIdToken() {
