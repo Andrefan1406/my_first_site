@@ -37,13 +37,13 @@ const MAX_DATE_SERIAL = 60000; // ...и примерно по 2064 год — о
 const DATA_RANGE = 'A1:FZ1000'; // с запасом и по строкам, и по колонкам (лист "факт" использует до ~150 колонок)
 
 const POSITION_MARKER_RE = /^поз\.\d+/;
+const STAGE_MARKER_RE = /^\d+\s*этап/i; // 'N этап' — верхний уровень группировки у sheet.stagedSections
 
 const SOURCES = [
   {
     key: 'poz64_72',
     label: 'ГПР 64,72',
-    spreadsheetId: '1eC80R11Hp26IVfLLa4M-_wnYGqTRHEi6k2_XG5Goqf0',
-    sheetName: '64,72',
+    sheets: [{ spreadsheetId: '1eC80R11Hp26IVfLLa4M-_wnYGqTRHEi6k2_XG5Goqf0', sheetName: '64,72' }],
     // поз.64 и поз.72 — основные (не "коммерческие") блоки этого листа. Есть
     // ещё 'поз.64 ком.'/'поз.72 ком.' (отдельные строки-маркеры для
     // коммерческих помещений тех же позиций) — их намеренно не включаем,
@@ -55,8 +55,7 @@ const SOURCES = [
   {
     key: 'nz3',
     label: 'ГПР НЖ3 (ОВ, ВК)',
-    spreadsheetId: '160_Nmmj4p0jX5NdJLTpRntoFHDHoxiyZptEVdp0U3mE',
-    sheetName: 'НЖ3',
+    sheets: [{ spreadsheetId: '160_Nmmj4p0jX5NdJLTpRntoFHDHoxiyZptEVdp0U3mE', sheetName: 'НЖ3' }],
     // Вся вкладка целиком — любая позиция с маркером поз.NN (56, 72, 69, 64, 63, 59, 65).
     includePosition: () => true,
     // "Водоснабжение и канализация" и "Отопление" здесь — промежуточные
@@ -71,8 +70,7 @@ const SOURCES = [
   {
     key: 'facades',
     label: 'Фасады',
-    spreadsheetId: '1WcB1F8B8vdth1DHwa6UkKSfMag1UmDzRWcuHik9kUEA',
-    sheetName: 'план_processed',
+    sheets: [{ spreadsheetId: '1WcB1F8B8vdth1DHwa6UkKSfMag1UmDzRWcuHik9kUEA', sheetName: 'план_processed' }],
     // Вся вкладка целиком — 5 объектов (Нурлы Жол 3, Спорт, Экополис, Лицей,
     // Ледовый каток), 16 позиций (56, 59, 63, 64, 65, 69, 72, 74, 76,
     // "73,75", 93, 100, 101, 103, 104, 105).
@@ -81,14 +79,13 @@ const SOURCES = [
     // У части позиций есть несколько блоков (например, поз.59 — 4 блока):
     // строка "Блок N" в колонке "Конструктивы" — промежуточный итог по
     // своим дочерним строкам (та же природа, что "Позиция N"/подытоги в
-    // НЖ3), не отдельная работа. См. блок-трекинг в fetchAndParseSource.
+    // НЖ3), не отдельная работа. См. блок-трекинг в fetchAndParseSheet.
     blockMarkerRe: /^Блок\s+\d+/i,
   },
   {
     key: 'sport2',
     label: 'ГПР Спорт 2',
-    spreadsheetId: '1I1zCQjPKGjZmRp2yIr23shae6SXMV-I6YO-rDGzvBgA',
-    sheetName: 'ГПР',
+    sheets: [{ spreadsheetId: '1I1zCQjPKGjZmRp2yIr23shae6SXMV-I6YO-rDGzvBgA', sheetName: 'ГПР' }],
     // Вся вкладка целиком — 6 позиций (73,75, 74, 76, 93, 100, 101). У листа
     // есть доп. колонка "план/факт/прогноз" (B) и строки-материалы (тип
     // "Материал" в последней колонке) вперемешку со строками-работами —
@@ -101,12 +98,16 @@ const SOURCES = [
   {
     key: 'nz4',
     label: 'ГПР Нурлы Жол 4',
-    spreadsheetId: '102E0nzIE4gyp_t4HNozvy4w-dZAa8rZ_oqx_L5IAPjQ',
-    sheetName: 'факт',
-    // 2025 год и 2026-2027 годы прописаны в двух строках подряд под
-    // подписями (offset 1 и 2 от строки подписей), а не в одной, как у
-    // остальных листов (offset 2 по умолчанию) — см. dateRowOffsets ниже.
-    dateRowOffsets: [1, 2],
+    sheets: [
+      {
+        spreadsheetId: '102E0nzIE4gyp_t4HNozvy4w-dZAa8rZ_oqx_L5IAPjQ',
+        sheetName: 'факт',
+        // 2025 год и 2026-2027 годы прописаны в двух строках подряд под
+        // подписями (offset 1 и 2 от строки подписей), а не в одной, как у
+        // остальных листов (offset 2 по умолчанию).
+        dateRowOffsets: [1, 2],
+      },
+    ],
     // Вся вкладка целиком — 9 позиций (1.1..1.9). У листа есть колонка
     // "Категория" (последняя), размечающая каждую строку данных как
     // "Работа" (реальная работа, отслеживаем % готовности) или "Материал"
@@ -114,9 +115,73 @@ const SOURCES = [
     // готовности, а доля/объём поставки) — и, в отличие от листа "ГПР
     // Спорт 2", строки-материалы здесь ИМЕЮТ маркер позиции в колонке A
     // (не отсеиваются пустой колонкой A), поэтому фильтруются явно по
-    // "Категория" === "Материал" (см. fetchAndParseSource).
+    // "Категория" === "Материал" (см. fetchAndParseSheet).
     includePosition: () => true,
     excludeWorkNames: new Set(),
+  },
+  {
+    key: 'nz5',
+    label: 'ГПР Нурлы Жол 5',
+    // Два листа под одним источником — один и тот же ответственный человек,
+    // но структурно разные таблицы: "план" — обычные позиции поз.4.X, а
+    // "ГПР" (Каток) вообще без колонки "позиция" — см. sectionsArePositions.
+    sheets: [
+      {
+        spreadsheetId: '1hbfMRSH7wsP5KhSDk5Tuk79pirvftOC_tFXHHWryPIg',
+        sheetName: 'план',
+        // 11 позиций (4.1..4.9, 4.11, и совмещённая "4.10-4.12"). Та же
+        // "Категория" (Работа/Материал), что и у "ГПР Нурлы Жол 4". Все
+        // недельные даты (2026-2027, с 2025 годом лист не начинается)
+        // умещаются в одной строке — offset [2] по умолчанию.
+      },
+      {
+        spreadsheetId: '17o-Sg8XtD6Fd46RlUOSo1ISFixM3yVtJ-YP-MAg_7Lo',
+        sheetName: 'ГПР',
+        // Колонки "позиция" нет вообще — весь объект ("Каток") описан
+        // плоским списком работ без поз.NN, сгруппированным заголовками
+        // разделов ("Административный блок", "Ледовый зал"): у этих строк
+        // колонка A пустая, а название раздела — в колонке "Конструктивы"
+        // (как "Позиция N" у обычных листов, только это единственный
+        // уровень группировки, а не под-уровень внутри позиции). Поэтому
+        // берём заголовок раздела как "позицию" вместо реального поз.NN
+        // (см. sectionsArePositions в fetchAndParseSheet). Колонка A на
+        // строках-данных всегда "план" (там нет "факт"/"прогноз" на этом
+        // листе) — сама по себе не используется.
+        sectionsArePositions: true,
+      },
+    ],
+    includePosition: () => true,
+    excludeWorkNames: new Set(),
+  },
+  {
+    key: 'razvyazka',
+    label: 'ГПР Развязка',
+    sheets: [
+      {
+        spreadsheetId: '16F_1zGQxSxNazg-Bp3mKlJHBn311S0TsUhwCuMxApoE',
+        sheetName: 'ГПР факт',
+        // Совсем другой шаблон (дорожная развязка, не здание): подпись
+        // конечной даты — "Дата окончания", а не "Окончание" (см. общий
+        // поиск по корню "оконч" в fetchAndParseSheet); колонки
+        // "Конструктивы" нет вообще — название работы без подписи в
+        // строке заголовков (соседняя "Объем работы" — это подпись для
+        // КОЛИЧЕСТВА в следующей колонке, не имени работы), поэтому индекс
+        // задан явно.
+        workNameColIndex: 1,
+        // Ни поз.NN, ни плоских разделов — двухуровневая структура "N
+        // этап" (1 этап, "2 этап (путепроводы)", "3 этап (петля)") с
+        // вложенными разделами ("Демонтажные работы", "Автомобильные
+        // дороги" и т.п.), причём НАЗВАНИЯ разделов повторяются в разных
+        // этапах — поэтому этап становится "позицией", а раздел —
+        // "блоком" (см. stagedSections в fetchAndParseSheet).
+        stagedSections: true,
+      },
+    ],
+    includePosition: () => true,
+    // "ИТОГО: %" — подытог по всему разделу "Система оперативно-
+    // дистанционного контроля сетей теплоснабжения" (у него нет других
+    // строк-работ вообще, только этот агрегат) — не отдельная работа.
+    excludeWorkNames: new Set(['ИТОГО: %']),
   },
 ];
 
@@ -134,13 +199,19 @@ function excelSerialToISODate(serial) {
   return `${y}-${m}-${day}`;
 }
 
-async function fetchAndParseSource(source) {
-  const raw = await getUnformattedValues(source.spreadsheetId, source.sheetName, DATA_RANGE);
+// Разбирает ОДИН лист (source.sheets[i]) — источник (SOURCES[i]) может
+// объединять несколько листов/таблиц под одним key (см. 'nz5': позиции
+// поз.4.X с одного листа + разделы "Каток" с другого — один человек
+// отвечает за оба, но структуры листов разные).
+async function fetchAndParseSheet(source, sheet) {
+  const raw = await getUnformattedValues(sheet.spreadsheetId, sheet.sheetName, DATA_RANGE);
 
+  // "Окончание" на большинстве листов, "Дата окончания" — на "ГПР факт"
+  // (Развязка); ищем по общему корню, а не точным совпадением.
   let labelsRowIndex = -1;
   let endColIndex = -1;
   for (let r = 0; r < Math.min(raw.length, LABELS_SEARCH_ROWS); r++) {
-    const idx = (raw[r] || []).findIndex((v) => typeof v === 'string' && v.trim() === 'Окончание');
+    const idx = (raw[r] || []).findIndex((v) => typeof v === 'string' && /оконч/i.test(v));
     if (idx !== -1) {
       labelsRowIndex = r;
       endColIndex = idx;
@@ -148,14 +219,21 @@ async function fetchAndParseSource(source) {
     }
   }
   if (labelsRowIndex === -1) {
-    throw new Error(`[${source.key}] не найдена колонка "Окончание" в первых строках листа "${source.sheetName}"`);
+    throw new Error(`[${source.key}] не найдена колонка "Окончание" в первых строках листа "${sheet.sheetName}"`);
   }
   const labelsRow = raw[labelsRowIndex];
   const firstDateCol = endColIndex + 1;
 
-  const workNameColIndex = labelsRow.findIndex((v) => typeof v === 'string' && v.trim() === 'Конструктивы');
-  if (workNameColIndex === -1) {
-    throw new Error(`[${source.key}] не найдена колонка "Конструктивы" в строке заголовков листа "${source.sheetName}"`);
+  // На "ГПР факт" (Развязка) колонки "Конструктивы" вообще нет — само
+  // название работы там без подписи в строке заголовков (соседняя ячейка
+  // "Объем работы" — это подпись для КОЛИЧЕСТВА, не имени работы), поэтому
+  // индекс колонки задаётся явно через sheet.workNameColIndex.
+  let workNameColIndex = sheet.workNameColIndex;
+  if (workNameColIndex === undefined) {
+    workNameColIndex = labelsRow.findIndex((v) => typeof v === 'string' && v.trim() === 'Конструктивы');
+    if (workNameColIndex === -1) {
+      throw new Error(`[${source.key}] не найдена колонка "Конструктивы" в строке заголовков листа "${sheet.sheetName}"`);
+    }
   }
 
   // Категория строки ("Работа"/"Материал") — есть не у всех листов; если
@@ -169,21 +247,25 @@ async function fetchAndParseSource(source) {
   // подписей. Отсекаем недельные колонки ДО первой такой текстовой ячейки
   // после firstDateCol — иначе побочная таблица подмешивает свои
   // даты-маркеры к недельным (реальная коллизия: те же календарные даты на
-  // ДРУГИХ номерах колонок дают дубликат в БД).
-  let boundaryCol = Infinity; // нет текстовой ячейки в пределах labelsRow — значит, побочной таблицы нет, границу не ставим
+  // ДРУГИХ номерах колонок дают дубликат в БД). Ищем ИМЕННО эти ключевые
+  // слова, а не любую текстовую ячейку — у листа "ГПР" (Каток) сам год
+  // ("2025") почему-то записан строкой, а не числом, прямо в firstDateCol,
+  // и без этого сужения ложно обнулил бы вообще все недельные колонки.
+  const BOUNDARY_KEYWORD_RE = /сумма|остаток|доля|ндс|категория/i;
+  let boundaryCol = Infinity; // нет ключевого слова в пределах labelsRow — значит, побочной таблицы нет, границу не ставим
   for (let c = firstDateCol; c < labelsRow.length; c++) {
-    if (typeof labelsRow[c] === 'string' && labelsRow[c].trim() !== '') {
+    if (typeof labelsRow[c] === 'string' && BOUNDARY_KEYWORD_RE.test(labelsRow[c])) {
       boundaryCol = c;
       break;
     }
   }
 
-  // Недельные даты — в строке(-ах) на source.dateRowOffsets ниже строки
+  // Недельные даты — в строке(-ах) на sheet.dateRowOffsets ниже строки
   // подписей (по умолчанию [2] — так исторически устроены все листы, кроме
   // "факт", где 2025 год и 2026-2027 годы прописаны в двух строках подряд,
   // offset [1, 2]).
   const dateColumnsMap = new Map(); // colIndex -> reportDate
-  for (const offset of source.dateRowOffsets || [2]) {
+  for (const offset of sheet.dateRowOffsets || [2]) {
     const row = raw[labelsRowIndex + offset] || [];
     for (let c = firstDateCol; c < Math.min(row.length, boundaryCol); c++) {
       const v = row[c];
@@ -202,17 +284,24 @@ async function fetchAndParseSource(source) {
     .sort((a, b) => a[0] - b[0])
     .map(([colIndex, reportDate]) => ({ colIndex, reportDate }));
 
-  // Первая строка данных — динамически ищем начиная сразу после подписей:
-  // как только встречаем маркер позиции 'поз.NN' в колонке A, либо
-  // "Позиция N" (итоговая сводка) в колонке "Конструктивы". Именно \s, а
-  // не \b — у кириллицы JS-регэксп \b не работает ожидаемо ("я" не
+  // Первая строка данных — динамически ищем начиная сразу после подписей.
+  // Обычный случай: как только встречаем маркер позиции 'поз.NN' в колонке
+  // A, либо "Позиция N" (итоговая сводка) в колонке "Конструктивы". Именно
+  // \s, а не \b — у кириллицы JS-регэксп \b не работает ожидаемо ("я" не
   // считается символом \w), так что "Позиция\b" не совпадёт вообще.
+  // sheet.sectionsArePositions/stagedSections (см. ниже) — колонки
+  // "позиция" вообще нет, поэтому границей данных считаем первую строку с
+  // непустым названием работы/раздела.
   let firstDataRowIndex = labelsRowIndex + 1;
   for (let r = labelsRowIndex + 1; r < raw.length; r++) {
     const row = raw[r] || [];
     const pos0 = (row[0] || '').toString().trim();
     const workCell = (row[workNameColIndex] || '').toString().trim();
-    if (POSITION_MARKER_RE.test(pos0) || /^Позиция\s/i.test(workCell)) {
+    const isDataBoundary =
+      sheet.sectionsArePositions || sheet.stagedSections
+        ? pos0 !== '' || workCell !== ''
+        : POSITION_MARKER_RE.test(pos0) || /^Позиция\s/i.test(workCell);
+    if (isDataBoundary) {
       firstDataRowIndex = r;
       break;
     }
@@ -226,16 +315,64 @@ async function fetchAndParseSource(source) {
     const row = raw[r];
     if (!row || !row.length) continue;
 
-    const position = (row[0] || '').toString().trim();
-    if (!position || !POSITION_MARKER_RE.test(position)) continue; // "Позиция N" — итоговая строка, не данные
-    if (position !== currentPosition) {
-      currentPosition = position;
-      currentBlock = '';
-    }
-    if (!source.includePosition(position)) continue;
+    let position;
+    let workName;
 
-    const workName = (row[workNameColIndex] || '').toString().trim();
-    if (!workName) continue;
+    if (sheet.sectionsArePositions) {
+      // Нет колонки "позиция" (поз.NN) — весь объект описан плоским
+      // списком работ, сгруппированным заголовками-разделами (например
+      // "Административный блок"/"Ледовый зал" на листе "ГПР" Катка).
+      // Колонка A здесь — не маркер позиции, а тип строки (у Катка всегда
+      // "план") и сама по себе не используется.
+      const col0 = (row[0] || '').toString().trim();
+      const workCell = (row[workNameColIndex] || '').toString().trim();
+      if (!col0) {
+        if (workCell) currentPosition = workCell; // заголовок раздела — контекст, не данные
+        continue;
+      }
+      if (!currentPosition) continue; // строка данных раньше первого заголовка раздела — не должно происходить
+      position = currentPosition;
+      workName = workCell;
+      if (!workName) continue;
+    } else if (sheet.stagedSections) {
+      // Двухуровневая группировка вместо позиций: "N этап" (например
+      // "1 этап", "2 этап (путепроводы)") — верхний уровень, становится
+      // "позицией"; вложенные заголовки-разделы (например "Демонтажные
+      // работы", "Автомобильные дороги" — их названия ПОВТОРЯЮТСЯ в
+      // разных этапах, поэтому одни, без этапа, для "позиции" не годятся)
+      // — становится "блоком". И то, и другое — строка-заголовок с
+      // текстом ТОЛЬКО в колонке A, остальное пусто (см. "ГПР факт",
+      // Развязка).
+      const col0 = (row[0] || '').toString().trim();
+      const workCell = (row[workNameColIndex] || '').toString().trim();
+      if (col0 && !workCell) {
+        if ((sheet.stageMarkerRe || STAGE_MARKER_RE).test(col0)) {
+          currentPosition = col0;
+          currentBlock = '';
+        } else {
+          currentBlock = col0;
+        }
+        continue;
+      }
+      if (!col0 && workCell) {
+        if (!currentPosition) continue; // строка данных раньше первого "N этап" — не должно происходить
+        position = currentPosition;
+        workName = workCell;
+      } else {
+        continue; // ни заголовок, ни данные (например, полностью пустая строка)
+      }
+    } else {
+      position = (row[0] || '').toString().trim();
+      if (!position || !POSITION_MARKER_RE.test(position)) continue; // "Позиция N" — итоговая строка, не данные
+      if (position !== currentPosition) {
+        currentPosition = position;
+        currentBlock = '';
+      }
+      workName = (row[workNameColIndex] || '').toString().trim();
+      if (!workName) continue;
+    }
+
+    if (!source.includePosition(position)) continue;
 
     if (source.blockMarkerRe && source.blockMarkerRe.test(workName)) {
       currentBlock = workName; // подытог блока, не отдельная работа — только запоминаем контекст
@@ -277,8 +414,10 @@ async function fetchAndParseSource(source) {
 async function fetchAndParse() {
   const all = [];
   for (const source of SOURCES) {
-    const rows = await fetchAndParseSource(source);
-    all.push(...rows);
+    for (const sheet of source.sheets) {
+      const rows = await fetchAndParseSheet(source, sheet);
+      all.push(...rows);
+    }
   }
   return all;
 }

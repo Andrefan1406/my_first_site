@@ -25,6 +25,8 @@ const GPR_SOURCES = [
   { key: "facades", label: "Фасады" },
   { key: "sport2", label: "ГПР Спорт 2" },
   { key: "nz4", label: "ГПР Нурлы Жол 4" },
+  { key: "nz5", label: "ГПР Нурлы Жол 5" },
+  { key: "razvyazka", label: "ГПР Развязка" },
 ];
 
 async function getIdToken() {
