@@ -275,6 +275,27 @@ const SOURCES = [
     // объект — исключаем по имени явно.
     excludeWorkNames: new Set(['ВСЕГО:', 'Бетон', 'Арматура', 'Кирпич', 'Утеплитель']),
   },
+  {
+    key: 'ekopolis2',
+    label: 'ГПР Экополис поз.103,104,105',
+    sheets: [{ spreadsheetId: '1kpCz-ltR4JLqy_IzEYHTvypq_DbnFRllZzfc3ck3fC8', sheetName: 'Факт' }],
+    // Вся вкладка целиком — поз.103, 104, 105. Обычный шаблон (как
+    // "64,72"/"НЖ3"), но: 1) "Монолитный каркас"/"Каменная кладка" на
+    // некоторых позициях встречаются ДВАЖДЫ отдельными строками с
+    // непересекающимися интервалами дат (видимо, разные этапы/объёмы) —
+    // такое разруливает общий механизм нумерации повторов в
+    // fetchAndParseSheet, не нужно ничего настраивать здесь;
+    // 2) "...Предоплата"/"Плита АКП, м2"/"Утеплитель, м3" — не % готовности
+    // работы, а разовая оплата/материал: явно записаны нулём на несколько
+    // недель подряд, потом уходят в пустоту — под обычную логику пропуска
+    // это ложно засчиталось бы как "забыли внести", хотя это не так.
+    includePosition: () => true,
+    excludeWorkNames: new Set([
+      'Утеплитель, м3', 'Плита АКП, м2',
+      'Вентиляция Предоплата', 'Витражи Предоплата', 'Лифт Предоплата',
+      'Оконные блоки Предоплата', 'Отопление Предоплата', 'Фасад Предоплата и закуп фасадных люлек',
+    ]),
+  },
 ];
 
 const CRON_SCHEDULE = process.env.GPR_REPORT_SYNC_CRON || '0 */6 * * *';
@@ -408,6 +429,13 @@ async function fetchAndParseSheet(source, sheet) {
   }
 
   const rows = [];
+  // Одна и та же работа изредка встречается ДВАЖДЫ под одной позицией на
+  // отдельных строках с непересекающимися интервалами дат (см. "ГПР
+  // Экополис поз. 103,104,105": "Монолитный каркас"/"Каменная кладка" —
+  // видимо, разные этапы/объёмы одной и той же работы без своей подписи).
+  // Реальные, не мусорные данные — просто разруливаем коллизию ключа,
+  // нумеруя повторы, а не отбрасываем.
+  const workNameOccurrences = new Map(); // "position|block|workName" -> счётчик
   let currentPosition = '';
   let currentBlock = '';
   // true сразу после того, как строка-заголовок блока (blockMarkerRe, без
@@ -549,6 +577,11 @@ async function fetchAndParseSheet(source, sheet) {
       if (category === 'Материал') continue; // расход материала, не % готовности работы
     }
 
+    const occurrenceKey = `${position}|${currentBlock}|${workName}`;
+    const occurrence = (workNameOccurrences.get(occurrenceKey) || 0) + 1;
+    workNameOccurrences.set(occurrenceKey, occurrence);
+    const storedWorkName = occurrence > 1 ? `${workName} (${occurrence})` : workName;
+
     for (const { colIndex, reportDate } of dateColumns) {
       const cell = row[colIndex];
       let percent = null;
@@ -564,7 +597,7 @@ async function fetchAndParseSheet(source, sheet) {
         source_label: source.label,
         position,
         block: currentBlock,
-        work_name: workName,
+        work_name: storedWorkName,
         report_date: reportDate,
         percent,
       });
