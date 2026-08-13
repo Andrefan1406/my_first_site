@@ -24,6 +24,7 @@ const GPR_SOURCES = [
   { key: "nz3", label: "ГПР НЖ3 (ОВ, ВК)" },
   { key: "facades", label: "Фасады" },
   { key: "sport2", label: "ГПР Спорт 2" },
+  { key: "nz4", label: "ГПР Нурлы Жол 4" },
 ];
 
 async function getIdToken() {
@@ -112,13 +113,7 @@ const GprCheckRulesSection = ({ sourceKey, sourceLabel }) => {
 
   return (
     <section style={{ ...s.section, marginTop: "20px" }}>
-      <h2 style={s.sectionTitle}>Проверка пропусков — {sourceLabel}</h2>
-      <p style={s.hint}>
-        Для email из списка ниже подача любых заявок блокируется, пока в графике
-        производства работ «{sourceLabel}» есть незаполненный % готовности за прошлую
-        пятницу или раньше. Как только отчёт заполнят — блокировка снимается сама. Это
-        отдельный список от других источников ГПР — за них отвечают разные люди.
-      </p>
+      <h2 style={s.sectionTitle}>{sourceLabel}</h2>
 
       <form onSubmit={handleAdd} style={s.form}>
         <input
@@ -297,6 +292,16 @@ const PeopleGapsUsersAdminPage = () => {
             </tbody>
           </table>
         )}
+      </section>
+
+      <section style={{ ...s.section, marginTop: "20px" }}>
+        <h2 style={s.sectionTitle}>Проверка пропусков — ГПР</h2>
+        <p style={s.hint}>
+          Для email из списка блокируется подача любых заявок, пока в соответствующем графике
+          производства работ есть незаполненный % готовности за прошлую пятницу или раньше. Как
+          только отчёт заполнят — блокировка снимается сама. У каждого источника ГПР свой
+          отдельный список email — за них отвечают разные люди.
+        </p>
       </section>
 
       {GPR_SOURCES.map((src) => (

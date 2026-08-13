@@ -4,26 +4,37 @@
 // задачи "парсер ГПР поз.64.ipynb"), переписанный на Node и обобщённый на
 // произвольное число листов после добавления второго источника (НЖ3).
 //
-// Формат исходника — общий шаблон компании, стабильный между листами, хоть
-// сами колонки до дат и отличаются числом (лист НЖ3 добавляет колонку
-// "Подрядчик"): строка 4 (0-индекс 3) — подписи колонок, где последняя перед
-// датами всегда называется "Окончание" (по ней ищем, с какой колонки
-// начинаются даты — не хардкодим номер колонки на каждый лист); строка 6
-// (0-индекс 5) — сами Excel-serial-даты (одна колонка = одна пятница);
-// данные — с строки 8 (0-индекс 7). Колонка A содержит маркер 'поз.NN' у
-// каждой строки данных этой позиции; у строк-разделов без данных (например,
-// "Кровельные работы" на листе "64,72") колонка A ВСЁ РАВНО содержит маркер
-// позиции — их приходится исключать по имени (source.excludeWorkNames), а
-// не по пустой колонке A. У строк-заголовков "Позиция N" (итоговая сводка)
-// колонка A, наоборот, пустая — их отсеивает POSITION_MARKER_RE.
+// Формат исходника — общий шаблон компании, стабильный между листами по
+// смыслу, но не по точному номеру строки/колонки (сколько строк-заголовков
+// объекта идёт перед подписями колонок, растянуты ли недельные даты на одну
+// строку или на несколько подряд — у листа "факт" (Нурлы Жол 4) 2025 год и
+// 2026-2027 годы прописаны в двух РАЗНЫХ строках одна под другой, видимо
+// из-за того что таблицу дописывали по частям). Поэтому строка подписей и
+// строки с датами ищутся динамически, а не хардкодятся номером:
+// - строка подписей — первая строка, где есть ячейка "Окончание" (по ней же
+//   вычисляем колонку начала недельных дат, и "Конструктивы" — колонку
+//   названия работы); ищем в первых LABELS_SEARCH_ROWS строках;
+// - дальше подряд читаем строки и собираем из них ячейки-serial-даты
+//   (число >= MIN_DATE_SERIAL — так отличаем реальную дату от, например,
+//   доли 0..1 в строке-подытоге "Позиция N"), пока не упрёмся в границу
+//   данных: либо колонка A уже содержит маркер 'поз.NN' (данные начались
+//   без явной строки-подытога), либо колонка "Конструктивы" содержит
+//   "Позиция ..." (итоговая сводка перед данными этой позиции).
+// Колонка A содержит маркер 'поз.NN' у каждой строки данных этой позиции; у
+// строк-разделов без данных (например, "Кровельные работы" на листе
+// "64,72") колонка A ВСЁ РАВНО содержит маркер позиции — их приходится
+// исключать по имени (source.excludeWorkNames), а не по пустой колонке A.
+// У строк-заголовков "Позиция N" колонка A, наоборот, пустая — их отсеивает
+// POSITION_MARKER_RE.
 const cron = require('node-cron');
 const { getWriteDb } = require('./db');
 const { getUnformattedValues } = require('./googleSheetsClient');
 
-const LABELS_ROW_INDEX = 3; // 0-индекс: строка 4 — подписи колонок, последняя перед датами — "Окончание"
-const HEADER_ROW_INDEX = 5; // 0-индекс: строка 6 — Excel-serial-даты
-const FIRST_DATA_ROW_INDEX = 7; // 0-индекс: строка 8 — первая строка с данными
-const DATA_RANGE = 'A1:CZ600'; // с запасом и по строкам (лист "план_processed" доходит до строки 454), и по колонкам
+const LABELS_SEARCH_ROWS = 10; // сколько первых строк листа проверяем в поисках подписи "Окончание"
+const MIN_DATE_SERIAL = 40000; // Excel-serial дат начиная примерно с 2009 года
+const MAX_DATE_SERIAL = 60000; // ...и примерно по 2064 год — обе границы просто отсекают заведомо не-даты
+                                // (доли 0..1, суммы в тенге и т.п.), которые тоже могут быть числами
+const DATA_RANGE = 'A1:FZ1000'; // с запасом и по строкам, и по колонкам (лист "факт" использует до ~150 колонок)
 
 const POSITION_MARKER_RE = /^поз\.\d+/;
 
@@ -87,6 +98,26 @@ const SOURCES = [
     includePosition: () => true,
     excludeWorkNames: new Set(),
   },
+  {
+    key: 'nz4',
+    label: 'ГПР Нурлы Жол 4',
+    spreadsheetId: '102E0nzIE4gyp_t4HNozvy4w-dZAa8rZ_oqx_L5IAPjQ',
+    sheetName: 'факт',
+    // 2025 год и 2026-2027 годы прописаны в двух строках подряд под
+    // подписями (offset 1 и 2 от строки подписей), а не в одной, как у
+    // остальных листов (offset 2 по умолчанию) — см. dateRowOffsets ниже.
+    dateRowOffsets: [1, 2],
+    // Вся вкладка целиком — 9 позиций (1.1..1.9). У листа есть колонка
+    // "Категория" (последняя), размечающая каждую строку данных как
+    // "Работа" (реальная работа, отслеживаем % готовности) или "Материал"
+    // (расход материала, например "Арматура АI Ø6, тн" — число там не %
+    // готовности, а доля/объём поставки) — и, в отличие от листа "ГПР
+    // Спорт 2", строки-материалы здесь ИМЕЮТ маркер позиции в колонке A
+    // (не отсеиваются пустой колонкой A), поэтому фильтруются явно по
+    // "Категория" === "Материал" (см. fetchAndParseSource).
+    includePosition: () => true,
+    excludeWorkNames: new Set(),
+  },
 ];
 
 const CRON_SCHEDULE = process.env.GPR_REPORT_SYNC_CRON || '0 */6 * * *';
@@ -106,11 +137,20 @@ function excelSerialToISODate(serial) {
 async function fetchAndParseSource(source) {
   const raw = await getUnformattedValues(source.spreadsheetId, source.sheetName, DATA_RANGE);
 
-  const labelsRow = raw[LABELS_ROW_INDEX] || [];
-  const endColIndex = labelsRow.findIndex((v) => typeof v === 'string' && v.trim() === 'Окончание');
-  if (endColIndex === -1) {
-    throw new Error(`[${source.key}] не найдена колонка "Окончание" в строке заголовков листа "${source.sheetName}"`);
+  let labelsRowIndex = -1;
+  let endColIndex = -1;
+  for (let r = 0; r < Math.min(raw.length, LABELS_SEARCH_ROWS); r++) {
+    const idx = (raw[r] || []).findIndex((v) => typeof v === 'string' && v.trim() === 'Окончание');
+    if (idx !== -1) {
+      labelsRowIndex = r;
+      endColIndex = idx;
+      break;
+    }
   }
+  if (labelsRowIndex === -1) {
+    throw new Error(`[${source.key}] не найдена колонка "Окончание" в первых строках листа "${source.sheetName}"`);
+  }
+  const labelsRow = raw[labelsRowIndex];
   const firstDateCol = endColIndex + 1;
 
   const workNameColIndex = labelsRow.findIndex((v) => typeof v === 'string' && v.trim() === 'Конструктивы');
@@ -118,21 +158,71 @@ async function fetchAndParseSource(source) {
     throw new Error(`[${source.key}] не найдена колонка "Конструктивы" в строке заголовков листа "${source.sheetName}"`);
   }
 
-  const headerRow = raw[HEADER_ROW_INDEX] || [];
-  // Колонки без числа в заголовке (пустой хвост таблицы) — не настоящие
-  // недельные колонки, пропускаем их.
-  const dateColumns = [];
-  for (let c = firstDateCol; c < headerRow.length; c++) {
-    const serial = headerRow[c];
-    if (typeof serial === 'number' && Number.isFinite(serial)) {
-      dateColumns.push({ colIndex: c, reportDate: excelSerialToISODate(serial) });
+  // Категория строки ("Работа"/"Материал") — есть не у всех листов; если
+  // колонки нет, ниже просто ничего не фильтруется по ней.
+  const categoryColIndex = labelsRow.findIndex((v) => typeof v === 'string' && v.trim() === 'Категория');
+
+  // Некоторые листы (например "64,72", "факт") дописывают справа побочную
+  // таблицу "Остаток по КС" (сверка оплат) — свои даты-маркеры (тоже
+  // правдоподобные serial-числа) и суммы в тенге, начинающуюся с текстовых
+  // подписей вроде "Доля"/"Сумма по КС"/"Остаток"/"НДС ...%" в строке
+  // подписей. Отсекаем недельные колонки ДО первой такой текстовой ячейки
+  // после firstDateCol — иначе побочная таблица подмешивает свои
+  // даты-маркеры к недельным (реальная коллизия: те же календарные даты на
+  // ДРУГИХ номерах колонок дают дубликат в БД).
+  let boundaryCol = Infinity; // нет текстовой ячейки в пределах labelsRow — значит, побочной таблицы нет, границу не ставим
+  for (let c = firstDateCol; c < labelsRow.length; c++) {
+    if (typeof labelsRow[c] === 'string' && labelsRow[c].trim() !== '') {
+      boundaryCol = c;
+      break;
     }
+  }
+
+  // Недельные даты — в строке(-ах) на source.dateRowOffsets ниже строки
+  // подписей (по умолчанию [2] — так исторически устроены все листы, кроме
+  // "факт", где 2025 год и 2026-2027 годы прописаны в двух строках подряд,
+  // offset [1, 2]).
+  const dateColumnsMap = new Map(); // colIndex -> reportDate
+  for (const offset of source.dateRowOffsets || [2]) {
+    const row = raw[labelsRowIndex + offset] || [];
+    for (let c = firstDateCol; c < Math.min(row.length, boundaryCol); c++) {
+      const v = row[c];
+      if (
+        typeof v === 'number' &&
+        Number.isFinite(v) &&
+        v >= MIN_DATE_SERIAL &&
+        v <= MAX_DATE_SERIAL &&
+        !dateColumnsMap.has(c)
+      ) {
+        dateColumnsMap.set(c, excelSerialToISODate(v));
+      }
+    }
+  }
+  const dateColumns = [...dateColumnsMap.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([colIndex, reportDate]) => ({ colIndex, reportDate }));
+
+  // Первая строка данных — динамически ищем начиная сразу после подписей:
+  // как только встречаем маркер позиции 'поз.NN' в колонке A, либо
+  // "Позиция N" (итоговая сводка) в колонке "Конструктивы". Именно \s, а
+  // не \b — у кириллицы JS-регэксп \b не работает ожидаемо ("я" не
+  // считается символом \w), так что "Позиция\b" не совпадёт вообще.
+  let firstDataRowIndex = labelsRowIndex + 1;
+  for (let r = labelsRowIndex + 1; r < raw.length; r++) {
+    const row = raw[r] || [];
+    const pos0 = (row[0] || '').toString().trim();
+    const workCell = (row[workNameColIndex] || '').toString().trim();
+    if (POSITION_MARKER_RE.test(pos0) || /^Позиция\s/i.test(workCell)) {
+      firstDataRowIndex = r;
+      break;
+    }
+    firstDataRowIndex = r + 1;
   }
 
   const rows = [];
   let currentPosition = '';
   let currentBlock = '';
-  for (let r = FIRST_DATA_ROW_INDEX; r < raw.length; r++) {
+  for (let r = firstDataRowIndex; r < raw.length; r++) {
     const row = raw[r];
     if (!row || !row.length) continue;
 
@@ -153,6 +243,11 @@ async function fetchAndParseSource(source) {
     }
 
     if (source.excludeWorkNames.has(workName)) continue;
+
+    if (categoryColIndex !== -1) {
+      const category = (row[categoryColIndex] || '').toString().trim();
+      if (category === 'Материал') continue; // расход материала, не % готовности работы
+    }
 
     for (const { colIndex, reportDate } of dateColumns) {
       const cell = row[colIndex];
