@@ -20,7 +20,7 @@ const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost
 // правды по КАКИМ листам вообще идёт синк, здесь просто подписи для формы
 // (сервер и сам проверяет source_key на допустимые значения).
 const GPR_SOURCES = [
-  { key: "poz64_72", label: "ГПР 64,72,59,63,65,69 и Экополис 103,104,105" },
+  { key: "poz64_72", label: "ГПР 64,72,59,63,65,69" },
   { key: "nz3", label: "ГПР НЖ3 (ОВ, ВК)" },
   { key: "facades", label: "Фасады" },
   { key: "sport2", label: "ГПР Спорт 2" },
@@ -30,6 +30,7 @@ const GPR_SOURCES = [
   { key: "brick2", label: "Brick Town 2" },
   { key: "brick3", label: "Brick Town 3" },
   { key: "kos", label: "ГПР КОС" },
+  { key: "ekopolis2", label: "ГПР Экополис поз.103,104,105" },
   { key: "biztsentr", label: "ГПР Бизнес центр" },
 ];
 
