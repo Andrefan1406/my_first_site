@@ -20,10 +20,18 @@ const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost
 // правды по КАКИМ листам вообще идёт синк, здесь просто подписи для формы
 // (сервер и сам проверяет source_key на допустимые значения).
 const GPR_SOURCES = [
-  { key: "poz64_72", label: "ГПР 64,72 (поз.64)" },
+  { key: "poz64_72", label: "ГПР 64,72,59,63,65,69" },
   { key: "nz3", label: "ГПР НЖ3 (ОВ, ВК)" },
   { key: "facades", label: "Фасады" },
   { key: "sport2", label: "ГПР Спорт 2" },
+  { key: "nz4", label: "ГПР Нурлы Жол 4" },
+  { key: "nz5", label: "ГПР Нурлы Жол 5 и Ледовый каток" },
+  { key: "razvyazka", label: "ГПР Развязка" },
+  { key: "brick2", label: "Brick Town 2" },
+  { key: "brick3", label: "Brick Town 3" },
+  { key: "kos", label: "ГПР КОС" },
+  { key: "ekopolis2", label: "ГПР Экополис поз.103,104,105" },
+  { key: "biztsentr", label: "ГПР Бизнес центр" },
 ];
 
 async function getIdToken() {
@@ -112,13 +120,7 @@ const GprCheckRulesSection = ({ sourceKey, sourceLabel }) => {
 
   return (
     <section style={{ ...s.section, marginTop: "20px" }}>
-      <h2 style={s.sectionTitle}>Проверка пропусков — {sourceLabel}</h2>
-      <p style={s.hint}>
-        Для email из списка ниже подача любых заявок блокируется, пока в графике
-        производства работ «{sourceLabel}» есть незаполненный % готовности за прошлую
-        пятницу или раньше. Как только отчёт заполнят — блокировка снимается сама. Это
-        отдельный список от других источников ГПР — за них отвечают разные люди.
-      </p>
+      <h2 style={s.sectionTitle}>{sourceLabel}</h2>
 
       <form onSubmit={handleAdd} style={s.form}>
         <input
@@ -297,6 +299,16 @@ const PeopleGapsUsersAdminPage = () => {
             </tbody>
           </table>
         )}
+      </section>
+
+      <section style={{ ...s.section, marginTop: "20px" }}>
+        <h2 style={s.sectionTitle}>Проверка пропусков — ГПР</h2>
+        <p style={s.hint}>
+          Для email из списка блокируется подача любых заявок, пока в соответствующем графике
+          производства работ есть незаполненный % готовности за прошлую пятницу или раньше. Как
+          только отчёт заполнят — блокировка снимается сама. У каждого источника ГПР свой
+          отдельный список email — за них отвечают разные люди.
+        </p>
       </section>
 
       {GPR_SOURCES.map((src) => (
