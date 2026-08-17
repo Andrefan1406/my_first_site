@@ -23,10 +23,21 @@ const gapLabel = (g) => `${g.position}${g.block ? ` / ${g.block}` : ''} / ${g.wo
 export const gprBlockMessage = (gaps) => {
   const labels = gaps.map(gapLabel);
   if (labels.length > GAP_LIST_THRESHOLD) {
-    return `Не заполнен отчёт по ГПР. Не хватает данных по ${labels.length} позициям/конструктивам за прошлую пятницу или раньше.`;
+    // Не "позициям" — в проектах компании "позиция" означает строящийся
+    // дом, а не строку/ячейку таблицы, формулировка вводила в заблуждение.
+    return `В отчёте по ГПР есть пропуски: не заполнено ${labels.length} ${cellsWord(labels.length)} за прошлую пятницу или раньше.`;
   }
   return `Не заполнен отчёт по ГПР. Внесите % готовности за прошлую пятницу или раньше по: ${labels.join(', ')}.`;
 };
+
+// Русское склонение "ячейка/ячейки/ячеек" по числу.
+function cellsWord(n) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'ячейка';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'ячейки';
+  return 'ячеек';
+}
 
 // Возвращает { blocked, gaps } для текущего залогиненного пользователя.
 // Без залогиненного email не запрашивает ничего — вернёт blocked:false.
