@@ -25,6 +25,12 @@ const SECTIONS = [
     color: "#e67e22",
   },
   {
+    title: "Заблокированные пользователи",
+    description: "Кто сейчас не может подать заявку и по какой причине (люди/ГПР)",
+    path: "/admin/blocked-users",
+    color: "#c0392b",
+  },
+  {
     title: "Админ-статистика",
     description: "Общая статистика по системе",
     path: "/admin/statistics",
