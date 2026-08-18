@@ -73,11 +73,7 @@ const App = () => {
           path="/electricans-request"
           element={
             <Protected>
-              <GprReportGuard>
-                <PeopleGapsGuard>
-                  <ElectricansRequestPage />
-                </PeopleGapsGuard>
-              </GprReportGuard>
+              <ElectricansRequestPage />
             </Protected>
           }
         />
@@ -86,11 +82,7 @@ const App = () => {
           path="/geo-request"
           element={
             <Protected>
-              <GprReportGuard>
-                <PeopleGapsGuard>
-                  <GeoRequestPage />
-                </PeopleGapsGuard>
-              </GprReportGuard>
+              <GeoRequestPage />
             </Protected>
           }
         />
@@ -112,11 +104,7 @@ const App = () => {
           path="/blbrequest"
           element={
             <Protected>
-              <GprReportGuard>
-                <PeopleGapsGuard>
-                  <BLBRequestPage />
-                </PeopleGapsGuard>
-              </GprReportGuard>
+              <BLBRequestPage />
             </Protected>
           }
         />
@@ -125,11 +113,7 @@ const App = () => {
           path="/znbrequest"
           element={
             <Protected>
-              <GprReportGuard>
-                <PeopleGapsGuard>
-                  <ZnbRequestPage />
-                </PeopleGapsGuard>
-              </GprReportGuard>
+              <ZnbRequestPage />
             </Protected>
           }
         />
@@ -138,11 +122,7 @@ const App = () => {
           path="/lab-request"
           element={
             <Protected>
-              <GprReportGuard>
-                <PeopleGapsGuard>
-                  <LabTestRequestPaje />
-                </PeopleGapsGuard>
-              </GprReportGuard>
+              <LabTestRequestPaje />
             </Protected>
           }
         />

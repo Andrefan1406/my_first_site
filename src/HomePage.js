@@ -120,48 +120,23 @@ const HomePage = () => {
         Заявка на бетон и раствор
       </button>
 
-      <button
-        onClick={() => navigate('/electricans-request')}
-        disabled={isRequestsBlocked}
-        style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={blockedTitle}
-      >
+      <button onClick={() => navigate('/electricans-request')} style={styles.button}>
         Заявка электриков
       </button>
 
-      <button
-        onClick={() => navigate('/geo-request')}
-        disabled={isRequestsBlocked}
-        style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={blockedTitle}
-      >
+      <button onClick={() => navigate('/geo-request')} style={styles.button}>
         Заявка геодезистов
       </button>
 
-      <button
-        onClick={() => navigate('/lab-request')}
-        disabled={isRequestsBlocked}
-        style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={blockedTitle}
-      >
+      <button onClick={() => navigate('/lab-request')} style={styles.button}>
         Лабораторные испытания
       </button>
 
-      <button
-        onClick={() => navigate('/blbrequest')}
-        disabled={isRequestsBlocked}
-        style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={blockedTitle}
-      >
+      <button onClick={() => navigate('/blbrequest')} style={styles.button}>
         Заявка на брусчатку
       </button>
 
-      <button
-        onClick={() => navigate('/znbrequest')}
-        disabled={isRequestsBlocked}
-        style={isRequestsBlocked ? styles.buttonDisabled : styles.button}
-        title={blockedTitle}
-      >
+      <button onClick={() => navigate('/znbrequest')} style={styles.button}>
         Заявка на ж/б изделия
       </button>
 
