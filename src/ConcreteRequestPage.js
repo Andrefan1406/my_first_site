@@ -162,6 +162,10 @@ const getActiveRequiredFields = (row) => {
 
 const ConcreteRequestPage = () => {
   const location = useLocation();
+  // Заявка пришла из Умной заявки (см. SmartRequestPage.jsx: handleProceed) —
+  // блокировку по пропускам отчётности для неё не проверяем (handleSubmit/
+  // handleFinalSubmit ниже), см. также PeopleGapsGuard.jsx/GprReportGuard.jsx.
+  const viaSmartRequest = !!location.state?.viaSmartRequest;
   const [formRows, setFormRows] = useState([emptyConcreteRow()]);
 
   const [showModal, setShowModal] = useState(false);
@@ -250,16 +254,20 @@ const ConcreteRequestPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    try {
-      const missingDates = await fetchMissingGapDates();
-      if (missingDates.length) {
-        alert(gapWarningMessage(missingDates));
-        return;
+    // Заявка пришла из Умной заявки (SmartRequestPage.jsx) — блокировку по
+    // пропускам отчётности для неё не проверяем, см. PeopleGapsGuard.jsx.
+    if (!viaSmartRequest) {
+      try {
+        const missingDates = await fetchMissingGapDates();
+        if (missingDates.length) {
+          alert(gapWarningMessage(missingDates));
+          return;
+        }
+      } catch (err) {
+        // Сама проверка недоступна (сеть/бэкенд) — не блокируем подачу заявки
+        // из-за этого, только логируем.
+        console.error('Не удалось проверить пропуски в отчётах по людям:', err);
       }
-    } catch (err) {
-      // Сама проверка недоступна (сеть/бэкенд) — не блокируем подачу заявки
-      // из-за этого, только логируем.
-      console.error('Не удалось проверить пропуски в отчётах по людям:', err);
     }
 
     const hasEmptyRequiredField = formRows.some(row => {
@@ -318,15 +326,18 @@ const ConcreteRequestPage = () => {
   // Последний рубеж перед фактической отправкой (сам POST в Google Apps
   // Script ниже) — handleSubmit проверяет то же самое до открытия модалки,
   // но эта кнопка вызывается напрямую из модалки и должна быть защищена
-  // независимо от того, что произошло на предыдущем шаге.
-  try {
-    const missingDates = await fetchMissingGapDates();
-    if (missingDates.length) {
-      alert(gapWarningMessage(missingDates));
-      return;
+  // независимо от того, что произошло на предыдущем шаге. viaSmartRequest —
+  // см. комментарий в handleSubmit.
+  if (!viaSmartRequest) {
+    try {
+      const missingDates = await fetchMissingGapDates();
+      if (missingDates.length) {
+        alert(gapWarningMessage(missingDates));
+        return;
+      }
+    } catch (err) {
+      console.error('Не удалось проверить пропуски в отчётах по людям:', err);
     }
-  } catch (err) {
-    console.error('Не удалось проверить пропуски в отчётах по людям:', err);
   }
 
   // продолжение отправки как прежде:

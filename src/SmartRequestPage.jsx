@@ -344,13 +344,18 @@ const SmartRequestPage = () => {
   };
 
   // Умная заявка НАМЕРЕННО не проверяет блокировку по пропускам (см.
-  // src/peopleGapsGate.js, src/gprReportGate.js) для техники/бетона, в
-  // отличие от самих роутов /request и /concrete-request (GprReportGuard/
-  // PeopleGapsGuard в App.js) — это осознанное решение, чтобы у
-  // заблокированных пользователей оставался стимул пробовать и привыкать к
-  // Умной заявке, а не просто упираться в стену. Не добавляйте сюда
-  // повторную проверку без явного запроса — её уже убирали один раз именно
-  // по этой причине.
+  // src/peopleGapsGate.js, src/gprReportGate.js) для техники/бетона — это
+  // осознанное решение, чтобы у заблокированных пользователей оставался
+  // стимул пробовать и привыкать к Умной заявке, а не просто упираться в
+  // стену. Не добавляйте сюда повторную проверку без явного запроса.
+  //
+  // Раньше на этом всё и заканчивалось: сама навигация ниже вела на
+  // /request или /concrete-request, а те роуты всё равно обёрнуты
+  // GprReportGuard/PeopleGapsGuard (App.js) — то есть пользователь долетал
+  // до формы, но там же и упирался в блокировку. Теперь navigate() передаёт
+  // viaSmartRequest: true через location.state, и GprReportGuard/
+  // PeopleGapsGuard, а также inline-проверка в ConcreteRequestPage.js,
+  // читают этот флаг и пропускают заявку без проверки.
   const handleProceed = () => {
     if (!result) return;
     const { type, items } = result;
@@ -373,7 +378,10 @@ const SmartRequestPage = () => {
       }));
       localStorage.setItem("lastRequestData", JSON.stringify(prefill));
       if (firstDate) localStorage.setItem("smartRequestDate", firstDate);
-      navigate("/request");
+      // viaSmartRequest снимает блокировку по пропускам отчётности
+      // (GprReportGuard/PeopleGapsGuard в App.js) для этого перехода — см.
+      // их код для подробностей.
+      navigate("/request", { state: { viaSmartRequest: true } });
 
     } else {
       // Для бетона, геодезистов, электриков — через router state
@@ -496,7 +504,10 @@ const SmartRequestPage = () => {
         };
       });
 
-      navigate(meta.route, { state: { prefill: { date: firstDate || "", rows } } });
+      // viaSmartRequest снимает блокировку по пропускам отчётности для
+      // бетона (GprReportGuard/PeopleGapsGuard в App.js + inline-проверка в
+      // ConcreteRequestPage.js); для остальных типов флаг просто не читается.
+      navigate(meta.route, { state: { prefill: { date: firstDate || "", rows }, viaSmartRequest: true } });
     }
   };
 

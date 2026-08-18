@@ -3,25 +3,30 @@
 // peopleGapsGate.js, пока по его участку есть неподтверждённые пропуски
 // отчётности за последние дни. Работает и при прямом переходе по ссылке —
 // это не кнопка на главной, а обёртка вокруг самого роута (см. App.js).
+// Исключение: заявки, пришедшие из Умной заявки (SmartRequestPage.jsx
+// передаёт location.state.viaSmartRequest), блокировку не проходят —
+// пользователь уже осознанно подаёт заявку через AI-помощника.
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { fetchMissingGapDates, gapWarningMessage } from '../peopleGapsGate';
 
 const PeopleGapsGuard = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const currentEmail = getAuth().currentUser?.email?.toLowerCase() || '';
+  const bypassed = !!location.state?.viaSmartRequest;
 
   // Кого именно проверять, сервер решает сам по people_gap_check_rules (см.
   // peopleGapsGate.js) — для email без правил fetchMissingGapDates вернёт
   // пустой список, страница просто откроется. 'clear' по умолчанию без
-  // залогиненного email — им не нужно ждать сетевой запрос, чтобы увидеть
-  // страницу.
-  const [status, setStatus] = useState(currentEmail ? 'checking' : 'clear');
+  // залогиненного email (или при обходе через Умную заявку) — им не нужно
+  // ждать сетевой запрос, чтобы увидеть страницу.
+  const [status, setStatus] = useState(currentEmail && !bypassed ? 'checking' : 'clear');
   const [missingDates, setMissingDates] = useState([]);
 
   useEffect(() => {
-    if (!currentEmail) return;
+    if (!currentEmail || bypassed) return;
     let cancelled = false;
 
     fetchMissingGapDates()
@@ -40,7 +45,7 @@ const PeopleGapsGuard = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, [currentEmail]);
+  }, [currentEmail, bypassed]);
 
   if (status === 'checking') {
     return <div style={styles.wrap}>Проверка доступа...</div>;

@@ -3,24 +3,30 @@
 // пропуск — прямой аналог PeopleGapsGuard.jsx, только по другому списку
 // email и с другим сообщением. Работает и при прямом переходе по ссылке —
 // это обёртка вокруг самого роута (см. App.js), а не кнопка на главной.
+// Исключение: заявки, пришедшие из Умной заявки (SmartRequestPage.jsx
+// передаёт location.state.viaSmartRequest), блокировку не проходят —
+// пользователь уже осознанно подаёт заявку через AI-помощника.
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { fetchGprReportBlock, gprBlockMessage } from '../gprReportGate';
 
 const GprReportGuard = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const currentEmail = getAuth().currentUser?.email?.toLowerCase() || '';
+  const bypassed = !!location.state?.viaSmartRequest;
 
   // Кого именно проверять, сервер решает сам по gpr_report_check_rules —
   // для email без правил fetchGprReportBlock вернёт blocked:false, страница
-  // просто откроется. 'clear' по умолчанию без залогиненного email — им не
-  // нужно ждать сетевой запрос, чтобы увидеть страницу.
-  const [status, setStatus] = useState(currentEmail ? 'checking' : 'clear');
+  // просто откроется. 'clear' по умолчанию без залогиненного email (или при
+  // обходе через Умную заявку) — им не нужно ждать сетевой запрос, чтобы
+  // увидеть страницу.
+  const [status, setStatus] = useState(currentEmail && !bypassed ? 'checking' : 'clear');
   const [gaps, setGaps] = useState([]);
 
   useEffect(() => {
-    if (!currentEmail) return;
+    if (!currentEmail || bypassed) return;
     let cancelled = false;
 
     fetchGprReportBlock()
@@ -39,7 +45,7 @@ const GprReportGuard = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, [currentEmail]);
+  }, [currentEmail, bypassed]);
 
   if (status === 'checking') {
     return <div style={styles.wrap}>Проверка доступа...</div>;
