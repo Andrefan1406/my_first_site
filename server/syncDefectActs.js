@@ -161,14 +161,24 @@ function syncDefectActsData(rows) {
   return rows.length;
 }
 
-// Собирает "поисковый" текст строки для эмбеддинга — все 4 свободнотекстовых
-// поля вместе (описание дефекта, заключение комиссии, причина неудержания,
-// примечание), через точку. Пустые поля пропускаются. Строки, у которых
-// вообще нет ни одного заполненного текстового поля, не индексируются —
-// эмбеддить нечего, и по ним всё равно нечего искать семантически (для них
-// достаточно обычного SQL по остальным колонкам).
+// Собирает "поисковый" текст строки для эмбеддинга — свободнотекстовые поля
+// (описание дефекта, заключение комиссии, причина неудержания, примечание)
+// плюс ответственных за возникновение/устранение — чтобы семантический
+// поиск мог найти акты и по подрядчику/лицу, а не только по описанию (см.
+// обсуждение: точный SQL-фильтр по этим полям ненадёжен из-за разного
+// написания одного и того же названия в реестре). Пустые поля пропускаются.
+// Строки, у которых вообще нет ни одного заполненного текстового поля, не
+// индексируются — эмбеддить нечего, и по ним всё равно нечего искать
+// семантически (для них достаточно обычного SQL по остальным колонкам).
 function buildSearchableText(row) {
-  return [row.defect_description, row.commission_conclusion, row.withhold_reason_na, row.note]
+  return [
+    row.defect_description,
+    row.commission_conclusion,
+    row.withhold_reason_na,
+    row.note,
+    row.responsible_occurrence,
+    row.responsible_fix,
+  ]
     .filter(Boolean)
     .join('. ');
 }
@@ -185,7 +195,8 @@ async function reindexEmbeddings() {
   const rows = db.prepare(`
     SELECT id, act_number, act_date, object_position, defect_description,
            commission_conclusion, withhold_reason_na, note, withhold_status,
-           total_cost, amount_to_withhold, amount_withheld
+           total_cost, amount_to_withhold, amount_withheld,
+           responsible_occurrence, responsible_fix
     FROM defect_acts
   `).all();
 

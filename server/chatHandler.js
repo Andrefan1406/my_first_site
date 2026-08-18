@@ -241,6 +241,8 @@ const DEFECT_ACTS_TABLE_SCHEMA = `
 
 function buildDefectActsSqlSystemPrompt() {
   const statuses = getDistinctValues('defect_acts', 'withhold_status', 10);
+  const responsibleOccurrence = getDistinctValues('defect_acts', 'responsible_occurrence', 40);
+  const responsibleFix = getDistinctValues('defect_acts', 'responsible_fix', 40);
   const dates = getDateRanges();
 
   return `
@@ -251,6 +253,8 @@ function buildDefectActsSqlSystemPrompt() {
 ${DEFECT_ACTS_TABLE_SCHEMA}
 
 Реальные значения withhold_status в базе: ${JSON.stringify(statuses)}
+Реальные значения responsible_occurrence в базе: ${JSON.stringify(responsibleOccurrence)}
+Реальные значения responsible_fix в базе: ${JSON.stringify(responsibleFix)}
 
 Готовые диапазоны дат (используй их буквально, не вычисляй даты сам):
 - сегодня: ${dates.today}
@@ -264,6 +268,23 @@ ${DEFECT_ACTS_TABLE_SCHEMA}
 - object_position — это ОДНО свободнотекстовое поле "объект, позиция" вместе (не два отдельных
   столбца) — ищи через LIKE '%...%' по частичному совпадению, если пользователь называет объект
   примерно или по номеру позиции.
+- responsible_occurrence и responsible_fix — свободнотекстовые поля с названием организации/ФИО,
+  одно и то же название в реестре может быть записано по-разному (например "ТОО Интер Г групп" и
+  "Интер-Г Групп ТОО" — разный порядок слов, разное написание через дефис/без него, организационно-
+  правовая форма то в начале, то в конце). НЕ используй LIKE '%...%' по этим полям — LIKE по короткому
+  фрагменту слишком часто цепляет лишние, не relevant вопросу строки. Вместо этого сравнивай через
+  точное равенство (=), выбрав из списка реальных значений выше ТОЧНУЮ строку, которая по смыслу
+  совпадает с тем, что назвал пользователь (игнорируя разницу в порядке слов/дефисах/форме "ТОО").
+  Если в списке реальных значений нет ничего похожего на то, что спросил пользователь — не выдумывай
+  фильтр, просто оставь SQL без фильтра по этому полю и объясни в ответе (следующим шагом), что точного
+  совпадения не нашлось.
+- Если фильтруешь по responsible_occurrence и/или responsible_fix, ВСЕГДА добавляй ОБЕ эти колонки в
+  SELECT результата (не только ту, по которой фильтруешь) — даже если вопрос про количество/сумму, не
+  ограничивайся одним агрегатом без них. Например, вместо "SELECT COUNT(*) FROM defect_acts WHERE
+  responsible_occurrence = '...'" делай "SELECT responsible_occurrence, responsible_fix, COUNT(*) AS
+  cnt FROM defect_acts WHERE responsible_occurrence = '...' GROUP BY responsible_occurrence,
+  responsible_fix" — так в ответе видно и того, кто отвечает за возникновение, и того, кто за
+  устранение, по каждой строке, и пользователь может глазами проверить, правильно ли выбраны строки.
 - "Сколько актов" -> COUNT(*). "Сколько денег/затрат/удержано" -> SUM() соответствующей суммовой колонки.
 - Если вопрос про то, что ЕЩЁ НЕ решено по удержанию — withhold_status IS NULL.
 - Если вопрос про дефекты, которые ещё не устранены — fix_mark IS NULL (или ''); устранены — fix_mark
