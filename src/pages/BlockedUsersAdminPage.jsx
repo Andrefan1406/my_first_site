@@ -78,7 +78,7 @@ const BlockedUsersAdminPage = () => {
     load();
   }, [load]);
 
-  const blockedUsers = data?.blockedUsers || [];
+  const blockedUsers = useMemo(() => data?.blockedUsers || [], [data]);
 
   const summary = useMemo(
     () => ({
