@@ -32,6 +32,7 @@ import AdminStatistics from "./pages/AdminStatistics";
 import PeopleGapsAdminPage from "./pages/PeopleGapsAdminPage";
 import GprReportGapsAdminPage from "./pages/GprReportGapsAdminPage";
 import PeopleGapsUsersAdminPage from "./pages/PeopleGapsUsersAdminPage";
+import BlockedUsersAdminPage from "./pages/BlockedUsersAdminPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ConcreteDashboardPage from "./pages/ConcreteDashboardPage";
 
@@ -290,6 +291,16 @@ const App = () => {
             <Protected>
               <AdminRoute>
                 <PeopleGapsUsersAdminPage />
+              </AdminRoute>
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin/blocked-users"
+          element={
+            <Protected>
+              <AdminRoute>
+                <BlockedUsersAdminPage />
               </AdminRoute>
             </Protected>
           }
