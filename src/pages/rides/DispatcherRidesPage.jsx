@@ -135,7 +135,7 @@ export default function DispatcherRidesPage() {
           {requests.map((r) => (
             <tr key={r.id} style={r.isStale ? s.staleRow : undefined}>
               <td style={s.td}>{formatDateTime(r.requestedAt)}</td>
-              <td style={s.td}>{r.fromAddress} → {r.toAddress}</td>
+              <td style={s.td}>{r.fromAddress} → {r.toAddress}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</td>
               <td style={s.td}>{r.employeeName}</td>
               <td style={s.td}>
                 {STATUS_LABEL[r.status] || r.status}
@@ -198,6 +198,7 @@ const s = {
   td: { padding: "10px", borderBottom: "1px solid #eee", fontSize: "13px" },
   staleRow: { background: "#fff8e1" },
   staleBadge: { marginLeft: "8px", fontSize: "11px", color: "#b8860b", fontWeight: 700 },
+  returnBadge: { fontSize: "12px", color: "#888" },
 
   primaryButton: { background: "#1976d2", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px", fontWeight: 600 },
   secondaryButton: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px", marginRight: "6px" },

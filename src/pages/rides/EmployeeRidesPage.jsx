@@ -36,7 +36,7 @@ function statusColor(status) {
   }
 }
 
-const emptyForm = { fromAddress: "", toAddress: "", requestedAt: "", purpose: "", passengersCount: 1, comment: "" };
+const emptyForm = { fromAddress: "", toAddress: "", requestedAt: "", purpose: "", passengersCount: 1, withReturn: false, comment: "" };
 
 export default function EmployeeRidesPage() {
   const [requests, setRequests] = useState([]);
@@ -121,6 +121,10 @@ export default function EmployeeRidesPage() {
         <label style={s.label}>Цель поездки
           <input style={s.input} value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
         </label>
+        <label style={s.checkboxLabel}>
+          <input type="checkbox" checked={form.withReturn} onChange={(e) => setForm({ ...form, withReturn: e.target.checked })} />
+          С ожиданием и возвратом (водитель ждёт на месте и везёт обратно)
+        </label>
         <label style={s.label}>Комментарий
           <textarea style={{ ...s.input, minHeight: "60px" }} value={form.comment} onChange={(e) => setForm({ ...form, comment: e.target.value })} />
         </label>
@@ -135,7 +139,7 @@ export default function EmployeeRidesPage() {
           <div style={s.cards}>
             {active.map((r) => (
               <div key={r.id} style={s.card}>
-                <div style={s.cardRoute}>{r.fromAddress} → {r.toAddress}</div>
+                <div style={s.cardRoute}>{r.fromAddress} → {r.toAddress}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
                 <div style={{ ...s.cardStatus, color: statusColor(r.status) }}>{statusLabel(r)}</div>
@@ -185,6 +189,7 @@ const s = {
   form: { background: "#fff", border: "1px solid #eee", borderRadius: "10px", padding: "18px", marginBottom: "28px", display: "flex", flexDirection: "column", gap: "12px" },
   formRow: { display: "flex", gap: "12px", flexWrap: "wrap" },
   label: { display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", color: "#444", flex: "1 1 200px" },
+  checkboxLabel: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#444" },
   input: { padding: "8px 10px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "14px" },
   primaryButton: { alignSelf: "flex-start", background: "#1976d2", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 20px", cursor: "pointer", fontSize: "14px", fontWeight: 600 },
 
@@ -196,6 +201,7 @@ const s = {
   cardRoute: { fontWeight: 700, fontSize: "15px", marginBottom: "4px" },
   cardMeta: { fontSize: "13px", color: "#555", marginBottom: "2px" },
   cardStatus: { fontSize: "13px", fontWeight: 600, marginTop: "6px" },
+  returnBadge: { fontWeight: 400, fontSize: "13px", color: "#888" },
 
   table: { width: "100%", borderCollapse: "collapse" },
   th: { textAlign: "left", padding: "8px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px" },

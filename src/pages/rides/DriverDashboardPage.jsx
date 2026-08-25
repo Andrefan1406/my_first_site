@@ -189,7 +189,7 @@ export default function DriverDashboardPage() {
           <div style={s.cards}>
             {current.map((r) => (
               <div key={r.id} style={s.card}>
-                <div style={s.cardRoute}>{r.fromAddress} → {r.toAddress}</div>
+                <div style={s.cardRoute}>{r.fromAddress} → {r.toAddress}{r.withReturn && <span style={s.returnBadge}> (туда-обратно, ждать на месте)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
                 {r.purpose && <div style={s.cardMeta}>Цель: {r.purpose}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
@@ -220,7 +220,7 @@ export default function DriverDashboardPage() {
           <div style={s.cards}>
             {pool.map((r) => (
               <div key={r.id} style={s.card}>
-                <div style={s.cardRoute}>{r.fromAddress} → {r.toAddress}</div>
+                <div style={s.cardRoute}>{r.fromAddress} → {r.toAddress}{r.withReturn && <span style={s.returnBadge}> (туда-обратно, ждать на месте)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
                 {r.purpose && <div style={s.cardMeta}>Цель: {r.purpose}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
@@ -288,6 +288,7 @@ const s = {
   cardMeta: { fontSize: "13px", color: "#555", marginBottom: "2px" },
   cardStatus: { fontSize: "13px", fontWeight: 600, color: "#1976d2", marginTop: "6px" },
   cardActions: { display: "flex", gap: "8px", marginTop: "10px" },
+  returnBadge: { fontWeight: 400, fontSize: "13px", color: "#888" },
   phoneLink: { color: "#1976d2", fontWeight: 600, textDecoration: "none" },
 
   primaryButton: { background: "#1976d2", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px", fontWeight: 600 },

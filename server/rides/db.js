@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS requests (
   requested_at      TEXT NOT NULL,
   purpose           TEXT,
   passengers_count  INTEGER NOT NULL DEFAULT 1,
+  with_return       INTEGER NOT NULL DEFAULT 0, -- туда-обратно: водитель ждёт на месте и везёт
+                                                  -- обратно в рамках той же заявки, не через
+                                                  -- отдельный заказ из пула.
   status            TEXT NOT NULL DEFAULT 'pending_assignment'
                      CHECK(status IN ('created','pending_assignment','assigned','in_progress','completed','cancelled')),
   comment           TEXT,
@@ -92,6 +95,18 @@ function initSchema() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   const db = getWriteDb();
   db.exec(SCHEMA);
+  migrateSchema(db);
+}
+
+// CREATE TABLE IF NOT EXISTS — no-op на уже существующей локальной/прод
+// базе, поэтому новые колонки в таблицах, которые нельзя пересоздавать
+// (заявки нельзя терять), добавляются через ALTER, тем же приёмом, что и
+// migrateSchema в server/db.js.
+function migrateSchema(db) {
+  const requestColumns = db.prepare("PRAGMA table_info(requests)").all().map((c) => c.name);
+  if (!requestColumns.includes('with_return')) {
+    db.exec('ALTER TABLE requests ADD COLUMN with_return INTEGER NOT NULL DEFAULT 0');
+  }
 }
 
 function getWriteDb() {

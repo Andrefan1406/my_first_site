@@ -56,6 +56,7 @@ function baseFields(row) {
     claimedAt: row.claimed_at,
     driverName: row.driver_name || null,
     vehiclePlate: row.vehicle_plate || null,
+    withReturn: !!row.with_return,
   };
 }
 
@@ -93,6 +94,7 @@ const createRequestSchema = z.object({
   requestedAt: z.string().trim().min(1, 'Укажите дату и время'),
   purpose: z.string().trim().optional().default(''),
   passengersCount: z.coerce.number().int().min(1).max(50).default(1),
+  withReturn: z.boolean().optional().default(false),
   comment: z.string().trim().optional().default(''),
 });
 
@@ -115,15 +117,15 @@ const statusSchema = z.object({
 // Сотрудник: создать заявку — сразу попадает в общий пул.
 router.post('/', requireRideRole('employee'), validate(createRequestSchema), (req, res) => {
   const db = getWriteDb();
-  const { fromAddress, toAddress, requestedAt, purpose, passengersCount, comment } = req.body;
+  const { fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn, comment } = req.body;
 
   const result = db.transaction(() => {
     const info = db
       .prepare(
-        `INSERT INTO requests (employee_id, from_address, to_address, requested_at, purpose, passengers_count, comment, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_assignment')`
+        `INSERT INTO requests (employee_id, from_address, to_address, requested_at, purpose, passengers_count, with_return, comment, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_assignment')`
       )
-      .run(req.rideUser.id, fromAddress, toAddress, requestedAt, purpose, passengersCount, comment);
+      .run(req.rideUser.id, fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn ? 1 : 0, comment);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'pending_assignment', ?)`)
       .run(info.lastInsertRowid, req.rideUser.id);
     return getRow(db, info.lastInsertRowid);
