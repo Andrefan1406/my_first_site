@@ -7,6 +7,7 @@ import { ridesApiFetch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
 import { formatRoute } from "../../rides/format";
+import MapPicker from "../../rides/MapPicker";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -45,6 +46,7 @@ export default function EmployeeRidesPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [mapPickerTarget, setMapPickerTarget] = useState(null); // "fromAddress" | "toAddress" | { stopIndex } | null
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,10 +108,16 @@ export default function EmployeeRidesPage() {
       <form onSubmit={submit} style={s.form}>
         <div style={s.formRow}>
           <label style={s.label}>Откуда
-            <input style={s.input} value={form.fromAddress} onChange={(e) => setForm({ ...form, fromAddress: e.target.value })} />
+            <div style={s.addressRow}>
+              <input style={{ ...s.input, flex: 1 }} value={form.fromAddress} onChange={(e) => setForm({ ...form, fromAddress: e.target.value })} />
+              <button type="button" style={s.mapButton} onClick={() => setMapPickerTarget("fromAddress")}>На карте</button>
+            </div>
           </label>
           <label style={s.label}>Куда
-            <input style={s.input} value={form.toAddress} onChange={(e) => setForm({ ...form, toAddress: e.target.value })} />
+            <div style={s.addressRow}>
+              <input style={{ ...s.input, flex: 1 }} value={form.toAddress} onChange={(e) => setForm({ ...form, toAddress: e.target.value })} />
+              <button type="button" style={s.mapButton} onClick={() => setMapPickerTarget("toAddress")}>На карте</button>
+            </div>
           </label>
         </div>
 
@@ -125,6 +133,7 @@ export default function EmployeeRidesPage() {
                 setForm({ ...form, extraStops: next });
               }}
             />
+            <button type="button" style={s.mapButton} onClick={() => setMapPickerTarget({ stopIndex: i })}>На карте</button>
             <button
               type="button"
               style={s.removeStopButton}
@@ -162,6 +171,24 @@ export default function EmployeeRidesPage() {
         </label>
         <button type="submit" style={s.primaryButton} disabled={submitting}>Подать заявку</button>
       </form>
+
+      {mapPickerTarget && (
+        <MapPicker
+          onClose={() => setMapPickerTarget(null)}
+          onSelect={(address) => {
+            if (mapPickerTarget === "fromAddress") setForm((f) => ({ ...f, fromAddress: address }));
+            else if (mapPickerTarget === "toAddress") setForm((f) => ({ ...f, toAddress: address }));
+            else {
+              setForm((f) => {
+                const next = [...f.extraStops];
+                next[mapPickerTarget.stopIndex] = address;
+                return { ...f, extraStops: next };
+              });
+            }
+            setMapPickerTarget(null);
+          }}
+        />
+      )}
 
       <section style={s.section}>
         <h2 style={s.sectionTitle}>Мои активные заявки</h2>
@@ -227,6 +254,8 @@ const s = {
   stopRow: { display: "flex", gap: "8px", alignItems: "center" },
   addStopButton: { alignSelf: "flex-start", background: "none", border: "1px dashed #1976d2", color: "#1976d2", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px" },
   removeStopButton: { background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "8px 12px", cursor: "pointer", fontSize: "13px" },
+  addressRow: { display: "flex", gap: "8px" },
+  mapButton: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "8px 12px", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap" },
 
   section: { marginBottom: "28px" },
   sectionTitle: { fontSize: "17px", marginBottom: "12px" },

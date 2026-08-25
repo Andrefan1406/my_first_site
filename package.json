@@ -20,6 +20,7 @@
     "googleapis": "^174.0.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
+    "leaflet": "^1.9.4",
     "node-cron": "^3.0.3",
     "papaparse": "^5.5.3",
     "react": "^19.0.0",
