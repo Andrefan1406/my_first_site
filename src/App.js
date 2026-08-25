@@ -36,7 +36,11 @@ import BlockedUsersAdminPage from "./pages/BlockedUsersAdminPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ConcreteDashboardPage from "./pages/ConcreteDashboardPage";
 import RideAccessGate from "./components/RideAccessGate";
+import RideRoleRoute from "./components/RideRoleRoute";
 import DriverDashboardPage from "./pages/rides/DriverDashboardPage";
+import EmployeeRidesPage from "./pages/rides/EmployeeRidesPage";
+import DispatcherRidesPage from "./pages/rides/DispatcherRidesPage";
+import RidesAdminPage from "./pages/rides/RidesAdminPage";
 
 
 const Protected = ({ children }) => (
@@ -60,7 +64,39 @@ const App = () => {
           path="/driver"
           element={
             <Protected>
-              <DriverDashboardPage />
+              <RideRoleRoute roles={["driver"]}>
+                <DriverDashboardPage />
+              </RideRoleRoute>
+            </Protected>
+          }
+        />
+        <Route
+          path="/employee"
+          element={
+            <Protected>
+              <RideRoleRoute roles={["employee"]}>
+                <EmployeeRidesPage />
+              </RideRoleRoute>
+            </Protected>
+          }
+        />
+        <Route
+          path="/dispatcher"
+          element={
+            <Protected>
+              <RideRoleRoute roles={["dispatcher", "admin"]}>
+                <DispatcherRidesPage />
+              </RideRoleRoute>
+            </Protected>
+          }
+        />
+        <Route
+          path="/rides-admin"
+          element={
+            <Protected>
+              <RideRoleRoute roles={["admin"]}>
+                <RidesAdminPage />
+              </RideRoleRoute>
             </Protected>
           }
         />

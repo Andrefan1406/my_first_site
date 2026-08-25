@@ -59,6 +59,7 @@ router.get('/', requireRideRole('admin'), async (req, res) => {
     const local = localByEmail.get(key);
     localByEmail.delete(key);
     merged.push({
+      id: local?.id || null,
       email: fu.email,
       displayName: fu.displayName || null,
       name: local?.name || '',
@@ -71,6 +72,7 @@ router.get('/', requireRideRole('admin'), async (req, res) => {
   // всё равно показываем, чтобы админ мог их убрать вручную.
   for (const leftover of localByEmail.values()) {
     merged.push({
+      id: leftover.id,
       email: leftover.email,
       displayName: null,
       name: leftover.name,
