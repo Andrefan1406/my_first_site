@@ -35,6 +35,8 @@ import PeopleGapsUsersAdminPage from "./pages/PeopleGapsUsersAdminPage";
 import BlockedUsersAdminPage from "./pages/BlockedUsersAdminPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ConcreteDashboardPage from "./pages/ConcreteDashboardPage";
+import RideAccessGate from "./components/RideAccessGate";
+import DriverDashboardPage from "./pages/rides/DriverDashboardPage";
 
 
 const Protected = ({ children }) => (
@@ -47,10 +49,21 @@ const App = () => {
   return (
     <Router>
       <PageTracker />
+      <RideAccessGate>
       <Routes>
 
         {/* Авторизация */}
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Система служебного транспорта (заявки на поездки) */}
+        <Route
+          path="/driver"
+          element={
+            <Protected>
+              <DriverDashboardPage />
+            </Protected>
+          }
+        />
 
         {/* Главная */}
         <Route path="/" element={<Protected><HomePage /></Protected>} />
@@ -294,6 +307,7 @@ const App = () => {
           }
         />
       </Routes>
+      </RideAccessGate>
     </Router>
   );
 };

@@ -63,6 +63,13 @@ router.get('/available', requireRideRole('dispatcher', 'admin'), (req, res) => {
   res.json({ drivers: rows.map(serialize) });
 });
 
+// Собственный профиль водителя (статус online/offline/busy, закреплённая машина).
+router.get('/me', requireRideRole('driver'), (req, res) => {
+  const row = getWriteDb().prepare(`${FULL_SELECT} WHERE d.user_id = ?`).get(req.rideUser.id);
+  if (!row) return res.status(404).json({ error: 'Вы не зарегистрированы как водитель' });
+  res.json({ driver: serialize(row) });
+});
+
 router.post('/', requireRideRole('admin'), validate(driverSchema), (req, res) => {
   const db = getWriteDb();
   const user = db.prepare(`SELECT * FROM users WHERE id = ? AND role = 'driver'`).get(req.body.userId);

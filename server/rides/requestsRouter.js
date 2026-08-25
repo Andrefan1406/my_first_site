@@ -7,7 +7,7 @@ const express = require('express');
 const { z } = require('zod');
 const { getWriteDb } = require('./db');
 const { requireRideRole } = require('./auth');
-const { emitToDrivers, emitToDispatcher, emitToEmployee } = require('./socket');
+const { emitToDrivers, emitToDispatcher, emitToEmployee, emitToDriver } = require('./socket');
 
 const router = express.Router();
 
@@ -305,6 +305,7 @@ router.post('/:id/assign', requireRideRole('dispatcher', 'admin'), validate(assi
   emitToDrivers('request:removed', { id: requestId });
   emitToDispatcher('request:updated', serializeForDispatcher(result, staleThreshold()));
   emitToEmployee(result.employee_id, 'request:assigned', serializeForEmployee(result));
+  emitToDriver(driver.id, 'request:assigned', serializeForDriver(result));
   res.json({ request: serializeForDispatcher(result, staleThreshold()) });
 });
 
@@ -313,9 +314,11 @@ router.post('/:id/cancel', requireRideRole('dispatcher', 'admin'), validate(canc
   const db = getWriteDb();
   const requestId = Number(req.params.id);
 
+  let previousDriverId = null;
   const result = db.transaction(() => {
     const row = db.prepare('SELECT * FROM requests WHERE id = ?').get(requestId);
     if (!row || ['in_progress', 'completed', 'cancelled'].includes(row.status)) return null;
+    previousDriverId = row.driver_id;
     db.prepare(`UPDATE requests SET status = 'cancelled', cancel_reason = ? WHERE id = ?`).run(req.body.reason, requestId);
     if (row.driver_id) db.prepare(`UPDATE drivers SET status = 'available' WHERE id = ?`).run(row.driver_id);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'cancelled', ?)`)
@@ -328,6 +331,7 @@ router.post('/:id/cancel', requireRideRole('dispatcher', 'admin'), validate(canc
   emitToDrivers('request:removed', { id: requestId });
   emitToDispatcher('request:updated', serializeForDispatcher(result, staleThreshold()));
   emitToEmployee(result.employee_id, 'request:status', serializeForEmployee(result));
+  if (previousDriverId) emitToDriver(previousDriverId, 'request:removed', { id: requestId });
   res.json({ request: serializeForDispatcher(result, staleThreshold()) });
 });
 

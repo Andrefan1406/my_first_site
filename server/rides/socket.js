@@ -1,13 +1,17 @@
-// Socket.io для системы поездок: три типа комнат — 'drivers' (все свободные
-// водители, broadcast о новых/забранных заявках пула), 'dispatcher'
-// (мониторинг диспетчером) и 'employee:{id}' (уведомление конкретного
-// сотрудника, что его заказ взяли). Комнату сокет получает не по слову
-// клиента, а по роли из rides.users после проверки Firebase ID-токена —
-// иначе любой мог бы подключиться с auth:{room:'employee:5'} и подслушивать
+// Socket.io для системы поездок: 'drivers' (все свободные водители,
+// broadcast о новых/забранных заявках пула), 'dispatcher' (мониторинг),
+// 'employee:{userId}' (уведомление конкретного сотрудника, что его заказ
+// взяли) и 'driver:{driverId}' (уведомление конкретного водителя, что ему
+// принудительно назначили заказ диспетчером — свои же действия водитель
+// и так видит из ответа REST-запроса, эта комната только для чужих
+// действий над его заказами). Комнату сокет получает не по слову клиента,
+// а по роли из rides.users после проверки Firebase ID-токена — иначе
+// любой мог бы подключиться с auth:{room:'employee:5'} и подслушивать
 // чужие заявки (там телефон заказчика).
 const { Server } = require('socket.io');
 const { getAuth } = require('firebase-admin/auth');
 const { findRideUserByEmail } = require('./auth');
+const { getWriteDb } = require('./db');
 
 let io = null;
 
@@ -32,7 +36,11 @@ function initSocket(httpServer) {
 
   io.on('connection', (socket) => {
     const { role, id } = socket.rideUser;
-    if (role === 'driver') socket.join('drivers');
+    if (role === 'driver') {
+      socket.join('drivers');
+      const driver = getWriteDb().prepare('SELECT id FROM drivers WHERE user_id = ?').get(id);
+      if (driver) socket.join(`driver:${driver.id}`);
+    }
     if (role === 'dispatcher' || role === 'admin') socket.join('dispatcher');
     if (role === 'employee') socket.join(`employee:${id}`);
   });
@@ -52,4 +60,8 @@ function emitToEmployee(employeeId, event, payload) {
   io?.to(`employee:${employeeId}`).emit(event, payload);
 }
 
-module.exports = { initSocket, emitToDrivers, emitToDispatcher, emitToEmployee };
+function emitToDriver(driverId, event, payload) {
+  io?.to(`driver:${driverId}`).emit(event, payload);
+}
+
+module.exports = { initSocket, emitToDrivers, emitToDispatcher, emitToEmployee, emitToDriver };
