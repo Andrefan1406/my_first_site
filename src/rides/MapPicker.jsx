@@ -17,7 +17,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: require("leaflet/dist/images/marker-shadow.png"),
 });
 
-const DEFAULT_CENTER = [43.238949, 76.889709]; // Алматы — стартовая точка карты по умолчанию
+const DEFAULT_CENTER = [49.948249, 82.628443]; // Усть-Каменогорск — стартовая точка карты по умолчанию
 
 async function reverseGeocode(lat, lng) {
   const res = await fetch(
