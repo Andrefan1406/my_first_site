@@ -74,8 +74,8 @@ export default function EmployeeRidesPage() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.fromAddress.trim() || !form.toAddress.trim() || !form.requestedAt) {
-      setError("Заполните адрес подачи, адрес назначения и время");
+    if (!form.fromAddress.trim() || !form.toAddress.trim() || !form.requestedAt || !form.purpose.trim()) {
+      setError("Заполните адрес подачи, адрес назначения, время и цель поездки");
       return;
     }
     setSubmitting(true);
@@ -150,8 +150,8 @@ export default function EmployeeRidesPage() {
             <input type="number" min={1} max={50} style={s.input} value={form.passengersCount} onChange={(e) => setForm({ ...form, passengersCount: e.target.value })} />
           </label>
         </div>
-        <label style={s.label}>Цель поездки
-          <input style={s.input} value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
+        <label style={s.label}>Цель поездки *
+          <input style={s.input} required value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
         </label>
         <label style={s.checkboxLabel}>
           <input type="checkbox" checked={form.withReturn} onChange={(e) => setForm({ ...form, withReturn: e.target.checked })} />

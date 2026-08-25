@@ -107,7 +107,7 @@ const createRequestSchema = z.object({
   fromAddress: z.string().trim().min(1, 'Укажите адрес подачи'),
   toAddress: z.string().trim().min(1, 'Укажите адрес назначения'),
   requestedAt: z.string().trim().min(1, 'Укажите дату и время'),
-  purpose: z.string().trim().optional().default(''),
+  purpose: z.string().trim().min(1, 'Укажите цель поездки'),
   passengersCount: z.coerce.number().int().min(1).max(50).default(1),
   withReturn: z.boolean().optional().default(false),
   extraStops: z.array(z.string().trim().min(1)).max(10, 'Не более 10 доп. пунктов').optional().default([]),
