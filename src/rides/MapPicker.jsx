@@ -19,13 +19,23 @@ L.Icon.Default.mergeOptions({
 
 const DEFAULT_CENTER = [49.948249, 82.628443]; // Усть-Каменогорск — стартовая точка карты по умолчанию
 
+// addressdetails=1 разбивает адрес на поля вместо одной строки
+// display_name — та тащит название организации/района/области/индекс
+// впереди улицы ("GEO.KZ, 3/2, проспект Победы, Стрелка, ..., 070004,
+// Казахстан"), что для поля адреса заявки избыточно. Из полей берём
+// только улицу и номер дома; если у точки их нет (открытая местность,
+// шоссе без названия) — откатываемся на полный display_name.
 async function reverseGeocode(lat, lng) {
   const res = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=ru`
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=ru&addressdetails=1`
   );
   if (!res.ok) throw new Error("geocoding failed");
   const data = await res.json();
-  return data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  const a = data.address || {};
+  const street = a.road || a.pedestrian || a.footway || a.street || "";
+  const house = a.house_number || "";
+  const short = [street, house].filter(Boolean).join(", ");
+  return short || data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
 export default function MapPicker({ onSelect, onClose }) {
