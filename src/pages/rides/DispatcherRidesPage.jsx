@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ridesApiFetch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
+import { formatRoute } from "../../rides/format";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -135,7 +136,7 @@ export default function DispatcherRidesPage() {
           {requests.map((r) => (
             <tr key={r.id} style={r.isStale ? s.staleRow : undefined}>
               <td style={s.td}>{formatDateTime(r.requestedAt)}</td>
-              <td style={s.td}>{r.fromAddress} → {r.toAddress}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</td>
+              <td style={s.td}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</td>
               <td style={s.td}>{r.employeeName}</td>
               <td style={s.td}>
                 {STATUS_LABEL[r.status] || r.status}

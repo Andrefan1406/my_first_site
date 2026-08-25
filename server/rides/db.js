@@ -79,6 +79,18 @@ CREATE INDEX IF NOT EXISTS idx_requests_employee ON requests(employee_id);
 CREATE INDEX IF NOT EXISTS idx_requests_driver   ON requests(driver_id);
 CREATE INDEX IF NOT EXISTS idx_drivers_status    ON drivers(status);
 
+-- Доп. пункты назначения сверх to_address (первого/основного) — заявка
+-- вида "от А до Б, потом ещё в В и Г". Отдельная таблица, а не несколько
+-- колонок to_address_2/3 в requests: пунктов может быть переменное
+-- количество, и большинству заявок они вообще не нужны.
+CREATE TABLE IF NOT EXISTS request_stops (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_id  INTEGER NOT NULL REFERENCES requests(id),
+  address     TEXT NOT NULL,
+  stop_order  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_request_stops_request ON request_stops(request_id);
+
 CREATE TABLE IF NOT EXISTS request_status_history (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   request_id  INTEGER NOT NULL REFERENCES requests(id),

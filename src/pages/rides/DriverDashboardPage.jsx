@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ridesApiFetch, ridesApiPatch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
+import { formatRoute } from "../../rides/format";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -189,7 +190,7 @@ export default function DriverDashboardPage() {
           <div style={s.cards}>
             {current.map((r) => (
               <div key={r.id} style={s.card}>
-                <div style={s.cardRoute}>{r.fromAddress} → {r.toAddress}{r.withReturn && <span style={s.returnBadge}> (туда-обратно, ждать на месте)</span>}</div>
+                <div style={s.cardRoute}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно, ждать на месте)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
                 {r.purpose && <div style={s.cardMeta}>Цель: {r.purpose}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
@@ -220,7 +221,7 @@ export default function DriverDashboardPage() {
           <div style={s.cards}>
             {pool.map((r) => (
               <div key={r.id} style={s.card}>
-                <div style={s.cardRoute}>{r.fromAddress} → {r.toAddress}{r.withReturn && <span style={s.returnBadge}> (туда-обратно, ждать на месте)</span>}</div>
+                <div style={s.cardRoute}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно, ждать на месте)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
                 {r.purpose && <div style={s.cardMeta}>Цель: {r.purpose}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
@@ -257,7 +258,7 @@ export default function DriverDashboardPage() {
               {history.map((r) => (
                 <tr key={r.id}>
                   <td style={s.td}>{formatDateTime(r.createdAt)}</td>
-                  <td style={s.td}>{r.fromAddress} → {r.toAddress}</td>
+                  <td style={s.td}>{formatRoute(r)}</td>
                   <td style={s.td}>{r.employeeName}</td>
                 </tr>
               ))}

@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ridesApiFetch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
+import { formatRoute } from "../../rides/format";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -36,7 +37,7 @@ function statusColor(status) {
   }
 }
 
-const emptyForm = { fromAddress: "", toAddress: "", requestedAt: "", purpose: "", passengersCount: 1, withReturn: false, comment: "" };
+const emptyForm = { fromAddress: "", toAddress: "", extraStops: [], requestedAt: "", purpose: "", passengersCount: 1, withReturn: false, comment: "" };
 
 export default function EmployeeRidesPage() {
   const [requests, setRequests] = useState([]);
@@ -80,7 +81,8 @@ export default function EmployeeRidesPage() {
     setSubmitting(true);
     setError("");
     try {
-      const { request } = await ridesApiPost("/api/v1/requests", form);
+      const payload = { ...form, extraStops: form.extraStops.map((s) => s.trim()).filter(Boolean) };
+      const { request } = await ridesApiPost("/api/v1/requests", payload);
       setRequests((prev) => [request, ...prev]);
       setForm(emptyForm);
     } catch (err) {
@@ -110,6 +112,36 @@ export default function EmployeeRidesPage() {
             <input style={s.input} value={form.toAddress} onChange={(e) => setForm({ ...form, toAddress: e.target.value })} />
           </label>
         </div>
+
+        {form.extraStops.map((stop, i) => (
+          <div key={i} style={s.stopRow}>
+            <input
+              style={{ ...s.input, flex: 1 }}
+              placeholder={`Ещё пункт назначения ${i + 1}`}
+              value={stop}
+              onChange={(e) => {
+                const next = [...form.extraStops];
+                next[i] = e.target.value;
+                setForm({ ...form, extraStops: next });
+              }}
+            />
+            <button
+              type="button"
+              style={s.removeStopButton}
+              onClick={() => setForm({ ...form, extraStops: form.extraStops.filter((_, j) => j !== i) })}
+            >
+              Удалить
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          style={s.addStopButton}
+          onClick={() => setForm({ ...form, extraStops: [...form.extraStops, ""] })}
+        >
+          + Добавить пункт назначения
+        </button>
+
         <div style={s.formRow}>
           <label style={s.label}>Дата и время подачи
             <input type="datetime-local" style={s.input} value={form.requestedAt} onChange={(e) => setForm({ ...form, requestedAt: e.target.value })} />
@@ -139,7 +171,7 @@ export default function EmployeeRidesPage() {
           <div style={s.cards}>
             {active.map((r) => (
               <div key={r.id} style={s.card}>
-                <div style={s.cardRoute}>{r.fromAddress} → {r.toAddress}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</div>
+                <div style={s.cardRoute}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
                 <div style={{ ...s.cardStatus, color: statusColor(r.status) }}>{statusLabel(r)}</div>
@@ -166,7 +198,7 @@ export default function EmployeeRidesPage() {
               {history.map((r) => (
                 <tr key={r.id}>
                   <td style={s.td}>{formatDateTime(r.createdAt)}</td>
-                  <td style={s.td}>{r.fromAddress} → {r.toAddress}</td>
+                  <td style={s.td}>{formatRoute(r)}</td>
                   <td style={{ ...s.td, color: statusColor(r.status) }}>{statusLabel(r)}</td>
                 </tr>
               ))}
@@ -192,6 +224,9 @@ const s = {
   checkboxLabel: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#444" },
   input: { padding: "8px 10px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "14px" },
   primaryButton: { alignSelf: "flex-start", background: "#1976d2", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 20px", cursor: "pointer", fontSize: "14px", fontWeight: 600 },
+  stopRow: { display: "flex", gap: "8px", alignItems: "center" },
+  addStopButton: { alignSelf: "flex-start", background: "none", border: "1px dashed #1976d2", color: "#1976d2", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px" },
+  removeStopButton: { background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "8px 12px", cursor: "pointer", fontSize: "13px" },
 
   section: { marginBottom: "28px" },
   sectionTitle: { fontSize: "17px", marginBottom: "12px" },

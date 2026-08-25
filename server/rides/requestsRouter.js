@@ -57,6 +57,7 @@ function baseFields(row) {
     driverName: row.driver_name || null,
     vehiclePlate: row.vehicle_plate || null,
     withReturn: !!row.with_return,
+    stops: row.stops || [],
   };
 }
 
@@ -84,8 +85,22 @@ function serializeForDispatcher(row, staleThresholdMinutes) {
   };
 }
 
+// Доп. пункты назначения (сверх to_address) грузятся отдельным запросом,
+// не JOIN'ом в FULL_SELECT — JOIN на request_stops размножил бы строку
+// заявки по числу пунктов, что ломает все остальные списки (пул,
+// диспетчер и т.д.), которым нужна ровно одна строка на заявку.
+function getStops(db, requestId) {
+  return db.prepare('SELECT address FROM request_stops WHERE request_id = ? ORDER BY stop_order ASC').all(requestId).map((r) => r.address);
+}
+
+function attachStops(db, rows) {
+  return rows.map((row) => ({ ...row, stops: getStops(db, row.id) }));
+}
+
 function getRow(db, id) {
-  return db.prepare(`${FULL_SELECT} WHERE r.id = ?`).get(id);
+  const row = db.prepare(`${FULL_SELECT} WHERE r.id = ?`).get(id);
+  if (row) row.stops = getStops(db, id);
+  return row;
 }
 
 const createRequestSchema = z.object({
@@ -95,6 +110,7 @@ const createRequestSchema = z.object({
   purpose: z.string().trim().optional().default(''),
   passengersCount: z.coerce.number().int().min(1).max(50).default(1),
   withReturn: z.boolean().optional().default(false),
+  extraStops: z.array(z.string().trim().min(1)).max(10, 'Не более 10 доп. пунктов').optional().default([]),
   comment: z.string().trim().optional().default(''),
 });
 
@@ -117,7 +133,7 @@ const statusSchema = z.object({
 // Сотрудник: создать заявку — сразу попадает в общий пул.
 router.post('/', requireRideRole('employee'), validate(createRequestSchema), (req, res) => {
   const db = getWriteDb();
-  const { fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn, comment } = req.body;
+  const { fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn, extraStops, comment } = req.body;
 
   const result = db.transaction(() => {
     const info = db
@@ -126,6 +142,8 @@ router.post('/', requireRideRole('employee'), validate(createRequestSchema), (re
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_assignment')`
       )
       .run(req.rideUser.id, fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn ? 1 : 0, comment);
+    const insertStop = db.prepare('INSERT INTO request_stops (request_id, address, stop_order) VALUES (?, ?, ?)');
+    extraStops.forEach((address, i) => insertStop.run(info.lastInsertRowid, address, i));
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'pending_assignment', ?)`)
       .run(info.lastInsertRowid, req.rideUser.id);
     return getRow(db, info.lastInsertRowid);
@@ -140,14 +158,14 @@ router.post('/', requireRideRole('employee'), validate(createRequestSchema), (re
 router.get('/mine', requireRideRole('employee'), (req, res) => {
   const db = getWriteDb();
   const rows = db.prepare(`${FULL_SELECT} WHERE r.employee_id = ? ORDER BY r.created_at DESC`).all(req.rideUser.id);
-  res.json({ requests: rows.map(serializeForEmployee) });
+  res.json({ requests: attachStops(db, rows).map(serializeForEmployee) });
 });
 
 // Водитель: пул свободных заявок, самые ранние сверху.
 router.get('/pool', requireRideRole('driver'), (req, res) => {
   const db = getWriteDb();
   const rows = db.prepare(`${FULL_SELECT} WHERE r.status = 'pending_assignment' ORDER BY r.created_at ASC`).all();
-  res.json({ requests: rows.map(serializeForDriver) });
+  res.json({ requests: attachStops(db, rows).map(serializeForDriver) });
 });
 
 // Водитель: заказы, которые сейчас у него на руках.
@@ -158,7 +176,7 @@ router.get('/my-current', requireRideRole('driver'), (req, res) => {
   const rows = db
     .prepare(`${FULL_SELECT} WHERE r.driver_id = ? AND r.status IN ('assigned', 'in_progress') ORDER BY r.claimed_at ASC`)
     .all(driver.id);
-  res.json({ requests: rows.map(serializeForDriver) });
+  res.json({ requests: attachStops(db, rows).map(serializeForDriver) });
 });
 
 // Водитель: история завершённых поездок за период (from/to — 'YYYY-MM-DD').
@@ -175,13 +193,13 @@ router.get('/my-history', requireRideRole('driver'), (req, res) => {
   sql += ' ORDER BY r.created_at DESC';
 
   const rows = db.prepare(sql).all(...params);
-  res.json({ requests: rows.map(serializeForDriver) });
+  res.json({ requests: attachStops(db, rows).map(serializeForDriver) });
 });
 
 // Диспетчер: полный список + сводка по статусам для мониторинга.
 router.get('/', requireRideRole('dispatcher', 'admin'), (req, res) => {
   const db = getWriteDb();
-  const rows = db.prepare(`${FULL_SELECT} ORDER BY r.created_at DESC`).all();
+  const rows = attachStops(db, db.prepare(`${FULL_SELECT} ORDER BY r.created_at DESC`).all());
   const threshold = staleThreshold();
   res.json({
     requests: rows.map((r) => serializeForDispatcher(r, threshold)),
