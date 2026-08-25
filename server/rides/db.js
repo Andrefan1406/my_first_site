@@ -66,6 +66,9 @@ CREATE TABLE IF NOT EXISTS requests (
   with_return       INTEGER NOT NULL DEFAULT 0, -- туда-обратно: водитель ждёт на месте и везёт
                                                   -- обратно в рамках той же заявки, не через
                                                   -- отдельный заказ из пула.
+  distance_km       REAL,    -- ориентировочные расстояние/время, посчитанные один раз при
+  duration_min      INTEGER, -- подаче (см. server/rides/routeEstimate.js) — NULL, если геокодер/
+                              -- роутер не смогли определить хотя бы одну из точек маршрута.
   status            TEXT NOT NULL DEFAULT 'pending_assignment'
                      CHECK(status IN ('created','pending_assignment','assigned','in_progress','completed','cancelled')),
   comment           TEXT,
@@ -118,6 +121,12 @@ function migrateSchema(db) {
   const requestColumns = db.prepare("PRAGMA table_info(requests)").all().map((c) => c.name);
   if (!requestColumns.includes('with_return')) {
     db.exec('ALTER TABLE requests ADD COLUMN with_return INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!requestColumns.includes('distance_km')) {
+    db.exec('ALTER TABLE requests ADD COLUMN distance_km REAL');
+  }
+  if (!requestColumns.includes('duration_min')) {
+    db.exec('ALTER TABLE requests ADD COLUMN duration_min INTEGER');
   }
 }
 

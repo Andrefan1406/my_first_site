@@ -8,6 +8,7 @@ const { z } = require('zod');
 const { getWriteDb } = require('./db');
 const { requireRideRole } = require('./auth');
 const { emitToDrivers, emitToDispatcher, emitToEmployee, emitToDriver } = require('./socket');
+const { estimateRoute } = require('./routeEstimate');
 
 const router = express.Router();
 
@@ -58,6 +59,8 @@ function baseFields(row) {
     vehiclePlate: row.vehicle_plate || null,
     withReturn: !!row.with_return,
     stops: row.stops || [],
+    distanceKm: row.distance_km ?? null,
+    durationMin: row.duration_min ?? null,
   };
 }
 
@@ -130,18 +133,26 @@ const statusSchema = z.object({
   status: z.enum(['in_progress', 'completed']),
 });
 
-// Сотрудник: создать заявку — сразу попадает в общий пул.
-router.post('/', requireRideRole('employee'), validate(createRequestSchema), (req, res) => {
+// Сотрудник: создать заявку — сразу попадает в общий пул. Расстояние/время
+// считаются один раз здесь (см. routeEstimate.js) — обращения к
+// геокодеру/роутеру асинхронные, а better-sqlite3-транзакция должна быть
+// синхронной, поэтому расчёт идёт ДО db.transaction(), не внутри неё.
+router.post('/', requireRideRole('employee'), validate(createRequestSchema), async (req, res) => {
   const db = getWriteDb();
   const { fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn, extraStops, comment } = req.body;
+
+  const estimate = await estimateRoute([fromAddress, toAddress, ...extraStops], withReturn);
 
   const result = db.transaction(() => {
     const info = db
       .prepare(
-        `INSERT INTO requests (employee_id, from_address, to_address, requested_at, purpose, passengers_count, with_return, comment, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_assignment')`
+        `INSERT INTO requests (employee_id, from_address, to_address, requested_at, purpose, passengers_count, with_return, distance_km, duration_min, comment, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_assignment')`
       )
-      .run(req.rideUser.id, fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn ? 1 : 0, comment);
+      .run(
+        req.rideUser.id, fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn ? 1 : 0,
+        estimate?.distanceKm ?? null, estimate?.durationMin ?? null, comment
+      );
     const insertStop = db.prepare('INSERT INTO request_stops (request_id, address, stop_order) VALUES (?, ?, ?)');
     extraStops.forEach((address, i) => insertStop.run(info.lastInsertRowid, address, i));
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'pending_assignment', ?)`)

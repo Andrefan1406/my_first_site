@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ridesApiFetch, ridesApiPatch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
-import { formatRoute } from "../../rides/format";
+import { formatRoute, formatEstimate } from "../../rides/format";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -192,6 +192,7 @@ export default function DriverDashboardPage() {
               <div key={r.id} style={s.card}>
                 <div style={s.cardRoute}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно, ждать на месте)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
+                {formatEstimate(r) && <div style={s.cardMeta}>{formatEstimate(r)}</div>}
                 {r.purpose && <div style={s.cardMeta}>Цель: {r.purpose}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
                 <div style={s.cardMeta}>
@@ -223,6 +224,7 @@ export default function DriverDashboardPage() {
               <div key={r.id} style={s.card}>
                 <div style={s.cardRoute}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно, ждать на месте)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
+                {formatEstimate(r) && <div style={s.cardMeta}>{formatEstimate(r)}</div>}
                 {r.purpose && <div style={s.cardMeta}>Цель: {r.purpose}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
                 <div style={s.cardMeta}>
