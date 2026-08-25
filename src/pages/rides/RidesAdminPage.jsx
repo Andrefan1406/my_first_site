@@ -5,6 +5,7 @@
 // страницы с общей навигацией.
 import React, { useCallback, useEffect, useState } from "react";
 import { ridesApiDelete, ridesApiFetch, ridesApiPatch, ridesApiPost, ridesApiPut } from "../../rides/api";
+import LogoutButton from "../../rides/LogoutButton";
 
 const ROLE_OPTIONS = [
   { value: "", label: "— нет доступа —" },
@@ -314,7 +315,10 @@ export default function RidesAdminPage() {
 
   return (
     <div style={s.page}>
-      <h1 style={s.title}>Администрирование системы поездок</h1>
+      <div style={s.header}>
+        <h1 style={s.title}>Администрирование системы поездок</h1>
+        <LogoutButton />
+      </div>
       <div style={s.tabs}>
         <button style={tab === "users" ? s.tabActive : s.tab} onClick={() => setTab("users")}>Пользователи и роли</button>
         <button style={tab === "drivers" ? s.tabActive : s.tab} onClick={() => setTab("drivers")}>Водители</button>
@@ -329,7 +333,8 @@ export default function RidesAdminPage() {
 
 const s = {
   page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1100px", margin: "0 auto" },
-  title: { fontSize: "22px", marginBottom: "16px" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
+  title: { fontSize: "22px", margin: 0 },
   tabs: { display: "flex", gap: "8px", marginBottom: "20px" },
   tab: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px" },
   tabActive: { background: "#1976d2", color: "#fff", border: "1px solid #1976d2", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px", fontWeight: 600 },

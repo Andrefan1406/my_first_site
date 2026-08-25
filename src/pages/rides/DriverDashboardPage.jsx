@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ridesApiFetch, ridesApiPatch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
+import LogoutButton from "../../rides/LogoutButton";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -174,6 +175,7 @@ export default function DriverDashboardPage() {
               {driver?.status === "offline" ? "Выйти на линию" : "Уйти с линии"}
             </button>
           )}
+          <LogoutButton />
         </div>
       </div>
 

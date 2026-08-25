@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { ridesApiFetch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
+import LogoutButton from "../../rides/LogoutButton";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -107,7 +108,10 @@ export default function DispatcherRidesPage() {
 
   return (
     <div style={s.page}>
-      <h1 style={s.title}>Мониторинг заявок</h1>
+      <div style={s.header}>
+        <h1 style={s.title}>Мониторинг заявок</h1>
+        <LogoutButton />
+      </div>
       {error && <div style={s.error}>{error}</div>}
 
       <div style={s.cards}>
@@ -178,7 +182,8 @@ export default function DispatcherRidesPage() {
 
 const s = {
   page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1100px", margin: "0 auto" },
-  title: { fontSize: "22px", marginBottom: "16px" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
+  title: { fontSize: "22px", margin: 0 },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
   muted: { color: "#888", fontSize: "14px" },
