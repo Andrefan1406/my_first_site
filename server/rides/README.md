@@ -50,6 +50,24 @@ npm run rides:seed
 аккаунт в Firebase Authentication проекта — сид этого не делает, он только
 заполняет SQLite.
 
+Завести сами аккаунты в Firebase Authentication (email/пароль из
+`create-test-users.js`, совпадают с email из сида) можно одной командой —
+нужен service account ключ именно проекта `my-first-site-16a0c`
+(Firebase Console → Project Settings → Service accounts → Generate new
+private key; НЕ коммитить в git):
+
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=./путь/к/ключу.json npm run rides:create-test-users
+```
+
+Тот же ключ нужен и для работы страницы `/rides-admin` в целом: вкладка
+«Пользователи и роли» вызывает `GET /api/v1/users`, а он читает список
+пользователей Firebase через `listUsers()` — эта операция, в отличие от
+проверки токена (`verifyIdToken`, ей хватает одного `projectId`, см.
+`server/rides/auth.js`), требует полноценных credentials. Поэтому на
+проде/локально задайте `GOOGLE_APPLICATION_CREDENTIALS` и для самого
+backend-процесса (`npm run server`), не только для разового скрипта.
+
 ## Как назначить себе роль (первый запуск)
 
 Раздел `/rides-admin` сам требует роль `admin`, поэтому самому первому
