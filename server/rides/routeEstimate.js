@@ -13,6 +13,15 @@
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
 
+// OSRM считает время по своей модели скоростей (близко к трассовой,
+// без городских пробок/светофоров) — для внутригородских служебных
+// поездок это заметно оптимистичнее реальности, поэтому время считаем
+// сами: расстояние (оно из фактической геометрии маршрута, ему доверяем)
+// делим на среднюю скорость по городу с поправкой на пробки и добавляем
+// фиксированный буфер на посадку/ожидание на месте.
+const AVERAGE_SPEED_KMH = 40;
+const WAIT_MINUTES = 10;
+
 async function geocode(address) {
   const url = `${NOMINATIM_URL}?q=${encodeURIComponent(address)}&format=jsonv2&limit=1`;
   const res = await fetch(url, { headers: { 'User-Agent': 'my-first-site-rides/1.0' } });
@@ -43,10 +52,9 @@ async function estimateRoute(addresses, withReturn) {
     const route = data.routes && data.routes[0];
     if (!route) return null;
 
-    return {
-      distanceKm: Math.round((route.distance / 1000) * 10) / 10,
-      durationMin: Math.round(route.duration / 60),
-    };
+    const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
+    const durationMin = Math.round((distanceKm / AVERAGE_SPEED_KMH) * 60) + WAIT_MINUTES;
+    return { distanceKm, durationMin };
   } catch (err) {
     return null;
   }
