@@ -37,7 +37,11 @@ app.use(express.json({ limit: '1mb' }));
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  // PATCH/PUT добавлены для server/rides/* (смена статуса водителя,
+  // CRUD машин/водителей, назначение ролей) — раньше в списке их не было,
+  // из-за чего браузер резал такие запросы ещё на CORS-preflight, до
+  // отправки на сервер ("Failed to fetch" на клиенте).
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
