@@ -24,7 +24,12 @@ const ROLE_OPTIONS = [
   { value: "admin", label: "Админ поездок" },
 ];
 
+function roleLabel(role) {
+  return ROLE_OPTIONS.find((o) => o.value === role)?.label || "—";
+}
+
 function UsersTab() {
+  const isSiteAdmin = getAuth().currentUser?.email?.toLowerCase() === SITE_ADMIN_EMAIL;
   const [users, setUsers] = useState([]);
   const [drafts, setDrafts] = useState({}); // email -> {name, phone, role, fullSiteAccess}
   const [loading, setLoading] = useState(true);
@@ -58,11 +63,15 @@ function UsersTab() {
     setSavingEmail(email);
     setError("");
     try {
-      if (!draft.role) {
+      // Убрать роль (очистить выпадающий список) может только главный
+      // админ — у остальных сам select не редактируется, но на всякий
+      // случай не пытаемся звать DELETE от их имени, бэкенд всё равно
+      // откажет.
+      if (isSiteAdmin && !draft.role) {
         await ridesApiDelete(`/api/v1/users/${encodeURIComponent(email)}`);
       } else {
         if (!draft.name.trim() || !draft.phone.trim()) {
-          setError("Укажите имя и телефон перед назначением роли");
+          setError("Укажите имя и телефон");
           setSavingEmail(null);
           return;
         }
@@ -78,10 +87,9 @@ function UsersTab() {
 
   if (loading) return <p style={s.muted}>Загрузка...</p>;
 
-  const isSiteAdmin = getAuth().currentUser?.email?.toLowerCase() === SITE_ADMIN_EMAIL;
-  // Бэкенд для не-главных админов уже не присылает ни саму строку
-  // SITE_ADMIN_EMAIL, ни поле fullSiteAccess — фильтр здесь просто на
-  // случай не полностью прогруженных данных, реальная защита не тут.
+  // Бэкенд для не-главных админов уже не присылает ни строку главного
+  // админа, ни поле fullSiteAccess — фильтр здесь просто на случай не
+  // полностью прогруженных данных, реальная защита не тут.
   const visibleUsers = isSiteAdmin ? users : users.filter((u) => u.email.toLowerCase() !== SITE_ADMIN_EMAIL);
 
   return (
@@ -111,9 +119,13 @@ function UsersTab() {
                   <input style={s.inputSmall} value={draft.phone} onChange={(e) => setDraft(u.email, { phone: e.target.value })} />
                 </td>
                 <td style={s.td}>
-                  <select style={s.inputSmall} value={draft.role} onChange={(e) => setDraft(u.email, { role: e.target.value })}>
-                    {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
+                  {isSiteAdmin ? (
+                    <select style={s.inputSmall} value={draft.role} onChange={(e) => setDraft(u.email, { role: e.target.value })}>
+                      {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  ) : (
+                    roleLabel(draft.role)
+                  )}
                 </td>
                 {isSiteAdmin && (
                 <td style={{ ...s.td, textAlign: "center" }}>
