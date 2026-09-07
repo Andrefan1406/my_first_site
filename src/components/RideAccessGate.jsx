@@ -11,18 +11,22 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 import { ridesApiFetch } from "../rides/api";
 
+// Роли "admin" в rides.users больше нет — главный админ сайта эту таблицу
+// не заполняет собой вообще (см. server/rides/usersRouter.js), поэтому
+// его сюда ROLE_HOME/ROLE_EXTRA_PATHS не касаются: без записи rideUser он
+// ниже просто не подпадает под ограничение и видит весь сайт как обычно.
 const ROLE_HOME = {
   employee: "/employee",
   dispatcher: "/dispatcher",
   driver: "/driver",
-  admin: "/rides-admin",
 };
 
 // Помимо своей "домашней" страницы, диспетчеру ещё можно на /employee —
-// он иногда сам себе заказывает машину (см. server/rides/requestsRouter.js,
-// requireRideRole('employee', 'dispatcher') на создании заявки).
+// он иногда сам себе заказывает машину, и на /rides-admin — он же ведёт
+// справочники водителей/машин (см. server/rides/driversRouter.js,
+// vehiclesRouter.js).
 const ROLE_EXTRA_PATHS = {
-  dispatcher: ["/employee"],
+  dispatcher: ["/employee", "/rides-admin"],
 };
 
 export default function RideAccessGate({ children }) {

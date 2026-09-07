@@ -38,8 +38,10 @@ function upsertDriver({ userId, vehicleId }) {
   return info.lastInsertRowid;
 }
 
+// Диспетчер — он же ведёт справочники водителей/машин (роли "admin"
+// отдельно от него больше нет, см. server/rides/usersRouter.js): главный
+// админ сайта только назначает роли, справочниками не занимается.
 const dispatcherId = upsertUser({ email: 'dispatcher@example.com', name: 'Айгуль Диспетчерова', phone: '+77010000001', role: 'dispatcher' });
-const adminId = upsertUser({ email: 'rides-admin@example.com', name: 'Админ Поездок', phone: '+77010000002', role: 'admin' });
 
 const driver1UserId = upsertUser({ email: 'driver1@example.com', name: 'Ерлан Водителев', phone: '+77010000003', role: 'driver' });
 const driver2UserId = upsertUser({ email: 'driver2@example.com', name: 'Данияр Шофёров', phone: '+77010000004', role: 'driver' });
@@ -72,4 +74,4 @@ if (requestsCount === 0) {
   console.log('В requests уже есть данные — заявки не добавлялись.');
 }
 
-console.log('Готово:', { dispatcherId, adminId, driver1Id, driver2Id, employee1Id, employee2Id });
+console.log('Готово:', { dispatcherId, driver1Id, driver2Id, employee1Id, employee2Id });

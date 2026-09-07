@@ -8,6 +8,12 @@
 const { initializeApp, getApps } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getWriteDb } = require('./db');
+// Главный админ сайта (server/adminAuth.js) — в системе поездок у него
+// осознанно нет собственной роли/записи: он только назначает роли другим
+// на /rides-admin и смотрит (без права правки) справочники водителей и
+// машин. requireSiteAdmin/requireRoleOrSiteAdmin ниже проверяют это по
+// email из Firebase-токена, а не по rides.users — записи там может не быть.
+const { ADMIN_EMAIL } = require('../adminAuth');
 
 const FIREBASE_PROJECT_ID = 'my-first-site-16a0c';
 
@@ -72,4 +78,36 @@ function requireRideRole(...roles) {
   };
 }
 
-module.exports = { loadRideUser, requireAnyRideUser, requireRideRole, findRideUserByEmail, verifyToken };
+// Только главный админ сайта — для назначения ролей (/api/v1/users, кроме /me).
+function requireSiteAdmin(req, res, next) {
+  verifyToken(req, res).then((decoded) => {
+    if (!decoded) return; // verifyToken уже отправил 401
+    req.firebaseEmail = decoded.email;
+    if (decoded.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+      return res.status(403).json({ error: 'Доступ только для главного администратора сайта' });
+    }
+    next();
+  });
+}
+
+// Нужная роль ИЛИ главный админ — для эндпоинтов, которые главному
+// админу можно только читать (справочники водителей/машин): диспетчер
+// правит их полноценно, главный админ видит то же самое, но пишущие
+// роуты этим хелпером не защищают — там отдельно requireRideRole(role).
+function requireRoleOrSiteAdmin(...roles) {
+  return (req, res, next) => {
+    loadRideUser(req, res, () => {
+      const isSiteAdmin = req.firebaseEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      if (isSiteAdmin) return next();
+      if (!req.rideUser || !roles.includes(req.rideUser.role)) {
+        return res.status(403).json({ error: 'Недостаточно прав для этого действия' });
+      }
+      next();
+    });
+  };
+}
+
+module.exports = {
+  loadRideUser, requireAnyRideUser, requireRideRole, requireSiteAdmin, requireRoleOrSiteAdmin,
+  findRideUserByEmail, verifyToken,
+};

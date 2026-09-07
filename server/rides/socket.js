@@ -41,7 +41,7 @@ function initSocket(httpServer) {
       const driver = getWriteDb().prepare('SELECT id FROM drivers WHERE user_id = ?').get(id);
       if (driver) socket.join(`driver:${driver.id}`);
     }
-    if (role === 'dispatcher' || role === 'admin') socket.join('dispatcher');
+    if (role === 'dispatcher') socket.join('dispatcher');
     // Диспетчер иногда сам подаёт заявку (как сотрудник) — ему тоже нужны
     // уведомления по комнате employee:{id} о своих же заявках.
     if (role === 'employee' || role === 'dispatcher') socket.join(`employee:${id}`);

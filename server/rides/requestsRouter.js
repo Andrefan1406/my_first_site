@@ -209,7 +209,7 @@ router.get('/my-history', requireRideRole('driver'), (req, res) => {
 });
 
 // Диспетчер: полный список + сводка по статусам для мониторинга.
-router.get('/', requireRideRole('dispatcher', 'admin'), (req, res) => {
+router.get('/', requireRideRole('dispatcher'), (req, res) => {
   const db = getWriteDb();
   const rows = attachStops(db, db.prepare(`${FULL_SELECT} ORDER BY r.created_at DESC`).all());
   const threshold = staleThreshold();
@@ -315,7 +315,7 @@ router.post('/:id/status', requireRideRole('driver'), validate(statusSchema), (r
 });
 
 // Диспетчер: принудительное назначение — исключение, а не основной сценарий.
-router.post('/:id/assign', requireRideRole('dispatcher', 'admin'), validate(assignSchema), (req, res) => {
+router.post('/:id/assign', requireRideRole('dispatcher'), validate(assignSchema), (req, res) => {
   const db = getWriteDb();
   const requestId = Number(req.params.id);
   const driver = db.prepare(`SELECT * FROM drivers WHERE id = ? AND status = 'available'`).get(req.body.driverId);
@@ -342,7 +342,7 @@ router.post('/:id/assign', requireRideRole('dispatcher', 'admin'), validate(assi
 });
 
 // Диспетчер: отмена заявки — только пока поездка не началась.
-router.post('/:id/cancel', requireRideRole('dispatcher', 'admin'), validate(cancelSchema), (req, res) => {
+router.post('/:id/cancel', requireRideRole('dispatcher'), validate(cancelSchema), (req, res) => {
   const db = getWriteDb();
   const requestId = Number(req.params.id);
 

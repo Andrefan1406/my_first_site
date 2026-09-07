@@ -75,7 +75,7 @@ const App = () => {
           path="/dispatcher"
           element={
             <Protected>
-              <RideRoleRoute roles={["dispatcher", "admin"]}>
+              <RideRoleRoute roles={["dispatcher"]}>
                 <DispatcherRidesPage />
               </RideRoleRoute>
             </Protected>
@@ -85,7 +85,9 @@ const App = () => {
           path="/rides-admin"
           element={
             <Protected>
-              <RideRoleRoute roles={["admin"]}>
+              {/* allowSiteAdmin: главный админ сайта попадает сюда по email,
+                  без роли dispatcher — см. RideRoleRoute.jsx */}
+              <RideRoleRoute roles={["dispatcher"]} allowSiteAdmin>
                 <RidesAdminPage />
               </RideRoleRoute>
             </Protected>

@@ -1,10 +1,12 @@
-// /api/v1/drivers — CRUD карточек водителей (admin) + водитель сам
+// /api/v1/drivers — CRUD карточек водителей ведёт диспетчер (тот же
+// человек, что и справочник машин в vehiclesRouter.js) + водитель сам
 // переключает себя online/offline (available <-> offline; busy проставляет
-// только сервер при взятии заказа, вручную недоступен).
+// только сервер при взятии заказа, вручную недоступен). Главный админ
+// сайта карточки только читает, см. requireRoleOrSiteAdmin ниже.
 const express = require('express');
 const { z } = require('zod');
 const { getWriteDb } = require('./db');
-const { requireRideRole } = require('./auth');
+const { requireRideRole, requireRoleOrSiteAdmin } = require('./auth');
 
 const router = express.Router();
 
@@ -52,13 +54,13 @@ const FULL_SELECT = `
   LEFT JOIN vehicles v ON v.id = d.vehicle_id
 `;
 
-router.get('/', requireRideRole('dispatcher', 'admin'), (req, res) => {
+router.get('/', requireRoleOrSiteAdmin('dispatcher'), (req, res) => {
   const rows = getWriteDb().prepare(`${FULL_SELECT} ORDER BY u.name`).all();
   res.json({ drivers: rows.map(serialize) });
 });
 
 // Диспетчеру нужен именно список свободных — для формы принудительного назначения.
-router.get('/available', requireRideRole('dispatcher', 'admin'), (req, res) => {
+router.get('/available', requireRideRole('dispatcher'), (req, res) => {
   const rows = getWriteDb().prepare(`${FULL_SELECT} WHERE d.status = 'available' ORDER BY u.name`).all();
   res.json({ drivers: rows.map(serialize) });
 });
@@ -70,7 +72,7 @@ router.get('/me', requireRideRole('driver'), (req, res) => {
   res.json({ driver: serialize(row) });
 });
 
-router.post('/', requireRideRole('admin'), validate(driverSchema), (req, res) => {
+router.post('/', requireRideRole('dispatcher'), validate(driverSchema), (req, res) => {
   const db = getWriteDb();
   const user = db.prepare(`SELECT * FROM users WHERE id = ? AND role = 'driver'`).get(req.body.userId);
   if (!user) return res.status(400).json({ error: 'Пользователь не найден или не имеет роли "водитель"' });
@@ -85,7 +87,7 @@ router.post('/', requireRideRole('admin'), validate(driverSchema), (req, res) =>
   }
 });
 
-router.patch('/:id', requireRideRole('admin'), validate(driverUpdateSchema), (req, res) => {
+router.patch('/:id', requireRideRole('dispatcher'), validate(driverUpdateSchema), (req, res) => {
   const db = getWriteDb();
   const existing = db.prepare('SELECT * FROM drivers WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Водитель не найден' });
@@ -98,7 +100,7 @@ router.patch('/:id', requireRideRole('admin'), validate(driverUpdateSchema), (re
   res.json({ driver: serialize(db.prepare(`${FULL_SELECT} WHERE d.id = ?`).get(req.params.id)) });
 });
 
-router.delete('/:id', requireRideRole('admin'), (req, res) => {
+router.delete('/:id', requireRideRole('dispatcher'), (req, res) => {
   const db = getWriteDb();
   const inUse = db.prepare(`SELECT 1 FROM requests WHERE driver_id = ? AND status IN ('assigned', 'in_progress')`).get(req.params.id);
   if (inUse) return res.status(409).json({ error: 'У водителя есть активный заказ — сначала закройте его' });

@@ -1,9 +1,12 @@
-// /api/v1/vehicles — CRUD справочника машин, доступен только admin-роли
-// системы поездок (не путать с общим /admin сайта).
+// /api/v1/vehicles — справочник машин. Полноценно (CRUD) им распоряжается
+// диспетчер — по факту тот же человек, что ведёт и карточки водителей
+// (см. driversRouter.js). Главный админ сайта может только смотреть
+// (requireRoleOrSiteAdmin на GET), сам он ничего не создаёт/не правит —
+// см. server/rides/usersRouter.js про то, чем он занимается.
 const express = require('express');
 const { z } = require('zod');
 const { getWriteDb } = require('./db');
-const { requireRideRole } = require('./auth');
+const { requireRideRole, requireRoleOrSiteAdmin } = require('./auth');
 
 const router = express.Router();
 
@@ -30,12 +33,12 @@ function serialize(row) {
   return { id: row.id, plateNumber: row.plate_number, model: row.model, status: row.status };
 }
 
-router.get('/', requireRideRole('dispatcher', 'admin'), (req, res) => {
+router.get('/', requireRoleOrSiteAdmin('dispatcher'), (req, res) => {
   const rows = getWriteDb().prepare('SELECT * FROM vehicles ORDER BY plate_number').all();
   res.json({ vehicles: rows.map(serialize) });
 });
 
-router.post('/', requireRideRole('admin'), validate(vehicleSchema), (req, res) => {
+router.post('/', requireRideRole('dispatcher'), validate(vehicleSchema), (req, res) => {
   const db = getWriteDb();
   try {
     const info = db
@@ -47,7 +50,7 @@ router.post('/', requireRideRole('admin'), validate(vehicleSchema), (req, res) =
   }
 });
 
-router.patch('/:id', requireRideRole('admin'), validate(vehicleUpdateSchema), (req, res) => {
+router.patch('/:id', requireRideRole('dispatcher'), validate(vehicleUpdateSchema), (req, res) => {
   const db = getWriteDb();
   const existing = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Машина не найдена' });
@@ -66,7 +69,7 @@ router.patch('/:id', requireRideRole('admin'), validate(vehicleUpdateSchema), (r
   }
 });
 
-router.delete('/:id', requireRideRole('admin'), (req, res) => {
+router.delete('/:id', requireRideRole('dispatcher'), (req, res) => {
   const db = getWriteDb();
   const inUse = db.prepare('SELECT 1 FROM drivers WHERE vehicle_id = ?').get(req.params.id);
   if (inUse) return res.status(409).json({ error: 'Машина закреплена за водителем — сначала отвяжите её' });

@@ -113,6 +113,7 @@ export default function DispatcherRidesPage() {
       <div style={s.header}>
         <h1 style={s.title}>Мониторинг заявок</h1>
         <div style={s.headerRight}>
+          <Link to="/rides-admin" style={s.link}>Водители и машины</Link>
           <Link to="/employee" style={s.link}>Заказать машину себе</Link>
           <LogoutButton />
         </div>

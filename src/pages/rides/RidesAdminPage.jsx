@@ -1,35 +1,27 @@
-// Админка системы поездок (роль admin в rides.users, не путать с общим
-// /admin сайта — см. RideAccessGate.jsx): назначение ролей/full_site_access
-// всем пользователям сайта и CRUD справочников водителей/машин. Три вкладки
-// в одном файле — три относительно небольших списка, не тянут на отдельные
-// страницы с общей навигацией.
+// Админка системы поездок — общая страница для двух разных людей:
+// главного админа сайта (назначает роли, справочники видит, но только
+// читает) и диспетчера (полноценно ведёт справочники водителей/машин,
+// вкладки "Пользователи и роли" у него нет вообще). Кто есть кто —
+// определяем по email (SITE_ADMIN_EMAIL) и по собственной роли из
+// GET /api/v1/users/me; бэкенд разграничивает то же самое по-настоящему
+// (requireSiteAdmin/requireRoleOrSiteAdmin, см. server/rides/*.js).
 import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { getAuth } from "firebase/auth";
 import { ridesApiDelete, ridesApiFetch, ridesApiPatch, ridesApiPost, ridesApiPut } from "../../rides/api";
 import LogoutButton from "../../rides/LogoutButton";
-
-// Тот же email, что server/adminAuth.js признаёт главным админом сайта —
-// строку с ним самим и рычаг full_site_access видит и меняет только он.
-// UX-уровень: бэкенд (server/rides/usersRouter.js) режет то же самое
-// по-настоящему — эту запись и подрежает из ответа GET /api/v1/users,
-// и не даст поменять через PUT/DELETE напрямую, даже если кто-то обойдёт
-// эту проверку на фронте.
-const SITE_ADMIN_EMAIL = "admin@vkdev.kz";
+import { SITE_ADMIN_EMAIL } from "../../rides/constants";
 
 const ROLE_OPTIONS = [
   { value: "", label: "— нет доступа —" },
   { value: "employee", label: "Сотрудник (пассажир)" },
   { value: "dispatcher", label: "Диспетчер" },
   { value: "driver", label: "Водитель" },
-  { value: "admin", label: "Админ поездок" },
 ];
 
-function roleLabel(role) {
-  return ROLE_OPTIONS.find((o) => o.value === role)?.label || "—";
-}
-
+// Видна только главному админу (сама страница сюда его и пускает —
+// requireSiteAdmin на бэкенде отдаёт эти данные только ему).
 function UsersTab() {
-  const isSiteAdmin = getAuth().currentUser?.email?.toLowerCase() === SITE_ADMIN_EMAIL;
   const [users, setUsers] = useState([]);
   const [drafts, setDrafts] = useState({}); // email -> {name, phone, role, fullSiteAccess}
   const [loading, setLoading] = useState(true);
@@ -63,15 +55,11 @@ function UsersTab() {
     setSavingEmail(email);
     setError("");
     try {
-      // Убрать роль (очистить выпадающий список) может только главный
-      // админ — у остальных сам select не редактируется, но на всякий
-      // случай не пытаемся звать DELETE от их имени, бэкенд всё равно
-      // откажет.
-      if (isSiteAdmin && !draft.role) {
+      if (!draft.role) {
         await ridesApiDelete(`/api/v1/users/${encodeURIComponent(email)}`);
       } else {
         if (!draft.name.trim() || !draft.phone.trim()) {
-          setError("Укажите имя и телефон");
+          setError("Укажите имя и телефон перед назначением роли");
           setSavingEmail(null);
           return;
         }
@@ -87,11 +75,6 @@ function UsersTab() {
 
   if (loading) return <p style={s.muted}>Загрузка...</p>;
 
-  // Бэкенд для не-главных админов уже не присылает ни строку главного
-  // админа, ни поле fullSiteAccess — фильтр здесь просто на случай не
-  // полностью прогруженных данных, реальная защита не тут.
-  const visibleUsers = isSiteAdmin ? users : users.filter((u) => u.email.toLowerCase() !== SITE_ADMIN_EMAIL);
-
   return (
     <div>
       {error && <div style={s.error}>{error}</div>}
@@ -102,12 +85,12 @@ function UsersTab() {
             <th style={s.th}>Имя</th>
             <th style={s.th}>Телефон</th>
             <th style={s.th}>Роль в системе поездок</th>
-            {isSiteAdmin && <th style={s.th}>Доступ ко всему сайту</th>}
+            <th style={s.th}>Доступ ко всему сайту</th>
             <th style={s.th}></th>
           </tr>
         </thead>
         <tbody>
-          {visibleUsers.map((u) => {
+          {users.map((u) => {
             const draft = drafts[u.email] || { name: "", phone: "", role: "", fullSiteAccess: false };
             return (
               <tr key={u.email}>
@@ -119,15 +102,10 @@ function UsersTab() {
                   <input style={s.inputSmall} value={draft.phone} onChange={(e) => setDraft(u.email, { phone: e.target.value })} />
                 </td>
                 <td style={s.td}>
-                  {isSiteAdmin ? (
-                    <select style={s.inputSmall} value={draft.role} onChange={(e) => setDraft(u.email, { role: e.target.value })}>
-                      {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                  ) : (
-                    roleLabel(draft.role)
-                  )}
+                  <select style={s.inputSmall} value={draft.role} onChange={(e) => setDraft(u.email, { role: e.target.value })}>
+                    {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
                 </td>
-                {isSiteAdmin && (
                 <td style={{ ...s.td, textAlign: "center" }}>
                   <input
                     type="checkbox"
@@ -136,7 +114,6 @@ function UsersTab() {
                     onChange={(e) => setDraft(u.email, { fullSiteAccess: e.target.checked })}
                   />
                 </td>
-                )}
                 <td style={s.td}>
                   <button style={s.secondaryButton} disabled={savingEmail === u.email} onClick={() => save(u.email)}>Сохранить</button>
                 </td>
@@ -149,7 +126,9 @@ function UsersTab() {
   );
 }
 
-function VehiclesTab() {
+// readOnly = главный админ сайта (может только смотреть); диспетчер видит
+// то же самое с формой добавления и кнопками изменения/удаления.
+function VehiclesTab({ readOnly }) {
   const [vehicles, setVehicles] = useState([]);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ plateNumber: "", model: "" });
@@ -196,21 +175,25 @@ function VehiclesTab() {
     }
   };
 
+  const STATUS_LABEL = { available: "Свободна", busy: "Занята", maintenance: "На ремонте" };
+
   return (
     <div>
       {error && <div style={s.error}>{error}</div>}
-      <form onSubmit={add} style={s.inlineForm}>
-        <input style={s.inputSmall} placeholder="Гос. номер" value={form.plateNumber} onChange={(e) => setForm({ ...form, plateNumber: e.target.value })} />
-        <input style={s.inputSmall} placeholder="Модель" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
-        <button type="submit" style={s.primaryButton}>Добавить машину</button>
-      </form>
+      {!readOnly && (
+        <form onSubmit={add} style={s.inlineForm}>
+          <input style={s.inputSmall} placeholder="Гос. номер" value={form.plateNumber} onChange={(e) => setForm({ ...form, plateNumber: e.target.value })} />
+          <input style={s.inputSmall} placeholder="Модель" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+          <button type="submit" style={s.primaryButton}>Добавить машину</button>
+        </form>
+      )}
       <table style={s.table}>
         <thead>
           <tr>
             <th style={s.th}>Гос. номер</th>
             <th style={s.th}>Модель</th>
             <th style={s.th}>Статус</th>
-            <th style={s.th}></th>
+            {!readOnly && <th style={s.th}></th>}
           </tr>
         </thead>
         <tbody>
@@ -219,13 +202,17 @@ function VehiclesTab() {
               <td style={s.td}>{v.plateNumber}</td>
               <td style={s.td}>{v.model}</td>
               <td style={s.td}>
-                <select style={s.inputSmall} value={v.status} onChange={(e) => updateStatus(v.id, e.target.value)}>
-                  <option value="available">Свободна</option>
-                  <option value="busy">Занята</option>
-                  <option value="maintenance">На ремонте</option>
-                </select>
+                {readOnly ? STATUS_LABEL[v.status] || v.status : (
+                  <select style={s.inputSmall} value={v.status} onChange={(e) => updateStatus(v.id, e.target.value)}>
+                    <option value="available">Свободна</option>
+                    <option value="busy">Занята</option>
+                    <option value="maintenance">На ремонте</option>
+                  </select>
+                )}
               </td>
-              <td style={s.td}><button style={s.dangerButton} onClick={() => remove(v.id)}>Удалить</button></td>
+              {!readOnly && (
+                <td style={s.td}><button style={s.dangerButton} onClick={() => remove(v.id)}>Удалить</button></td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -234,7 +221,7 @@ function VehiclesTab() {
   );
 }
 
-function DriversTab() {
+function DriversTab({ readOnly }) {
   const [drivers, setDrivers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [driverUsers, setDriverUsers] = useState([]);
@@ -244,18 +231,24 @@ function DriversTab() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const [driversRes, vehiclesRes, usersRes] = await Promise.all([
+      const [driversRes, vehiclesRes] = await Promise.all([
         ridesApiFetch("/api/v1/drivers"),
         ridesApiFetch("/api/v1/vehicles"),
-        ridesApiFetch("/api/v1/users"),
       ]);
       setDrivers(driversRes.drivers);
       setVehicles(vehiclesRes.vehicles);
-      setDriverUsers(usersRes.users.filter((u) => u.role === "driver" && u.id));
+      // Список пользователей с ролью "Водитель" нужен только для формы
+      // создания карточки — она есть только у диспетчера (readOnly её не
+      // видит), и только диспетчеру доступен GET /api/v1/users вообще,
+      // так что главному админу этот запрос смысла не имеет.
+      if (!readOnly) {
+        const usersRes = await ridesApiFetch("/api/v1/users");
+        setDriverUsers(usersRes.users.filter((u) => u.role === "driver" && u.id));
+      }
     } catch (err) {
       setError(err.message || "Не удалось загрузить данные");
     }
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -294,19 +287,21 @@ function DriversTab() {
   return (
     <div>
       {error && <div style={s.error}>{error}</div>}
-      <form onSubmit={add} style={s.inlineForm}>
-        <select style={s.inputSmall} value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })}>
-          <option value="">Выберите пользователя с ролью «Водитель»</option>
-          {unassigned.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
-        </select>
-        <select style={s.inputSmall} value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}>
-          <option value="">— без машины —</option>
-          {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plateNumber}</option>)}
-        </select>
-        <button type="submit" style={s.primaryButton} disabled={!form.userId}>Создать карточку водителя</button>
-      </form>
-      {unassigned.length === 0 && driverUsers.length === 0 && (
-        <p style={s.muted}>Сначала назначьте кому-нибудь роль «Водитель» на вкладке «Пользователи».</p>
+      {!readOnly && (
+        <form onSubmit={add} style={s.inlineForm}>
+          <select style={s.inputSmall} value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })}>
+            <option value="">Выберите пользователя с ролью «Водитель»</option>
+            {unassigned.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+          </select>
+          <select style={s.inputSmall} value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}>
+            <option value="">— без машины —</option>
+            {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plateNumber}</option>)}
+          </select>
+          <button type="submit" style={s.primaryButton} disabled={!form.userId}>Создать карточку водителя</button>
+        </form>
+      )}
+      {!readOnly && unassigned.length === 0 && driverUsers.length === 0 && (
+        <p style={s.muted}>Сначала назначьте кому-нибудь роль «Водитель» на вкладке «Пользователи и роли».</p>
       )}
       <table style={s.table}>
         <thead>
@@ -315,7 +310,7 @@ function DriversTab() {
             <th style={s.th}>Телефон</th>
             <th style={s.th}>Машина</th>
             <th style={s.th}>Статус</th>
-            <th style={s.th}></th>
+            {!readOnly && <th style={s.th}></th>}
           </tr>
         </thead>
         <tbody>
@@ -324,13 +319,17 @@ function DriversTab() {
               <td style={s.td}>{d.name}</td>
               <td style={s.td}>{d.phone}</td>
               <td style={s.td}>
-                <select style={s.inputSmall} value={d.vehicleId || ""} onChange={(e) => updateVehicle(d.id, e.target.value ? Number(e.target.value) : "")}>
-                  <option value="">— не закреплена —</option>
-                  {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plateNumber}</option>)}
-                </select>
+                {readOnly ? (d.vehiclePlate || "— не закреплена —") : (
+                  <select style={s.inputSmall} value={d.vehicleId || ""} onChange={(e) => updateVehicle(d.id, e.target.value ? Number(e.target.value) : "")}>
+                    <option value="">— не закреплена —</option>
+                    {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plateNumber}</option>)}
+                  </select>
+                )}
               </td>
               <td style={s.td}>{d.status}</td>
-              <td style={s.td}><button style={s.dangerButton} onClick={() => remove(d.id)}>Удалить</button></td>
+              {!readOnly && (
+                <td style={s.td}><button style={s.dangerButton} onClick={() => remove(d.id)}>Удалить</button></td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -340,22 +339,47 @@ function DriversTab() {
 }
 
 export default function RidesAdminPage() {
-  const [tab, setTab] = useState("users");
+  const isSiteAdmin = getAuth().currentUser?.email?.toLowerCase() === SITE_ADMIN_EMAIL;
+  const [role, setRole] = useState(undefined); // undefined = проверяется; своя роль по rides.users (у site admin — null)
+  const [tab, setTab] = useState(null);
+
+  useEffect(() => {
+    ridesApiFetch("/api/v1/users/me")
+      .then(({ user }) => {
+        const r = user?.role || null;
+        setRole(r);
+        setTab(isSiteAdmin ? "users" : "drivers");
+      })
+      .catch(() => { setRole(null); setTab(isSiteAdmin ? "users" : "drivers"); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (tab === null) return <div style={{ padding: 30 }}>Загрузка...</div>;
+
+  const isDispatcher = role === "dispatcher";
+  // Справочники доступны и диспетчеру (полноценно), и главному админу
+  // (только для чтения) — readOnly включается именно для него.
+  const readOnly = isSiteAdmin && !isDispatcher;
 
   return (
     <div style={s.page}>
       <div style={s.header}>
         <h1 style={s.title}>Администрирование системы поездок</h1>
-        <LogoutButton />
+        <div style={s.headerRight}>
+          {isDispatcher && <Link to="/dispatcher" style={s.link}>← Панель диспетчера</Link>}
+          <LogoutButton />
+        </div>
       </div>
       <div style={s.tabs}>
-        <button style={tab === "users" ? s.tabActive : s.tab} onClick={() => setTab("users")}>Пользователи и роли</button>
+        {isSiteAdmin && (
+          <button style={tab === "users" ? s.tabActive : s.tab} onClick={() => setTab("users")}>Пользователи и роли</button>
+        )}
         <button style={tab === "drivers" ? s.tabActive : s.tab} onClick={() => setTab("drivers")}>Водители</button>
         <button style={tab === "vehicles" ? s.tabActive : s.tab} onClick={() => setTab("vehicles")}>Машины</button>
       </div>
-      {tab === "users" && <UsersTab />}
-      {tab === "drivers" && <DriversTab />}
-      {tab === "vehicles" && <VehiclesTab />}
+      {tab === "users" && isSiteAdmin && <UsersTab />}
+      {tab === "drivers" && <DriversTab readOnly={readOnly} />}
+      {tab === "vehicles" && <VehiclesTab readOnly={readOnly} />}
     </div>
   );
 }
@@ -363,6 +387,8 @@ export default function RidesAdminPage() {
 const s = {
   page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1100px", margin: "0 auto" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
+  headerRight: { display: "flex", alignItems: "center", gap: "12px" },
+  link: { color: "#1976d2", fontSize: "13px", textDecoration: "none" },
   title: { fontSize: "22px", margin: 0 },
   tabs: { display: "flex", gap: "8px", marginBottom: "20px" },
   tab: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px" },

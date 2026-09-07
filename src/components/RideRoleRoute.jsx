@@ -1,34 +1,43 @@
 // Гейт по роли для страниц системы поездок (/employee, /dispatcher,
 // /driver, /rides-admin) — как AdminRoute.jsx, только сверяет не один
 // захардкоженный email, а роль из rides.users. UX-уровень: настоящая
-// проверка — requireRideRole на бэкенде на каждом /api/v1/* эндпоинте.
+// проверка — requireRideRole/requireRoleOrSiteAdmin на бэкенде на каждом
+// /api/v1/* эндпоинте.
+//
+// allowSiteAdmin: главный админ сайта (SITE_ADMIN_EMAIL) не имеет своей
+// роли в rides.users вообще (см. server/rides/usersRouter.js) — на
+// /rides-admin его пускает не совпадение роли, а email, поэтому для этого
+// роута нужен отдельный флаг, а не просто "admin" в списке roles.
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 import { ridesApiFetch } from "../rides/api";
+import { SITE_ADMIN_EMAIL } from "../rides/constants";
 
-export default function RideRoleRoute({ roles, children }) {
+export default function RideRoleRoute({ roles, allowSiteAdmin, children }) {
   const navigate = useNavigate();
   const [status, setStatus] = useState("checking"); // checking | ok | denied
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) { setStatus("denied"); return; }
+      const isSiteAdmin = allowSiteAdmin && user.email?.toLowerCase() === SITE_ADMIN_EMAIL;
+      if (isSiteAdmin) { setStatus("ok"); return; }
       ridesApiFetch("/api/v1/users/me")
         .then(({ user: rideUser }) => setStatus(rideUser && roles.includes(rideUser.role) ? "ok" : "denied"))
         .catch((err) => {
           // Сеть/бэкенд недоступны — fail-open, тот же принцип, что и в
           // RideAccessGate.jsx: не запираем страницу роли из-за временной
           // недоступности API (например, сервер ещё не поднялся после
-          // рестарта) — настоящая проверка всё равно requireRideRole на
-          // бэкенде, на каждый запрос к /api/v1/*.
+          // рестарта) — настоящая проверка всё равно на бэкенде, на
+          // каждый запрос к /api/v1/*.
           console.error("Не удалось проверить роль в системе поездок:", err);
           setStatus("ok");
         });
     });
     return () => unsubscribe();
-  }, [roles]);
+  }, [roles, allowSiteAdmin]);
 
   if (status === "checking") return <div style={{ padding: 30 }}>Проверка доступа...</div>;
 
