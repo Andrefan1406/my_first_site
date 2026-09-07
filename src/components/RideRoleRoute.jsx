@@ -17,7 +17,15 @@ export default function RideRoleRoute({ roles, children }) {
       if (!user) { setStatus("denied"); return; }
       ridesApiFetch("/api/v1/users/me")
         .then(({ user: rideUser }) => setStatus(rideUser && roles.includes(rideUser.role) ? "ok" : "denied"))
-        .catch(() => setStatus("denied"));
+        .catch((err) => {
+          // Сеть/бэкенд недоступны — fail-open, тот же принцип, что и в
+          // RideAccessGate.jsx: не запираем страницу роли из-за временной
+          // недоступности API (например, сервер ещё не поднялся после
+          // рестарта) — настоящая проверка всё равно requireRideRole на
+          // бэкенде, на каждый запрос к /api/v1/*.
+          console.error("Не удалось проверить роль в системе поездок:", err);
+          setStatus("ok");
+        });
     });
     return () => unsubscribe();
   }, [roles]);
