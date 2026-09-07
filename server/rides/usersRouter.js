@@ -4,31 +4,24 @@
 // src/components/RideAccessGate.jsx), который прячет остальной сайт от
 // тех, у кого full_site_access = 0.
 //
-// Роли и full_site_access назначает ИСКЛЮЧИТЕЛЬНО главный админ сайта
-// (ADMIN_EMAIL, server/adminAuth.js) — только у него есть доступ к этому
-// разделу. У самого главного админа в этой таблице сознательно нет
-// записи: он не диспетчер, не водитель и не сотрудник, а отдельная,
-// стоящая над остальными ролями функция — назначение прав. Диспетчер (он
-// же ведёт справочники водителей/машин, см. driversRouter.js/
-// vehiclesRouter.js) роли не назначает вообще.
+// Разделение обязанностей на остальных эндпоинтах:
+// - Главный админ сайта (ADMIN_EMAIL, server/adminAuth.js) — ТОЛЬКО
+//   назначает роль и full_site_access. Имя/телефон он не трогает и не
+//   видит их в своей форме — это не его забота. У него самого записи в
+//   этой таблице нет: он не сотрудник/диспетчер/водитель, а отдельная
+//   функция сверху, определяется по email, а не по роли.
+// - Диспетчер (он же ведёт справочники водителей/машин, см.
+//   driversRouter.js/vehiclesRouter.js) заполняет "карточку" — имя и
+//   телефон — тем, кому роль уже назначил главный админ. Роль и
+//   full_site_access ему не видны и не редактируются: это не его решение.
 const express = require('express');
 const { z } = require('zod');
 const { getAuth } = require('firebase-admin/auth');
 const { getWriteDb } = require('./db');
-const { loadRideUser, requireSiteAdmin } = require('./auth');
+const { loadRideUser, requireSiteAdmin, requireRoleOrSiteAdmin } = require('./auth');
+const { ADMIN_EMAIL } = require('../adminAuth');
 
 const router = express.Router();
-
-function validate(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({ error: result.error.issues[0]?.message || 'Некорректные данные запроса' });
-    }
-    req.body = result.data;
-    next();
-  };
-}
 
 function serializeUser(row) {
   return {
@@ -45,8 +38,13 @@ router.get('/me', loadRideUser, (req, res) => {
   res.json({ user: req.rideUser ? serializeUser(req.rideUser) : null });
 });
 
-router.get('/', requireSiteAdmin, async (req, res) => {
+// И главному админу (полный список + назначение ролей), и диспетчеру
+// (карточки уже назначенных) нужен один и тот же список пользователей
+// Firebase — различается только то, что каждый из них в ответе видит и
+// может редактировать (см. фильтрацию в конце функции).
+router.get('/', requireRoleOrSiteAdmin('dispatcher'), async (req, res) => {
   const db = getWriteDb();
+  const isSiteAdmin = req.firebaseEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const localByEmail = new Map(db.prepare('SELECT * FROM users').all().map((r) => [r.email.toLowerCase(), r]));
 
   let firebaseUsers;
@@ -91,30 +89,72 @@ router.get('/', requireSiteAdmin, async (req, res) => {
     });
   }
   merged.sort((a, b) => a.email.localeCompare(b.email));
-  res.json({ users: merged });
+
+  if (isSiteAdmin) {
+    return res.json({ users: merged });
+  }
+
+  // Диспетчер: только тем, кому роль уже назначена, без full_site_access
+  // (это не его рычаг) — заполняет карточку (имя/телефон) уже готовым записям.
+  const result = merged.filter((u) => u.role).map(({ fullSiteAccess, ...rest }) => rest);
+  res.json({ users: result });
 });
 
-const upsertSchema = z.object({
-  name: z.string().trim().min(1, 'Укажите имя'),
-  phone: z.string().trim().min(1, 'Укажите телефон'),
+const roleAssignmentSchema = z.object({
   role: z.enum(['employee', 'dispatcher', 'driver']),
   fullSiteAccess: z.boolean().default(false),
 });
 
-router.put('/:email', requireSiteAdmin, validate(upsertSchema), (req, res) => {
+const cardSchema = z.object({
+  name: z.string().trim().min(1, 'Укажите имя'),
+  phone: z.string().trim().min(1, 'Укажите телефон'),
+});
+
+// Главный админ: назначить/сменить роль и full_site_access. Имя/телефон
+// он не присылает — при первом назначении роли новому email они остаются
+// пустыми, пока диспетчер не заполнит карточку (см. PATCH ниже).
+router.put('/:email', requireSiteAdmin, (req, res) => {
+  const result = roleAssignmentSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error.issues[0]?.message || 'Некорректные данные запроса' });
+  }
+  const { role, fullSiteAccess } = result.data;
+
   const db = getWriteDb();
   const email = req.params.email.toLowerCase();
   const existing = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  const fullSiteAccess = req.body.fullSiteAccess ? 1 : 0;
 
   if (existing) {
-    db.prepare('UPDATE users SET name = ?, phone = ?, role = ?, full_site_access = ? WHERE id = ?')
-      .run(req.body.name, req.body.phone, req.body.role, fullSiteAccess, existing.id);
+    db.prepare('UPDATE users SET role = ?, full_site_access = ? WHERE id = ?')
+      .run(role, fullSiteAccess ? 1 : 0, existing.id);
   } else {
     db.prepare('INSERT INTO users (email, name, phone, role, full_site_access) VALUES (?, ?, ?, ?, ?)')
-      .run(email, req.body.name, req.body.phone, req.body.role, fullSiteAccess);
+      .run(email, '', '', role, fullSiteAccess ? 1 : 0);
   }
 
+  res.json({ user: serializeUser(db.prepare('SELECT * FROM users WHERE email = ?').get(email)) });
+});
+
+// Диспетчер: заполнить карточку (имя/телефон) уже существующей записи —
+// роль он не назначает и создать новую запись не может, только дополняет то,
+// что до него сделал главный админ.
+router.patch('/:email', requireRoleOrSiteAdmin('dispatcher'), (req, res) => {
+  const isSiteAdmin = req.firebaseEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  if (isSiteAdmin) {
+    return res.status(403).json({ error: 'Имя и телефон заполняет диспетчер, не главный админ' });
+  }
+  const result = cardSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error.issues[0]?.message || 'Некорректные данные запроса' });
+  }
+
+  const db = getWriteDb();
+  const email = req.params.email.toLowerCase();
+  const existing = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  if (!existing) return res.status(404).json({ error: 'Сначала главный админ должен назначить этому email роль' });
+
+  db.prepare('UPDATE users SET name = ?, phone = ? WHERE id = ?')
+    .run(result.data.name, result.data.phone, existing.id);
   res.json({ user: serializeUser(db.prepare('SELECT * FROM users WHERE email = ?').get(email)) });
 });
 

@@ -1,10 +1,13 @@
-// Админка системы поездок — общая страница для двух разных людей:
-// главного админа сайта (назначает роли, справочники видит, но только
-// читает) и диспетчера (полноценно ведёт справочники водителей/машин,
-// вкладки "Пользователи и роли" у него нет вообще). Кто есть кто —
-// определяем по email (SITE_ADMIN_EMAIL) и по собственной роли из
-// GET /api/v1/users/me; бэкенд разграничивает то же самое по-настоящему
-// (requireSiteAdmin/requireRoleOrSiteAdmin, см. server/rides/*.js).
+// Админка системы поездок — общая страница для двух разных людей, у
+// каждого своя вкладка "Пользователи" (первая):
+// - главный админ сайта назначает РОЛЬ и "Доступ ко всему сайту"
+//   (RoleAssignmentTab) — имя/телефон не его забота вообще;
+// - диспетчер заполняет ИМЯ/ТЕЛЕФОН уже назначенным людям (UserCardsTab)
+//   и полноценно ведёт справочники водителей/машин; главный админ эти
+//   справочники только читает (readOnly).
+// Кто есть кто — определяем по email (SITE_ADMIN_EMAIL) и по собственной
+// роли из GET /api/v1/users/me; бэкенд разграничивает то же самое
+// по-настоящему (requireSiteAdmin/requireRoleOrSiteAdmin, см. server/rides/*.js).
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getAuth } from "firebase/auth";
@@ -19,11 +22,15 @@ const ROLE_OPTIONS = [
   { value: "driver", label: "Водитель" },
 ];
 
-// Видна только главному админу (сама страница сюда его и пускает —
-// requireSiteAdmin на бэкенде отдаёт эти данные только ему).
-function UsersTab() {
+function roleLabel(role) {
+  return ROLE_OPTIONS.find((o) => o.value === role)?.label || "—";
+}
+
+// Главный админ: только email → роль → "Доступ ко всему сайту". Имя и
+// телефон здесь нет вообще — не его забота (см. usersRouter.js, PUT /:email).
+function RoleAssignmentTab() {
   const [users, setUsers] = useState([]);
-  const [drafts, setDrafts] = useState({}); // email -> {name, phone, role, fullSiteAccess}
+  const [drafts, setDrafts] = useState({}); // email -> {role, fullSiteAccess}
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [savingEmail, setSavingEmail] = useState(null);
@@ -36,7 +43,7 @@ function UsersTab() {
       setUsers(rows);
       const nextDrafts = {};
       for (const u of rows) {
-        nextDrafts[u.email] = { name: u.name, phone: u.phone, role: u.role || "", fullSiteAccess: u.fullSiteAccess };
+        nextDrafts[u.email] = { role: u.role || "", fullSiteAccess: u.fullSiteAccess };
       }
       setDrafts(nextDrafts);
     } catch (err) {
@@ -58,11 +65,6 @@ function UsersTab() {
       if (!draft.role) {
         await ridesApiDelete(`/api/v1/users/${encodeURIComponent(email)}`);
       } else {
-        if (!draft.name.trim() || !draft.phone.trim()) {
-          setError("Укажите имя и телефон перед назначением роли");
-          setSavingEmail(null);
-          return;
-        }
         await ridesApiPut(`/api/v1/users/${encodeURIComponent(email)}`, draft);
       }
       await load();
@@ -78,12 +80,11 @@ function UsersTab() {
   return (
     <div>
       {error && <div style={s.error}>{error}</div>}
+      <p style={s.muted}>Имя и телефон сюда не входят — их вписывает диспетчер на вкладке «Пользователи» после того, как роль назначена здесь.</p>
       <table style={s.table}>
         <thead>
           <tr>
             <th style={s.th}>Email</th>
-            <th style={s.th}>Имя</th>
-            <th style={s.th}>Телефон</th>
             <th style={s.th}>Роль в системе поездок</th>
             <th style={s.th}>Доступ ко всему сайту</th>
             <th style={s.th}></th>
@@ -91,16 +92,10 @@ function UsersTab() {
         </thead>
         <tbody>
           {users.map((u) => {
-            const draft = drafts[u.email] || { name: "", phone: "", role: "", fullSiteAccess: false };
+            const draft = drafts[u.email] || { role: "", fullSiteAccess: false };
             return (
               <tr key={u.email}>
                 <td style={s.td}>{u.email}</td>
-                <td style={s.td}>
-                  <input style={s.inputSmall} value={draft.name} onChange={(e) => setDraft(u.email, { name: e.target.value })} />
-                </td>
-                <td style={s.td}>
-                  <input style={s.inputSmall} value={draft.phone} onChange={(e) => setDraft(u.email, { phone: e.target.value })} />
-                </td>
                 <td style={s.td}>
                   <select style={s.inputSmall} value={draft.role} onChange={(e) => setDraft(u.email, { role: e.target.value })}>
                     {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -114,6 +109,97 @@ function UsersTab() {
                     onChange={(e) => setDraft(u.email, { fullSiteAccess: e.target.checked })}
                   />
                 </td>
+                <td style={s.td}>
+                  <button style={s.secondaryButton} disabled={savingEmail === u.email} onClick={() => save(u.email)}>Сохранить</button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Диспетчер: только email → имя → телефон, для тех, кому роль уже
+// назначил главный админ. Роль показана как справка (не редактируется),
+// "Доступ ко всему сайту" ему вообще не видно (не его рычаг).
+function UserCardsTab() {
+  const [users, setUsers] = useState([]);
+  const [drafts, setDrafts] = useState({}); // email -> {name, phone}
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [savingEmail, setSavingEmail] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { users: rows } = await ridesApiFetch("/api/v1/users");
+      setUsers(rows);
+      const nextDrafts = {};
+      for (const u of rows) {
+        nextDrafts[u.email] = { name: u.name, phone: u.phone };
+      }
+      setDrafts(nextDrafts);
+    } catch (err) {
+      setError(err.message || "Не удалось загрузить список пользователей");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const setDraft = (email, patch) => setDrafts((prev) => ({ ...prev, [email]: { ...prev[email], ...patch } }));
+
+  const save = async (email) => {
+    const draft = drafts[email];
+    if (!draft.name.trim() || !draft.phone.trim()) {
+      setError("Укажите имя и телефон");
+      return;
+    }
+    setSavingEmail(email);
+    setError("");
+    try {
+      await ridesApiPatch(`/api/v1/users/${encodeURIComponent(email)}`, draft);
+      await load();
+    } catch (err) {
+      setError(err.message || "Не удалось сохранить карточку");
+    } finally {
+      setSavingEmail(null);
+    }
+  };
+
+  if (loading) return <p style={s.muted}>Загрузка...</p>;
+
+  return (
+    <div>
+      {error && <div style={s.error}>{error}</div>}
+      {users.length === 0 && <p style={s.muted}>Пока никому не назначена роль — это делает главный администратор сайта.</p>}
+      <table style={s.table}>
+        <thead>
+          <tr>
+            <th style={s.th}>Email</th>
+            <th style={s.th}>Имя</th>
+            <th style={s.th}>Телефон</th>
+            <th style={s.th}>Роль</th>
+            <th style={s.th}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((u) => {
+            const draft = drafts[u.email] || { name: "", phone: "" };
+            return (
+              <tr key={u.email}>
+                <td style={s.td}>{u.email}</td>
+                <td style={s.td}>
+                  <input style={s.inputSmall} value={draft.name} onChange={(e) => setDraft(u.email, { name: e.target.value })} />
+                </td>
+                <td style={s.td}>
+                  <input style={s.inputSmall} value={draft.phone} onChange={(e) => setDraft(u.email, { phone: e.target.value })} />
+                </td>
+                <td style={s.td}>{roleLabel(u.role)}</td>
                 <td style={s.td}>
                   <button style={s.secondaryButton} disabled={savingEmail === u.email} onClick={() => save(u.email)}>Сохранить</button>
                 </td>
@@ -346,11 +432,10 @@ export default function RidesAdminPage() {
   useEffect(() => {
     ridesApiFetch("/api/v1/users/me")
       .then(({ user }) => {
-        const r = user?.role || null;
-        setRole(r);
-        setTab(isSiteAdmin ? "users" : "drivers");
+        setRole(user?.role || null);
+        setTab("users");
       })
-      .catch(() => { setRole(null); setTab(isSiteAdmin ? "users" : "drivers"); });
+      .catch(() => { setRole(null); setTab("users"); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -371,13 +456,13 @@ export default function RidesAdminPage() {
         </div>
       </div>
       <div style={s.tabs}>
-        {isSiteAdmin && (
-          <button style={tab === "users" ? s.tabActive : s.tab} onClick={() => setTab("users")}>Пользователи и роли</button>
-        )}
+        <button style={tab === "users" ? s.tabActive : s.tab} onClick={() => setTab("users")}>
+          {isSiteAdmin ? "Роли" : "Пользователи"}
+        </button>
         <button style={tab === "drivers" ? s.tabActive : s.tab} onClick={() => setTab("drivers")}>Водители</button>
         <button style={tab === "vehicles" ? s.tabActive : s.tab} onClick={() => setTab("vehicles")}>Машины</button>
       </div>
-      {tab === "users" && isSiteAdmin && <UsersTab />}
+      {tab === "users" && (isSiteAdmin ? <RoleAssignmentTab /> : <UserCardsTab />)}
       {tab === "drivers" && <DriversTab readOnly={readOnly} />}
       {tab === "vehicles" && <VehiclesTab readOnly={readOnly} />}
     </div>
