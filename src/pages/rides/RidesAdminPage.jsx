@@ -4,8 +4,17 @@
 // в одном файле — три относительно небольших списка, не тянут на отдельные
 // страницы с общей навигацией.
 import React, { useCallback, useEffect, useState } from "react";
+import { getAuth } from "firebase/auth";
 import { ridesApiDelete, ridesApiFetch, ridesApiPatch, ridesApiPost, ridesApiPut } from "../../rides/api";
 import LogoutButton from "../../rides/LogoutButton";
+
+// Тот же email, что server/adminAuth.js признаёт главным админом сайта —
+// строку с ним самим и рычаг full_site_access видит и меняет только он.
+// UX-уровень: бэкенд (server/rides/usersRouter.js) режет то же самое
+// по-настоящему — эту запись и подрежает из ответа GET /api/v1/users,
+// и не даст поменять через PUT/DELETE напрямую, даже если кто-то обойдёт
+// эту проверку на фронте.
+const SITE_ADMIN_EMAIL = "admin@vkdev.kz";
 
 const ROLE_OPTIONS = [
   { value: "", label: "— нет доступа —" },
@@ -69,6 +78,12 @@ function UsersTab() {
 
   if (loading) return <p style={s.muted}>Загрузка...</p>;
 
+  const isSiteAdmin = getAuth().currentUser?.email?.toLowerCase() === SITE_ADMIN_EMAIL;
+  // Бэкенд для не-главных админов уже не присылает ни саму строку
+  // SITE_ADMIN_EMAIL, ни поле fullSiteAccess — фильтр здесь просто на
+  // случай не полностью прогруженных данных, реальная защита не тут.
+  const visibleUsers = isSiteAdmin ? users : users.filter((u) => u.email.toLowerCase() !== SITE_ADMIN_EMAIL);
+
   return (
     <div>
       {error && <div style={s.error}>{error}</div>}
@@ -79,12 +94,12 @@ function UsersTab() {
             <th style={s.th}>Имя</th>
             <th style={s.th}>Телефон</th>
             <th style={s.th}>Роль в системе поездок</th>
-            <th style={s.th}>Доступ ко всему сайту</th>
+            {isSiteAdmin && <th style={s.th}>Доступ ко всему сайту</th>}
             <th style={s.th}></th>
           </tr>
         </thead>
         <tbody>
-          {users.map((u) => {
+          {visibleUsers.map((u) => {
             const draft = drafts[u.email] || { name: "", phone: "", role: "", fullSiteAccess: false };
             return (
               <tr key={u.email}>
@@ -100,6 +115,7 @@ function UsersTab() {
                     {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </td>
+                {isSiteAdmin && (
                 <td style={{ ...s.td, textAlign: "center" }}>
                   <input
                     type="checkbox"
@@ -108,6 +124,7 @@ function UsersTab() {
                     onChange={(e) => setDraft(u.email, { fullSiteAccess: e.target.checked })}
                   />
                 </td>
+                )}
                 <td style={s.td}>
                   <button style={s.secondaryButton} disabled={savingEmail === u.email} onClick={() => save(u.email)}>Сохранить</button>
                 </td>

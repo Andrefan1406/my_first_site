@@ -12,6 +12,13 @@ const { z } = require('zod');
 const { getAuth } = require('firebase-admin/auth');
 const { getWriteDb } = require('./db');
 const { loadRideUser, requireRideRole } = require('./auth');
+// Главный админ сайта (тот же email, что проверяет server/adminAuth.js) —
+// его строку в этой таблице и чекбокс full_site_access (кому включать
+// доступ ко всему сайту, а не только к системе поездок) видит и меняет
+// только он сам. Остальные admin'ы системы поездок (их может быть
+// несколько, назначаются именно здесь) управляют ролями всех прочих, но
+// не имеют этих двух рычагов.
+const { ADMIN_EMAIL } = require('../adminAuth');
 
 const router = express.Router();
 
@@ -87,7 +94,15 @@ router.get('/', requireRideRole('admin'), async (req, res) => {
     });
   }
   merged.sort((a, b) => a.email.localeCompare(b.email));
-  res.json({ users: merged });
+
+  const isSiteAdmin = req.firebaseEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const result = isSiteAdmin
+    ? merged
+    : merged
+        .filter((u) => u.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase())
+        .map(({ fullSiteAccess, ...rest }) => rest);
+
+  res.json({ users: result });
 });
 
 const upsertSchema = z.object({
@@ -100,14 +115,25 @@ const upsertSchema = z.object({
 router.put('/:email', requireRideRole('admin'), validate(upsertSchema), (req, res) => {
   const db = getWriteDb();
   const email = req.params.email.toLowerCase();
+  const isSiteAdmin = req.firebaseEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+  if (email === ADMIN_EMAIL.toLowerCase() && !isSiteAdmin) {
+    return res.status(403).json({ error: 'Эту запись может менять только сам главный администратор сайта' });
+  }
+
   const existing = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  // full_site_access решает только главный админ — остальные admin'ы
+  // системы поездок эту ручку не видят на фронте (см. RidesAdminPage.jsx),
+  // но раз поле всё равно приходит в теле запроса (zod-схема общая),
+  // подстраховываемся и здесь: не даём его поменять напрямую через API.
+  const fullSiteAccess = isSiteAdmin ? (req.body.fullSiteAccess ? 1 : 0) : existing?.full_site_access ?? 0;
 
   if (existing) {
     db.prepare('UPDATE users SET name = ?, phone = ?, role = ?, full_site_access = ? WHERE id = ?')
-      .run(req.body.name, req.body.phone, req.body.role, req.body.fullSiteAccess ? 1 : 0, existing.id);
+      .run(req.body.name, req.body.phone, req.body.role, fullSiteAccess, existing.id);
   } else {
     db.prepare('INSERT INTO users (email, name, phone, role, full_site_access) VALUES (?, ?, ?, ?, ?)')
-      .run(email, req.body.name, req.body.phone, req.body.role, req.body.fullSiteAccess ? 1 : 0);
+      .run(email, req.body.name, req.body.phone, req.body.role, fullSiteAccess);
   }
 
   res.json({ user: serializeUser(db.prepare('SELECT * FROM users WHERE email = ?').get(email)) });
@@ -116,6 +142,12 @@ router.put('/:email', requireRideRole('admin'), validate(upsertSchema), (req, re
 router.delete('/:email', requireRideRole('admin'), (req, res) => {
   const db = getWriteDb();
   const email = req.params.email.toLowerCase();
+  const isSiteAdmin = req.firebaseEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+  if (email === ADMIN_EMAIL.toLowerCase() && !isSiteAdmin) {
+    return res.status(403).json({ error: 'Эту запись может удалить только сам главный администратор сайта' });
+  }
+
   const existing = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!existing) return res.status(404).json({ error: 'Пользователь не найден в системе поездок' });
 
