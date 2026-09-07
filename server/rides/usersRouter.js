@@ -49,6 +49,11 @@ router.get('/', requireRideRole('admin'), async (req, res) => {
   try {
     firebaseUsers = (await getAuth().listUsers(1000)).users;
   } catch (err) {
+    // Реальная причина (обычно — нет/неверный service account: см.
+    // server/rides/README.md про GOOGLE_APPLICATION_CREDENTIALS) видна
+    // только здесь, в логе бэкенда — клиенту отдаём общее сообщение,
+    // чтобы не светить детали инфраструктуры наружу.
+    console.error('listUsers() не сработал — вероятно, не задан валидный GOOGLE_APPLICATION_CREDENTIALS:', err);
     return res.status(502).json({ error: 'Не удалось получить список пользователей Firebase' });
   }
 
