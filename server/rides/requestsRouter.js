@@ -133,11 +133,12 @@ const statusSchema = z.object({
   status: z.enum(['in_progress', 'completed']),
 });
 
-// Сотрудник: создать заявку — сразу попадает в общий пул. Расстояние/время
-// считаются один раз здесь (см. routeEstimate.js) — обращения к
-// геокодеру/роутеру асинхронные, а better-sqlite3-транзакция должна быть
-// синхронной, поэтому расчёт идёт ДО db.transaction(), не внутри неё.
-router.post('/', requireRideRole('employee'), validate(createRequestSchema), async (req, res) => {
+// Сотрудник (и диспетчер — иногда сам себе заказывает машину) создаёт
+// заявку — сразу попадает в общий пул. Расстояние/время считаются один
+// раз здесь (см. routeEstimate.js) — обращения к геокодеру/роутеру
+// асинхронные, а better-sqlite3-транзакция должна быть синхронной,
+// поэтому расчёт идёт ДО db.transaction(), не внутри неё.
+router.post('/', requireRideRole('employee', 'dispatcher'), validate(createRequestSchema), async (req, res) => {
   const db = getWriteDb();
   const { fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn, extraStops, comment } = req.body;
 
@@ -165,8 +166,8 @@ router.post('/', requireRideRole('employee'), validate(createRequestSchema), asy
   res.status(201).json({ request: serializeForEmployee(result) });
 });
 
-// Сотрудник: свои заявки, активные и история — сортировка новые сверху.
-router.get('/mine', requireRideRole('employee'), (req, res) => {
+// Сотрудник (и диспетчер): свои заявки, активные и история — сортировка новые сверху.
+router.get('/mine', requireRideRole('employee', 'dispatcher'), (req, res) => {
   const db = getWriteDb();
   const rows = db.prepare(`${FULL_SELECT} WHERE r.employee_id = ? ORDER BY r.created_at DESC`).all(req.rideUser.id);
   res.json({ requests: attachStops(db, rows).map(serializeForEmployee) });

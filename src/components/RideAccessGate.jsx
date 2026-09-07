@@ -18,6 +18,13 @@ const ROLE_HOME = {
   admin: "/rides-admin",
 };
 
+// Помимо своей "домашней" страницы, диспетчеру ещё можно на /employee —
+// он иногда сам себе заказывает машину (см. server/rides/requestsRouter.js,
+// requireRideRole('employee', 'dispatcher') на создании заявки).
+const ROLE_EXTRA_PATHS = {
+  dispatcher: ["/employee"],
+};
+
 export default function RideAccessGate({ children }) {
   const location = useLocation();
   const [user, setUser] = useState(undefined); // undefined = проверяется, null = не залогинен
@@ -44,7 +51,9 @@ export default function RideAccessGate({ children }) {
 
   if (rideUser && !rideUser.fullSiteAccess) {
     const home = ROLE_HOME[rideUser.role];
-    if (home && location.pathname !== "/login" && !location.pathname.startsWith(home)) {
+    const allowed = [home, ...(ROLE_EXTRA_PATHS[rideUser.role] || [])];
+    const isAllowed = location.pathname === "/login" || allowed.some((p) => p && location.pathname.startsWith(p));
+    if (home && !isAllowed) {
       return <Navigate to={home} replace />;
     }
   }

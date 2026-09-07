@@ -60,21 +60,12 @@ const App = () => {
         <Route path="/login" element={<LoginPage />} />
 
         {/* Система служебного транспорта (заявки на поездки) */}
-        <Route
-          path="/driver"
-          element={
-            <Protected>
-              <RideRoleRoute roles={["driver"]}>
-                <DriverDashboardPage />
-              </RideRoleRoute>
-            </Protected>
-          }
-        />
+        <Route path="/driver" element={<Protected><RideRoleRoute roles={["driver"]}><DriverDashboardPage /></RideRoleRoute></Protected>}/>
         <Route
           path="/employee"
           element={
             <Protected>
-              <RideRoleRoute roles={["employee"]}>
+              <RideRoleRoute roles={["employee", "dispatcher"]}>
                 <EmployeeRidesPage />
               </RideRoleRoute>
             </Protected>

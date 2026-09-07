@@ -42,7 +42,9 @@ function initSocket(httpServer) {
       if (driver) socket.join(`driver:${driver.id}`);
     }
     if (role === 'dispatcher' || role === 'admin') socket.join('dispatcher');
-    if (role === 'employee') socket.join(`employee:${id}`);
+    // Диспетчер иногда сам подаёт заявку (как сотрудник) — ему тоже нужны
+    // уведомления по комнате employee:{id} о своих же заявках.
+    if (role === 'employee' || role === 'dispatcher') socket.join(`employee:${id}`);
   });
 
   return io;

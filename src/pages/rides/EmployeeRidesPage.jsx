@@ -3,6 +3,7 @@
 // реальном времени через Socket.io (комната employee:{id}) — без
 // перезагрузки страницы видно, кто именно принял заказ.
 import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ridesApiFetch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
@@ -47,6 +48,11 @@ export default function EmployeeRidesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [mapPickerTarget, setMapPickerTarget] = useState(null); // "fromAddress" | "toAddress" | { stopIndex } | null
+  const [role, setRole] = useState(null); // диспетчер, зашедший сюда сам себе заказать машину, видит ссылку назад на /dispatcher
+
+  useEffect(() => {
+    ridesApiFetch("/api/v1/users/me").then(({ user }) => setRole(user?.role || null)).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,7 +107,10 @@ export default function EmployeeRidesPage() {
     <div style={s.page}>
       <div style={s.header}>
         <h1 style={s.title}>Заказ служебного транспорта</h1>
-        <LogoutButton />
+        <div style={s.headerRight}>
+          {role === "dispatcher" && <Link to="/dispatcher" style={s.link}>← Панель диспетчера</Link>}
+          <LogoutButton />
+        </div>
       </div>
       {error && <div style={s.error}>{error}</div>}
 
@@ -241,6 +250,8 @@ export default function EmployeeRidesPage() {
 const s = {
   page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "700px", margin: "0 auto" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
+  headerRight: { display: "flex", alignItems: "center", gap: "12px" },
+  link: { color: "#1976d2", fontSize: "13px", textDecoration: "none" },
   title: { fontSize: "22px", margin: 0 },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },

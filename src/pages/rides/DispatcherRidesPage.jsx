@@ -4,6 +4,7 @@
 // конкретного водителя вручную (исключение, не основной сценарий), либо
 // отменить заявку.
 import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ridesApiFetch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
@@ -111,7 +112,10 @@ export default function DispatcherRidesPage() {
     <div style={s.page}>
       <div style={s.header}>
         <h1 style={s.title}>Мониторинг заявок</h1>
-        <LogoutButton />
+        <div style={s.headerRight}>
+          <Link to="/employee" style={s.link}>Заказать машину себе</Link>
+          <LogoutButton />
+        </div>
       </div>
       {error && <div style={s.error}>{error}</div>}
 
@@ -186,6 +190,8 @@ export default function DispatcherRidesPage() {
 const s = {
   page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1100px", margin: "0 auto" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
+  headerRight: { display: "flex", alignItems: "center", gap: "12px" },
+  link: { color: "#1976d2", fontSize: "13px", textDecoration: "none" },
   title: { fontSize: "22px", margin: 0 },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
