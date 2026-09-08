@@ -3,12 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon_new.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
     <meta
       name="description"
       content="Web site created using create-react-app"
     />
+    <!-- Полноэкранный режим (без адресной строки/панели браузера) — но
+         только когда сайт открыт с иконки на экране "Домой", а не просто
+         в открытой вкладке браузера. iOS Safari и Android Chrome
+         используют для этого разные механизмы: iOS — эти три meta-тега,
+         Android/остальные — свойство "display" в manifest.json (уже
+         "standalone" там). Инструкция для пользователя: Safari → кнопка
+         "Поделиться" → "На экран «Домой»" → открывать сайт заново именно
+         с этого значка, не из вкладки браузера. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VK Dev" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
