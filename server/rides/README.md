@@ -66,13 +66,34 @@ private key; НЕ коммитить в git):
 GOOGLE_APPLICATION_CREDENTIALS=./путь/к/ключу.json npm run rides:create-test-users
 ```
 
-Тот же ключ нужен и для работы страницы `/rides-admin` в целом: вкладка
-«Пользователи и роли» вызывает `GET /api/v1/users`, а он читает список
+### Тот же ключ нужен для работы `/rides-admin` (и локально, и на Render)
+
+Вкладка «Роли» вызывает `GET /api/v1/users`, а он читает список
 пользователей Firebase через `listUsers()` — эта операция, в отличие от
-проверки токена (`verifyIdToken`, ей хватает одного `projectId`, см.
-`server/rides/auth.js`), требует полноценных credentials. Поэтому на
-проде/локально задайте `GOOGLE_APPLICATION_CREDENTIALS` и для самого
-backend-процесса (`npm run server`), не только для разового скрипта.
+проверки токена при логине (`verifyIdToken`, ей хватает одного
+`projectId`, см. `server/adminAuth.js`), требует полноценных credentials.
+Без них сама страница `/rides-admin` открывается, но эта вкладка
+отвечает «Не удалось получить список пользователей Firebase».
+
+Для самого backend-процесса (не для разового скрипта выше) ключ задаётся
+**не** через `GOOGLE_APPLICATION_CREDENTIALS` (это путь к файлу на диске —
+на Render такого файла нет), а тем же способом, что уже используется в
+проекте для Google Sheets (`GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON`, см.
+`server/googleSheetsClient.js`) — весь JSON-ключ одной строкой в
+переменной окружения:
+
+```
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"my-first-site-16a0c",...}
+```
+
+- **Локально** — строка в `.env` (gitignored).
+- **На Render** — Dashboard сервиса → Environment → добавить переменную
+  `FIREBASE_SERVICE_ACCOUNT_JSON` с тем же значением, затем передеплой.
+
+Без этой переменной `server/adminAuth.js` по-прежнему инициализирует
+Firebase Admin только с `projectId` — вход и проверка ролей везде на
+сайте продолжают работать как обычно, не работает только `listUsers()`
+на вкладке «Роли».
 
 ## Первый запуск: доступ к `/rides-admin`
 

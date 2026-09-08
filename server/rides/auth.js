@@ -5,7 +5,7 @@
 // заранее добавлен админом в таблицу rides.users с ролью — обычный
 // сотрудник с рабочим логином, но без такой записи, получает 403 на
 // любом эндпоинте /api/v1/*.
-const { initializeApp, getApps } = require('firebase-admin/app');
+const { initializeApp, getApps, cert } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getWriteDb } = require('./db');
 // Главный админ сайта (server/adminAuth.js) — в системе поездок у него
@@ -17,8 +17,18 @@ const { ADMIN_EMAIL } = require('../adminAuth');
 
 const FIREBASE_PROJECT_ID = 'my-first-site-16a0c';
 
+// На случай, если этот модуль когда-нибудь загрузится раньше
+// server/adminAuth.js (сейчас — не загружается, см. комментарий там же):
+// то же самое решение через FIREBASE_SERVICE_ACCOUNT_JSON, чтобы
+// listUsers() в usersRouter.js не зависел от порядка require() в
+// server/index.js.
 if (!getApps().length) {
-  initializeApp({ projectId: FIREBASE_PROJECT_ID });
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (raw) {
+    initializeApp({ credential: cert(JSON.parse(raw)), projectId: FIREBASE_PROJECT_ID });
+  } else {
+    initializeApp({ projectId: FIREBASE_PROJECT_ID });
+  }
 }
 
 async function verifyToken(req, res) {

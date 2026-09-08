@@ -9,15 +9,45 @@
 //
 // verifyIdToken проверяет подпись токена по публичным ключам Google и claim'ы
 // (aud/iss = наш Firebase-проект) — для этого сервисный аккаунт не нужен,
-// поэтому initializeApp() вызывается только с projectId.
-const { initializeApp, getApps } = require('firebase-admin/app');
+// достаточно initializeApp() с одним projectId.
+//
+// Но это приложение firebase-admin — общее на весь процесс (getApps()
+// ниже глобальный, не per-file): этот модуль требуется раньше, чем
+// server/rides/auth.js (см. server/index.js — peopleGapsAdmin.js и
+// другие ./admin*-роутеры идут в require до ./rides/*), поэтому именно
+// здесь, а не там, нужно один раз завести credentials — иначе
+// server/rides/usersRouter.js (GET /api/v1/users → listUsers()) увидит
+// уже созданное projectId-only приложение и молча останется без прав на
+// управление пользователями (verifyIdToken при этом продолжит работать
+// как ни в чём не бывало, поэтому ошибка не сразу заметна).
+//
+// Ключ сервис-аккаунта — тем же приёмом, что и
+// GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON в server/googleSheetsClient.js:
+// весь JSON одной строкой в переменной окружения (см. .env, gitignored;
+// на Render — в Environment Variables сервиса), НЕЛЬЗЯ коммитить в репозиторий.
+const { initializeApp, getApps, cert } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 
 const FIREBASE_PROJECT_ID = 'my-first-site-16a0c';
 const ADMIN_EMAIL = 'admin@vkdev.kz';
 
 if (!getApps().length) {
-  initializeApp({ projectId: FIREBASE_PROJECT_ID });
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (raw) {
+    let credentials;
+    try {
+      credentials = JSON.parse(raw);
+    } catch (err) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON содержит невалидный JSON: ' + err.message);
+    }
+    initializeApp({ credential: cert(credentials), projectId: FIREBASE_PROJECT_ID });
+  } else {
+    // Без ключа: verifyIdToken (вход, роли) работает как обычно, но
+    // управление пользователями (listUsers/createUser) — нет, см.
+    // комментарий выше. Не бросаем ошибку — большая часть сайта в этом
+    // ключе не нуждается вообще.
+    initializeApp({ projectId: FIREBASE_PROJECT_ID });
+  }
 }
 
 async function requireAdmin(req, res, next) {
