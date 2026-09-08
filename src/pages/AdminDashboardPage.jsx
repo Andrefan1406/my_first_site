@@ -36,6 +36,12 @@ const SECTIONS = [
     path: "/admin/statistics",
     color: "#6610f2",
   },
+  {
+    title: "Система поездок — роли",
+    description: "Назначить роль (сотрудник/диспетчер/водитель) и доступ ко всему сайту",
+    path: "/rides-admin",
+    color: "#1976d2",
+  },
 ];
 
 const AdminDashboardPage = () => {
