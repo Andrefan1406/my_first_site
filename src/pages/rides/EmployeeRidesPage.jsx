@@ -9,6 +9,7 @@ import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
 import { formatRoute, formatEstimate } from "../../rides/format";
 import MapPicker from "../../rides/MapPicker";
+import CancelRequestModal from "../../rides/CancelRequestModal";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -49,6 +50,7 @@ export default function EmployeeRidesPage() {
   const [form, setForm] = useState(emptyForm);
   const [mapPickerTarget, setMapPickerTarget] = useState(null); // "fromAddress" | "toAddress" | { stopIndex } | null
   const [role, setRole] = useState(null); // диспетчер, зашедший сюда сам себе заказать машину, видит ссылку назад на /dispatcher
+  const [cancelTargetId, setCancelTargetId] = useState(null); // id заявки, для которой открыта модалка отмены
 
   useEffect(() => {
     ridesApiFetch("/api/v1/users/me").then(({ user }) => setRole(user?.role || null)).catch(() => {});
@@ -97,6 +99,16 @@ export default function EmployeeRidesPage() {
       setError(err.message || "Не удалось отправить заявку");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const cancelRequest = async (reason) => {
+    try {
+      const { request } = await ridesApiPost(`/api/v1/requests/${cancelTargetId}/cancel-mine`, { reason });
+      setRequests((prev) => prev.map((r) => (r.id === request.id ? request : r)));
+      setCancelTargetId(null);
+    } catch (err) {
+      setError(err.message || "Не удалось отменить заявку");
     }
   };
 
@@ -212,9 +224,16 @@ export default function EmployeeRidesPage() {
                 {formatEstimate(r) && <div style={s.cardMeta}>{formatEstimate(r)}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
                 <div style={{ ...s.cardStatus, color: statusColor(r.status) }}>{statusLabel(r)}</div>
+                {["pending_assignment", "assigned"].includes(r.status) && (
+                  <button type="button" style={s.cancelButton} onClick={() => setCancelTargetId(r.id)}>Отменить заявку</button>
+                )}
               </div>
             ))}
           </div>
+        )}
+
+        {cancelTargetId && (
+          <CancelRequestModal onClose={() => setCancelTargetId(null)} onConfirm={cancelRequest} />
         )}
       </section>
 
@@ -277,6 +296,7 @@ const s = {
   cardRoute: { fontWeight: 700, fontSize: "15px", marginBottom: "4px" },
   cardMeta: { fontSize: "13px", color: "#555", marginBottom: "2px" },
   cardStatus: { fontSize: "13px", fontWeight: 600, marginTop: "6px" },
+  cancelButton: { marginTop: "10px", background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "8px 14px", cursor: "pointer", fontSize: "13px" },
   returnBadge: { fontWeight: 400, fontSize: "13px", color: "#888" },
 
   table: { width: "100%", borderCollapse: "collapse" },

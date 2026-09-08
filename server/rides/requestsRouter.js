@@ -125,6 +125,14 @@ const cancelSchema = z.object({
   reason: z.string().trim().optional().default(''),
 });
 
+// Причина обязательна — сотрудник выбирает из предложенных вариантов на
+// фронте (см. EmployeeRidesPage.jsx) либо вписывает свою; бэкенду
+// достаточно проверить, что строка не пустая, конкретный набор
+// вариантов — это дело интерфейса, не контракта API.
+const employeeCancelSchema = z.object({
+  reason: z.string().trim().min(1, 'Укажите причину отмены'),
+});
+
 const assignSchema = z.object({
   driverId: z.coerce.number().int().positive(),
 });
@@ -365,6 +373,38 @@ router.post('/:id/cancel', requireRideRole('dispatcher'), validate(cancelSchema)
   emitToEmployee(result.employee_id, 'request:status', serializeForEmployee(result));
   if (previousDriverId) emitToDriver(previousDriverId, 'request:removed', { id: requestId });
   res.json({ request: serializeForDispatcher(result, staleThreshold()) });
+});
+
+// Сотрудник (или диспетчер — для своей же заявки) отменяет СВОЮ заявку.
+// Разрешено, пока её ещё не приняли (pending_assignment) или водитель уже
+// назначен, но ещё не нажал "В пути" (assigned) — та же граница, что и у
+// диспетчерской отмены выше: как только поездка реально началась
+// (in_progress), отменить может только диспетчер вручную, не сам заказчик.
+router.post('/:id/cancel-mine', requireRideRole('employee', 'dispatcher'), validate(employeeCancelSchema), (req, res) => {
+  const db = getWriteDb();
+  const requestId = Number(req.params.id);
+
+  let previousDriverId = null;
+  const result = db.transaction(() => {
+    const row = db.prepare('SELECT * FROM requests WHERE id = ?').get(requestId);
+    if (!row || row.employee_id !== req.rideUser.id) return null;
+    if (!['pending_assignment', 'assigned'].includes(row.status)) return null;
+    previousDriverId = row.driver_id;
+    db.prepare(`UPDATE requests SET status = 'cancelled', cancel_reason = ? WHERE id = ?`).run(req.body.reason, requestId);
+    if (row.driver_id) db.prepare(`UPDATE drivers SET status = 'available' WHERE id = ?`).run(row.driver_id);
+    db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'cancelled', ?)`)
+      .run(requestId, req.rideUser.id);
+    return getRow(db, requestId);
+  })();
+
+  if (!result) {
+    return res.status(409).json({ error: 'Заявку нельзя отменить — водитель уже в пути, поездка завершена, либо это не ваша заявка' });
+  }
+
+  emitToDrivers('request:removed', { id: requestId });
+  emitToDispatcher('request:updated', serializeForDispatcher(result, staleThreshold()));
+  if (previousDriverId) emitToDriver(previousDriverId, 'request:removed', { id: requestId });
+  res.json({ request: serializeForEmployee(result) });
 });
 
 function staleThreshold() {
