@@ -81,42 +81,44 @@ function RoleAssignmentTab() {
     <div>
       {error && <div style={s.error}>{error}</div>}
       <p style={s.muted}>Имя и телефон сюда не входят — их вписывает диспетчер на вкладке «Пользователи» после того, как роль назначена здесь.</p>
-      <table style={s.table}>
-        <thead>
-          <tr>
-            <th style={s.th}>Email</th>
-            <th style={s.th}>Роль в системе поездок</th>
-            <th style={s.th}>Доступ ко всему сайту</th>
-            <th style={s.th}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u) => {
-            const draft = drafts[u.email] || { role: "", fullSiteAccess: false };
-            return (
-              <tr key={u.email}>
-                <td style={s.td}>{u.email}</td>
-                <td style={s.td}>
-                  <select style={s.inputSmall} value={draft.role} onChange={(e) => setDraft(u.email, { role: e.target.value })}>
-                    {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </td>
-                <td style={{ ...s.td, textAlign: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={draft.fullSiteAccess}
-                    disabled={!draft.role}
-                    onChange={(e) => setDraft(u.email, { fullSiteAccess: e.target.checked })}
-                  />
-                </td>
-                <td style={s.td}>
-                  <button style={s.secondaryButton} disabled={savingEmail === u.email} onClick={() => save(u.email)}>Сохранить</button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div style={s.tableWrap}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Email</th>
+              <th style={s.th}>Роль в системе поездок</th>
+              <th style={s.th}>Доступ ко всему сайту</th>
+              <th style={s.th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => {
+              const draft = drafts[u.email] || { role: "", fullSiteAccess: false };
+              return (
+                <tr key={u.email}>
+                  <td style={s.td}>{u.email}</td>
+                  <td style={s.td}>
+                    <select style={s.inputSmall} value={draft.role} onChange={(e) => setDraft(u.email, { role: e.target.value })}>
+                      {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ ...s.td, textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={draft.fullSiteAccess}
+                      disabled={!draft.role}
+                      onChange={(e) => setDraft(u.email, { fullSiteAccess: e.target.checked })}
+                    />
+                  </td>
+                  <td style={s.td}>
+                    <button style={s.secondaryButton} disabled={savingEmail === u.email} onClick={() => save(u.email)}>Сохранить</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -177,37 +179,39 @@ function UserCardsTab() {
     <div>
       {error && <div style={s.error}>{error}</div>}
       {users.length === 0 && <p style={s.muted}>Пока никому не назначена роль — это делает главный администратор сайта.</p>}
-      <table style={s.table}>
-        <thead>
-          <tr>
-            <th style={s.th}>Email</th>
-            <th style={s.th}>Имя</th>
-            <th style={s.th}>Телефон</th>
-            <th style={s.th}>Роль</th>
-            <th style={s.th}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u) => {
-            const draft = drafts[u.email] || { name: "", phone: "" };
-            return (
-              <tr key={u.email}>
-                <td style={s.td}>{u.email}</td>
-                <td style={s.td}>
-                  <input style={s.inputSmall} value={draft.name} onChange={(e) => setDraft(u.email, { name: e.target.value })} />
-                </td>
-                <td style={s.td}>
-                  <input style={s.inputSmall} value={draft.phone} onChange={(e) => setDraft(u.email, { phone: e.target.value })} />
-                </td>
-                <td style={s.td}>{roleLabel(u.role)}</td>
-                <td style={s.td}>
-                  <button style={s.secondaryButton} disabled={savingEmail === u.email} onClick={() => save(u.email)}>Сохранить</button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div style={s.tableWrap}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Email</th>
+              <th style={s.th}>Имя</th>
+              <th style={s.th}>Телефон</th>
+              <th style={s.th}>Роль</th>
+              <th style={s.th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => {
+              const draft = drafts[u.email] || { name: "", phone: "" };
+              return (
+                <tr key={u.email}>
+                  <td style={s.td}>{u.email}</td>
+                  <td style={s.td}>
+                    <input style={s.inputSmall} value={draft.name} onChange={(e) => setDraft(u.email, { name: e.target.value })} />
+                  </td>
+                  <td style={s.td}>
+                    <input style={s.inputSmall} value={draft.phone} onChange={(e) => setDraft(u.email, { phone: e.target.value })} />
+                  </td>
+                  <td style={s.td}>{roleLabel(u.role)}</td>
+                  <td style={s.td}>
+                    <button style={s.secondaryButton} disabled={savingEmail === u.email} onClick={() => save(u.email)}>Сохранить</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -273,36 +277,38 @@ function VehiclesTab({ readOnly }) {
           <button type="submit" style={s.primaryButton}>Добавить машину</button>
         </form>
       )}
-      <table style={s.table}>
-        <thead>
-          <tr>
-            <th style={s.th}>Гос. номер</th>
-            <th style={s.th}>Модель</th>
-            <th style={s.th}>Статус</th>
-            {!readOnly && <th style={s.th}></th>}
-          </tr>
-        </thead>
-        <tbody>
-          {vehicles.map((v) => (
-            <tr key={v.id}>
-              <td style={s.td}>{v.plateNumber}</td>
-              <td style={s.td}>{v.model}</td>
-              <td style={s.td}>
-                {readOnly ? STATUS_LABEL[v.status] || v.status : (
-                  <select style={s.inputSmall} value={v.status} onChange={(e) => updateStatus(v.id, e.target.value)}>
-                    <option value="available">Свободна</option>
-                    <option value="busy">Занята</option>
-                    <option value="maintenance">На ремонте</option>
-                  </select>
-                )}
-              </td>
-              {!readOnly && (
-                <td style={s.td}><button style={s.dangerButton} onClick={() => remove(v.id)}>Удалить</button></td>
-              )}
+      <div style={s.tableWrap}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Гос. номер</th>
+              <th style={s.th}>Модель</th>
+              <th style={s.th}>Статус</th>
+              {!readOnly && <th style={s.th}></th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {vehicles.map((v) => (
+              <tr key={v.id}>
+                <td style={s.td}>{v.plateNumber}</td>
+                <td style={s.td}>{v.model}</td>
+                <td style={s.td}>
+                  {readOnly ? STATUS_LABEL[v.status] || v.status : (
+                    <select style={s.inputSmall} value={v.status} onChange={(e) => updateStatus(v.id, e.target.value)}>
+                      <option value="available">Свободна</option>
+                      <option value="busy">Занята</option>
+                      <option value="maintenance">На ремонте</option>
+                    </select>
+                  )}
+                </td>
+                {!readOnly && (
+                  <td style={s.td}><button style={s.dangerButton} onClick={() => remove(v.id)}>Удалить</button></td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -389,37 +395,39 @@ function DriversTab({ readOnly }) {
       {!readOnly && unassigned.length === 0 && driverUsers.length === 0 && (
         <p style={s.muted}>Сначала назначьте кому-нибудь роль «Водитель» на вкладке «Пользователи и роли».</p>
       )}
-      <table style={s.table}>
-        <thead>
-          <tr>
-            <th style={s.th}>Имя</th>
-            <th style={s.th}>Телефон</th>
-            <th style={s.th}>Машина</th>
-            <th style={s.th}>Статус</th>
-            {!readOnly && <th style={s.th}></th>}
-          </tr>
-        </thead>
-        <tbody>
-          {drivers.map((d) => (
-            <tr key={d.id}>
-              <td style={s.td}>{d.name}</td>
-              <td style={s.td}>{d.phone}</td>
-              <td style={s.td}>
-                {readOnly ? (d.vehiclePlate || "— не закреплена —") : (
-                  <select style={s.inputSmall} value={d.vehicleId || ""} onChange={(e) => updateVehicle(d.id, e.target.value ? Number(e.target.value) : "")}>
-                    <option value="">— не закреплена —</option>
-                    {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plateNumber}</option>)}
-                  </select>
-                )}
-              </td>
-              <td style={s.td}>{d.status}</td>
-              {!readOnly && (
-                <td style={s.td}><button style={s.dangerButton} onClick={() => remove(d.id)}>Удалить</button></td>
-              )}
+      <div style={s.tableWrap}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Имя</th>
+              <th style={s.th}>Телефон</th>
+              <th style={s.th}>Машина</th>
+              <th style={s.th}>Статус</th>
+              {!readOnly && <th style={s.th}></th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {drivers.map((d) => (
+              <tr key={d.id}>
+                <td style={s.td}>{d.name}</td>
+                <td style={s.td}>{d.phone}</td>
+                <td style={s.td}>
+                  {readOnly ? (d.vehiclePlate || "— не закреплена —") : (
+                    <select style={s.inputSmall} value={d.vehicleId || ""} onChange={(e) => updateVehicle(d.id, e.target.value ? Number(e.target.value) : "")}>
+                      <option value="">— не закреплена —</option>
+                      {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plateNumber}</option>)}
+                    </select>
+                  )}
+                </td>
+                <td style={s.td}>{d.status}</td>
+                {!readOnly && (
+                  <td style={s.td}><button style={s.dangerButton} onClick={() => remove(d.id)}>Удалить</button></td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -470,25 +478,26 @@ export default function RidesAdminPage() {
 }
 
 const s = {
-  page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1100px", margin: "0 auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
-  headerRight: { display: "flex", alignItems: "center", gap: "12px" },
+  page: { padding: "16px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1100px", margin: "0 auto", boxSizing: "border-box" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "16px" },
+  headerRight: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "12px" },
   link: { color: "#1976d2", fontSize: "13px", textDecoration: "none" },
-  title: { fontSize: "22px", margin: 0 },
-  tabs: { display: "flex", gap: "8px", marginBottom: "20px" },
+  title: { fontSize: "clamp(18px, 5vw, 22px)", margin: 0 },
+  tabs: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "20px" },
   tab: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px" },
   tabActive: { background: "#1976d2", color: "#fff", border: "1px solid #1976d2", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px", fontWeight: 600 },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
   muted: { color: "#888", fontSize: "13px", marginBottom: "10px" },
 
-  inlineForm: { display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center" },
+  inlineForm: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px", alignItems: "center" },
 
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", padding: "8px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px" },
+  tableWrap: { overflowX: "auto", WebkitOverflowScrolling: "touch" },
+  table: { width: "100%", minWidth: "480px", borderCollapse: "collapse" },
+  th: { textAlign: "left", padding: "8px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px", whiteSpace: "nowrap" },
   td: { padding: "8px", borderBottom: "1px solid #eee", fontSize: "13px" },
 
-  inputSmall: { padding: "6px 8px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "13px", width: "100%" },
+  inputSmall: { padding: "6px 8px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "13px", width: "100%", boxSizing: "border-box" },
   primaryButton: { background: "#1976d2", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px", fontWeight: 600 },
   secondaryButton: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px" },
   dangerButton: { background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px" },

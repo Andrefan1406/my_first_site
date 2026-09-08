@@ -242,24 +242,26 @@ export default function EmployeeRidesPage() {
         {history.length === 0 ? (
           <p style={s.muted}>Пока ничего нет.</p>
         ) : (
-          <table style={s.table}>
-            <thead>
-              <tr>
-                <th style={s.th}>Дата</th>
-                <th style={s.th}>Маршрут</th>
-                <th style={s.th}>Статус</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((r) => (
-                <tr key={r.id}>
-                  <td style={s.td}>{formatDateTime(r.createdAt)}</td>
-                  <td style={s.td}>{formatRoute(r)}</td>
-                  <td style={{ ...s.td, color: statusColor(r.status) }}>{statusLabel(r)}</td>
+          <div style={s.tableWrap}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  <th style={s.th}>Дата</th>
+                  <th style={s.th}>Маршрут</th>
+                  <th style={s.th}>Статус</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {history.map((r) => (
+                  <tr key={r.id}>
+                    <td style={s.td}>{formatDateTime(r.createdAt)}</td>
+                    <td style={s.td}>{formatRoute(r)}</td>
+                    <td style={{ ...s.td, color: statusColor(r.status) }}>{statusLabel(r)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>
@@ -267,39 +269,40 @@ export default function EmployeeRidesPage() {
 }
 
 const s = {
-  page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "700px", margin: "0 auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
-  headerRight: { display: "flex", alignItems: "center", gap: "12px" },
+  page: { padding: "16px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "700px", margin: "0 auto", boxSizing: "border-box" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "16px" },
+  headerRight: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "12px" },
   link: { color: "#1976d2", fontSize: "13px", textDecoration: "none" },
-  title: { fontSize: "22px", margin: 0 },
+  title: { fontSize: "clamp(18px, 5vw, 22px)", margin: 0 },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
   muted: { color: "#888", fontSize: "14px" },
 
-  form: { background: "#fff", border: "1px solid #eee", borderRadius: "10px", padding: "18px", marginBottom: "28px", display: "flex", flexDirection: "column", gap: "12px" },
+  form: { background: "#fff", border: "1px solid #eee", borderRadius: "10px", padding: "16px", marginBottom: "28px", display: "flex", flexDirection: "column", gap: "12px", boxSizing: "border-box" },
   formRow: { display: "flex", gap: "12px", flexWrap: "wrap" },
-  label: { display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", color: "#444", flex: "1 1 200px" },
+  label: { display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", color: "#444", flex: "1 1 200px", minWidth: 0 },
   checkboxLabel: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#444" },
-  input: { padding: "8px 10px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "14px" },
+  input: { padding: "8px 10px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "14px", width: "100%", boxSizing: "border-box", minWidth: 0 },
   primaryButton: { alignSelf: "flex-start", background: "#1976d2", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 20px", cursor: "pointer", fontSize: "14px", fontWeight: 600 },
-  stopRow: { display: "flex", gap: "8px", alignItems: "center" },
+  stopRow: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" },
   addStopButton: { alignSelf: "flex-start", background: "none", border: "1px dashed #1976d2", color: "#1976d2", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px" },
   removeStopButton: { background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "8px 12px", cursor: "pointer", fontSize: "13px" },
-  addressRow: { display: "flex", gap: "8px" },
+  addressRow: { display: "flex", gap: "8px", flexWrap: "wrap" },
   mapButton: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "8px 12px", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap" },
 
   section: { marginBottom: "28px" },
-  sectionTitle: { fontSize: "17px", marginBottom: "12px" },
+  sectionTitle: { fontSize: "16px", marginBottom: "12px" },
 
   cards: { display: "flex", flexDirection: "column", gap: "12px" },
-  card: { background: "#fff", border: "1px solid #eee", borderRadius: "10px", padding: "14px 16px", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" },
-  cardRoute: { fontWeight: 700, fontSize: "15px", marginBottom: "4px" },
-  cardMeta: { fontSize: "13px", color: "#555", marginBottom: "2px" },
+  card: { background: "#fff", border: "1px solid #eee", borderRadius: "10px", padding: "14px 16px", boxShadow: "0 1px 4px rgba(0,0,0,0.05)", boxSizing: "border-box" },
+  cardRoute: { fontWeight: 700, fontSize: "14px", marginBottom: "4px", wordBreak: "break-word" },
+  cardMeta: { fontSize: "13px", color: "#555", marginBottom: "2px", wordBreak: "break-word" },
   cardStatus: { fontSize: "13px", fontWeight: 600, marginTop: "6px" },
   cancelButton: { marginTop: "10px", background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "8px 14px", cursor: "pointer", fontSize: "13px" },
   returnBadge: { fontWeight: 400, fontSize: "13px", color: "#888" },
 
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", padding: "8px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px" },
+  tableWrap: { overflowX: "auto", WebkitOverflowScrolling: "touch" },
+  table: { width: "100%", minWidth: "420px", borderCollapse: "collapse" },
+  th: { textAlign: "left", padding: "8px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px", whiteSpace: "nowrap" },
   td: { padding: "8px", borderBottom: "1px solid #eee", fontSize: "13px" },
 };

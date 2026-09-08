@@ -126,42 +126,44 @@ export default function DispatcherRidesPage() {
         <div style={s.card}><div style={s.cardLabel}>В пути</div><div style={s.cardValue}>{summary?.inProgress ?? 0}</div></div>
       </div>
 
-      <table style={s.table}>
-        <thead>
-          <tr>
-            <th style={s.th}>Время</th>
-            <th style={s.th}>Маршрут</th>
-            <th style={s.th}>≈ км / мин</th>
-            <th style={s.th}>Заказчик</th>
-            <th style={s.th}>Статус</th>
-            <th style={s.th}>Водитель</th>
-            <th style={s.th}>Действия</th>
-          </tr>
-        </thead>
-        <tbody>
-          {requests.map((r) => (
-            <tr key={r.id} style={r.isStale ? s.staleRow : undefined}>
-              <td style={s.td}>{formatDateTime(r.requestedAt)}</td>
-              <td style={s.td}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</td>
-              <td style={s.td}>{formatEstimate(r) || "—"}</td>
-              <td style={s.td}>{r.employeeName}</td>
-              <td style={s.td}>
-                {STATUS_LABEL[r.status] || r.status}
-                {r.isStale && <span style={s.staleBadge}>висит &gt; {summary?.staleThresholdMinutes ?? 15} мин</span>}
-              </td>
-              <td style={s.td}>{r.driverName ? `${r.driverName}${r.vehiclePlate ? ` (${r.vehiclePlate})` : ""}` : "—"}</td>
-              <td style={s.td}>
-                {r.status === "pending_assignment" && (
-                  <button style={s.secondaryButton} onClick={() => openAssign(r.id)}>Назначить</button>
-                )}
-                {["pending_assignment", "assigned"].includes(r.status) && (
-                  <button style={s.dangerButton} onClick={() => cancelRequest(r.id)}>Отменить</button>
-                )}
-              </td>
+      <div style={s.tableWrap}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Время</th>
+              <th style={s.th}>Маршрут</th>
+              <th style={s.th}>≈ км / мин</th>
+              <th style={s.th}>Заказчик</th>
+              <th style={s.th}>Статус</th>
+              <th style={s.th}>Водитель</th>
+              <th style={s.th}>Действия</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {requests.map((r) => (
+              <tr key={r.id} style={r.isStale ? s.staleRow : undefined}>
+                <td style={s.td}>{formatDateTime(r.requestedAt)}</td>
+                <td style={s.td}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</td>
+                <td style={s.td}>{formatEstimate(r) || "—"}</td>
+                <td style={s.td}>{r.employeeName}</td>
+                <td style={s.td}>
+                  {STATUS_LABEL[r.status] || r.status}
+                  {r.isStale && <span style={s.staleBadge}>висит &gt; {summary?.staleThresholdMinutes ?? 15} мин</span>}
+                </td>
+                <td style={s.td}>{r.driverName ? `${r.driverName}${r.vehiclePlate ? ` (${r.vehiclePlate})` : ""}` : "—"}</td>
+                <td style={s.td}>
+                  {r.status === "pending_assignment" && (
+                    <button style={s.secondaryButton} onClick={() => openAssign(r.id)}>Назначить</button>
+                  )}
+                  {["pending_assignment", "assigned"].includes(r.status) && (
+                    <button style={s.dangerButton} onClick={() => cancelRequest(r.id)}>Отменить</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {assignTarget && (
         <div style={s.modalOverlay} onClick={() => setAssignTarget(null)}>
@@ -189,22 +191,23 @@ export default function DispatcherRidesPage() {
 }
 
 const s = {
-  page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1100px", margin: "0 auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
-  headerRight: { display: "flex", alignItems: "center", gap: "12px" },
+  page: { padding: "16px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "1100px", margin: "0 auto", boxSizing: "border-box" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "16px" },
+  headerRight: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "12px" },
   link: { color: "#1976d2", fontSize: "13px", textDecoration: "none" },
-  title: { fontSize: "22px", margin: 0 },
+  title: { fontSize: "clamp(18px, 5vw, 22px)", margin: 0 },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
   muted: { color: "#888", fontSize: "14px" },
 
-  cards: { display: "grid", gridTemplateColumns: "repeat(3, minmax(160px, 1fr))", gap: "16px", marginBottom: "20px" },
+  cards: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px", marginBottom: "20px" },
   card: { background: "#fff", borderRadius: "10px", padding: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" },
   cardLabel: { fontSize: "12px", color: "#888", marginBottom: "6px" },
   cardValue: { fontSize: "24px", fontWeight: 700 },
 
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", padding: "10px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px" },
+  tableWrap: { overflowX: "auto", WebkitOverflowScrolling: "touch", marginBottom: "12px" },
+  table: { width: "100%", minWidth: "760px", borderCollapse: "collapse" },
+  th: { textAlign: "left", padding: "10px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px", whiteSpace: "nowrap" },
   td: { padding: "10px", borderBottom: "1px solid #eee", fontSize: "13px" },
   staleRow: { background: "#fff8e1" },
   staleBadge: { marginLeft: "8px", fontSize: "11px", color: "#b8860b", fontWeight: 700 },
@@ -215,7 +218,7 @@ const s = {
   dangerButton: { background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px" },
 
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
-  modal: { background: "#fff", borderRadius: "10px", padding: "20px", width: "360px" },
-  modalActions: { display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px" },
-  input: { width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "14px" },
+  modal: { background: "#fff", borderRadius: "10px", padding: "20px", width: "360px", maxWidth: "92vw", boxSizing: "border-box" },
+  modalActions: { display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "8px", marginTop: "16px" },
+  input: { width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "14px", boxSizing: "border-box" },
 };

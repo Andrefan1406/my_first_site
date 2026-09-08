@@ -248,24 +248,26 @@ export default function DriverDashboardPage() {
           <button style={s.secondaryButton} onClick={loadHistory}>Показать</button>
         </div>
         {history.length > 0 && (
-          <table style={s.table}>
-            <thead>
-              <tr>
-                <th style={s.th}>Дата</th>
-                <th style={s.th}>Маршрут</th>
-                <th style={s.th}>Заказчик</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((r) => (
-                <tr key={r.id}>
-                  <td style={s.td}>{formatDateTime(r.createdAt)}</td>
-                  <td style={s.td}>{formatRoute(r)}</td>
-                  <td style={s.td}>{r.employeeName}</td>
+          <div style={s.tableWrap}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  <th style={s.th}>Дата</th>
+                  <th style={s.th}>Маршрут</th>
+                  <th style={s.th}>Заказчик</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {history.map((r) => (
+                  <tr key={r.id}>
+                    <td style={s.td}>{formatDateTime(r.createdAt)}</td>
+                    <td style={s.td}>{formatRoute(r)}</td>
+                    <td style={s.td}>{r.employeeName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>
@@ -273,24 +275,24 @@ export default function DriverDashboardPage() {
 }
 
 const s = {
-  page: { padding: "24px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "900px", margin: "0 auto" },
+  page: { padding: "16px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: "900px", margin: "0 auto", boxSizing: "border-box" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" },
-  headerRight: { display: "flex", alignItems: "center", gap: "10px" },
-  title: { margin: 0, fontSize: "22px" },
+  headerRight: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" },
+  title: { margin: 0, fontSize: "clamp(18px, 5vw, 22px)" },
   badge: { padding: "4px 10px", borderRadius: "999px", border: "1px solid", fontSize: "13px", fontWeight: 600 },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
   muted: { color: "#888", fontSize: "14px" },
 
   section: { marginBottom: "28px" },
-  sectionTitle: { fontSize: "17px", marginBottom: "12px" },
+  sectionTitle: { fontSize: "16px", marginBottom: "12px" },
 
   cards: { display: "flex", flexDirection: "column", gap: "12px" },
-  card: { background: "#fff", border: "1px solid #eee", borderRadius: "10px", padding: "14px 16px", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" },
-  cardRoute: { fontWeight: 700, fontSize: "15px", marginBottom: "4px" },
-  cardMeta: { fontSize: "13px", color: "#555", marginBottom: "2px" },
+  card: { background: "#fff", border: "1px solid #eee", borderRadius: "10px", padding: "14px 16px", boxShadow: "0 1px 4px rgba(0,0,0,0.05)", boxSizing: "border-box" },
+  cardRoute: { fontWeight: 700, fontSize: "14px", marginBottom: "4px", wordBreak: "break-word" },
+  cardMeta: { fontSize: "13px", color: "#555", marginBottom: "2px", wordBreak: "break-word" },
   cardStatus: { fontSize: "13px", fontWeight: 600, color: "#1976d2", marginTop: "6px" },
-  cardActions: { display: "flex", gap: "8px", marginTop: "10px" },
+  cardActions: { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" },
   returnBadge: { fontWeight: 400, fontSize: "13px", color: "#888" },
   phoneLink: { color: "#1976d2", fontWeight: 600, textDecoration: "none" },
 
@@ -298,10 +300,11 @@ const s = {
   secondaryButton: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "8px 14px", cursor: "pointer", fontSize: "13px" },
   dangerButton: { background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "8px 14px", cursor: "pointer", fontSize: "13px" },
 
-  historyFilters: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" },
-  dateInput: { padding: "6px 8px", borderRadius: "6px", border: "1px solid #ccc" },
+  historyFilters: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "12px" },
+  dateInput: { padding: "6px 8px", borderRadius: "6px", border: "1px solid #ccc", minWidth: 0, flex: "1 1 130px" },
 
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", padding: "8px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px" },
+  tableWrap: { overflowX: "auto", WebkitOverflowScrolling: "touch" },
+  table: { width: "100%", minWidth: "420px", borderCollapse: "collapse" },
+  th: { textAlign: "left", padding: "8px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px", whiteSpace: "nowrap" },
   td: { padding: "8px", borderBottom: "1px solid #eee", fontSize: "13px" },
 };

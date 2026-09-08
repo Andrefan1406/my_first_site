@@ -109,12 +109,12 @@ export default function MapPicker({ onSelect, onClose }) {
 
 const s = {
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 },
-  modal: { background: "#fff", borderRadius: "10px", padding: "16px", width: "560px", maxWidth: "90vw" },
-  map: { height: "320px", borderRadius: "8px", marginBottom: "10px" },
+  modal: { background: "#fff", borderRadius: "10px", padding: "16px", width: "560px", maxWidth: "92vw", boxSizing: "border-box" },
+  map: { height: "320px", maxWidth: "100%", borderRadius: "8px", marginBottom: "10px" },
   label: { display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", color: "#444" },
   input: { padding: "8px 10px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "14px", width: "100%", boxSizing: "border-box" },
   error: { background: "#fff0f0", color: "#c00", borderRadius: "6px", padding: "6px 10px", marginBottom: "8px", fontSize: "12px" },
-  actions: { display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "14px" },
+  actions: { display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "8px", marginTop: "14px" },
   primaryButton: { background: "#1976d2", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px", fontWeight: 600 },
   secondaryButton: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "8px 14px", cursor: "pointer", fontSize: "13px" },
 };
