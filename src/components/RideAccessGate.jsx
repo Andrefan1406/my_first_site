@@ -10,16 +10,12 @@ import { Navigate, useLocation } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 import { ridesApiFetch } from "../rides/api";
+import { ROLE_HOME_PATH } from "../rides/constants";
 
 // Роли "admin" в rides.users больше нет — главный админ сайта эту таблицу
 // не заполняет собой вообще (см. server/rides/usersRouter.js), поэтому
-// его сюда ROLE_HOME/ROLE_EXTRA_PATHS не касаются: без записи rideUser он
-// ниже просто не подпадает под ограничение и видит весь сайт как обычно.
-const ROLE_HOME = {
-  employee: "/employee",
-  dispatcher: "/dispatcher",
-  driver: "/driver",
-};
+// его сюда ROLE_HOME_PATH/ROLE_EXTRA_PATHS не касаются: без записи rideUser
+// он ниже просто не подпадает под ограничение и видит весь сайт как обычно.
 
 // Помимо своей "домашней" страницы, диспетчеру ещё можно на /employee —
 // он иногда сам себе заказывает машину, и на /rides-admin — он же ведёт
@@ -54,7 +50,7 @@ export default function RideAccessGate({ children }) {
   }
 
   if (rideUser && !rideUser.fullSiteAccess) {
-    const home = ROLE_HOME[rideUser.role];
+    const home = ROLE_HOME_PATH[rideUser.role];
     const allowed = [home, ...(ROLE_EXTRA_PATHS[rideUser.role] || [])];
     const isAllowed = location.pathname === "/login" || allowed.some((p) => p && location.pathname.startsWith(p));
     if (home && !isAllowed) {

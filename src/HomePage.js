@@ -4,6 +4,8 @@ import { signOut, getAuth } from "firebase/auth";
 import { auth } from "./firebase";
 import { fetchMissingGapDates, gapWarningMessage } from './peopleGapsGate';
 import { fetchGprReportBlock, gprBlockMessage } from './gprReportGate';
+import { ridesApiFetch } from './rides/api';
+import { ROLE_HOME_PATH } from './rides/constants';
 
 const ADMIN_EMAIL = "admin@vkdev.kz";
 
@@ -41,6 +43,19 @@ const HomePage = () => {
         setGprGaps(gaps);
       })
       .catch((err) => console.error('Не удалось проверить пропуски в отчётах ГПР:', err));
+  }, [currentEmail]);
+
+  // Если у сотрудника уже есть роль в системе поездок и при этом включён
+  // "Доступ ко всему сайту" (иначе он сюда физически не попал бы —
+  // см. RideAccessGate.jsx), даём ему кнопку назад на его страницу
+  // поездок — иначе с главной до неё не добраться, кроме как вручную
+  // вбив адрес в браузере.
+  const [rideRole, setRideRole] = useState(null);
+  useEffect(() => {
+    if (!currentEmail) return;
+    ridesApiFetch('/api/v1/users/me')
+      .then(({ user }) => setRideRole(user?.role || null))
+      .catch(() => {});
   }, [currentEmail]);
 
   const isRequestsBlocked = missingGapDates.length > 0 || gprBlocked;
@@ -150,6 +165,12 @@ const HomePage = () => {
       >
         Графики и отчёты
       </button>
+
+      {rideRole && ROLE_HOME_PATH[rideRole] && (
+        <button onClick={() => navigate(ROLE_HOME_PATH[rideRole])} style={styles.rideButton}>
+          🚗 Служебный транспорт
+        </button>
+      )}
     </div>
   );
 };
@@ -249,6 +270,16 @@ const styles = {
     fontWeight: '700',
     width: '300px',
     boxShadow: '0 4px 12px rgba(102,16,242,0.35)',
+  },
+  rideButton: {
+    padding: '10px 20px',
+    background: '#28a745',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    width: '300px'
   }
 };
 
