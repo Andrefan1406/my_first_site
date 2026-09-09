@@ -468,9 +468,13 @@ const EmptyState = ({ domain, onPick }) => (
   </div>
 );
 
-const ConcreteChatPage = () => {
+// soloDomain — показать ТОЛЬКО один домен без сайдбара и без переключения
+// (используется временной страницей /rascenki-test для доступа к поиску по
+// расценкам без авторизации). disableUsageLog — не писать в Firestore
+// (на публичной странице пользователь неавторизован).
+const ConcreteChatPage = ({ soloDomain = null, disableUsageLog = false }) => {
   const navigate = useNavigate();
-  const [activeDomain, setActiveDomain] = useState(DEFAULT_DOMAIN);
+  const [activeDomain, setActiveDomain] = useState(soloDomain || DEFAULT_DOMAIN);
   const [messagesByDomain, setMessagesByDomain] = useState(() => buildInitialByDomain([]));
   const [loadingByDomain, setLoadingByDomain] = useState(() => buildInitialByDomain(false));
   const [errorByDomain, setErrorByDomain] = useState(() => buildInitialByDomain(""));
@@ -508,7 +512,7 @@ const ConcreteChatPage = () => {
     requestAnimationFrame(resizeTextarea);
     setErrorByDomain((prev) => ({ ...prev, [domainKey]: "" }));
     setLoadingByDomain((prev) => ({ ...prev, [domainKey]: true }));
-    logChatUsage(question, domainKey);
+    if (!disableUsageLog) logChatUsage(question, domainKey);
 
     try {
       const history = nextMessages.slice(-MAX_HISTORY).map((m) => ({
@@ -584,23 +588,25 @@ const ConcreteChatPage = () => {
         }
       `}</style>
 
-      <nav style={s.sidebar} className="analytics-sidebar">
-        <div style={s.sidebarTitle} className="analytics-sidebar-title">Аналитика</div>
-        {DOMAINS.map((d) => (
-          <button
-            key={d.key}
-            style={{ ...s.sidebarItem, ...(d.key === activeDomain ? s.sidebarItemActive : null) }}
-            onClick={() => setActiveDomain(d.key)}
-          >
-            <d.Icon size={17} />
-            {d.label}
-          </button>
-        ))}
-      </nav>
+      {!soloDomain && (
+        <nav style={s.sidebar} className="analytics-sidebar">
+          <div style={s.sidebarTitle} className="analytics-sidebar-title">Аналитика</div>
+          {DOMAINS.map((d) => (
+            <button
+              key={d.key}
+              style={{ ...s.sidebarItem, ...(d.key === activeDomain ? s.sidebarItemActive : null) }}
+              onClick={() => setActiveDomain(d.key)}
+            >
+              <d.Icon size={17} />
+              {d.label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <div style={s.main}>
         <header style={s.header}>
-          <button onClick={() => navigate("/")} style={s.back}>←</button>
+          {!soloDomain && <button onClick={() => navigate("/")} style={s.back}>←</button>}
           <span style={s.headerTitle}>{domain.label}</span>
         </header>
 
