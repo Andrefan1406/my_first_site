@@ -26,10 +26,31 @@ const EMBEDDING_DIM = 768;
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 // batchEmbedContents допускает до 100 запросов за вызов.
 const MAX_BATCH = 100;
-const RETRY_ATTEMPTS = 4;
-const RETRY_BASE_MS = 1500;
+const RETRY_ATTEMPTS = 5;
+const RETRY_BASE_MS = 4000;
+
+// Бесплатный тариф Gemini для gemini-embedding-001 — порядка 5 запросов/мин.
+// Переиндексация свода/актов шлёт десятки батчей подряд и без паузы мгновенно
+// ловит 429. Держим минимальный интервал между ЛЮБЫМИ вызовами API (общий на
+// весь процесс — и переиндексация, и эмбеддинг запросов в поиске идут через
+// одну очередь). На платном тарифе лимит поднять через EMBEDDING_MAX_RPM.
+const MAX_RPM = Number(process.env.EMBEDDING_MAX_RPM || 5);
+const MIN_GAP_MS = Math.ceil(60000 / Math.max(1, MAX_RPM)) + 300;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let rateGate = Promise.resolve();
+let lastCallAt = 0;
+// Последовательная очередь: каждый вызов ждёт, пока с момента предыдущего
+// пройдёт MIN_GAP_MS.
+function throttle() {
+  rateGate = rateGate.then(async () => {
+    const wait = lastCallAt + MIN_GAP_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastCallAt = Date.now();
+  });
+  return rateGate;
+}
 
 function l2normalize(vec) {
   let sumSq = 0;
@@ -50,6 +71,7 @@ async function callGemini(path, body) {
   assertKey();
   let lastErr;
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    await throttle();
     let res;
     try {
       res = await fetch(`${API_BASE}/${path}?key=${GEMINI_API_KEY}`, {
