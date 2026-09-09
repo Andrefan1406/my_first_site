@@ -32,11 +32,12 @@ const RETRY_ATTEMPTS = 4;
 const RETRY_BASE_MS = 3000;
 
 // Общий на весь процесс троттлинг (переиндексация и эмбеддинг запросов в поиске
-// идут через одну очередь). Бесплатный аккаунт Voyage без привязанной карты —
-// 3 запроса/мин; с картой (но всё ещё в рамках бесплатных 200 млн токенов) —
-// 2000/мин, тогда EMBEDDING_MAX_RPM можно поднять переменной окружения.
-const MAX_RPM = Number(process.env.EMBEDDING_MAX_RPM || 3);
-const MIN_GAP_MS = Math.ceil(60000 / Math.max(1, MAX_RPM)) + 200;
+// идут через одну очередь). У Voyage с привязанной картой лимит 2000 запросов/
+// мин (бесплатные 200 млн токенов при этом расходуются как обычно), у аккаунта
+// без карты — заметно ниже. 100/мин — с запасом: полная переиндексация (~25
+// запросов) укладывается в полминуты. Поднять/опустить через EMBEDDING_MAX_RPM.
+const MAX_RPM = Number(process.env.EMBEDDING_MAX_RPM || 100);
+const MIN_GAP_MS = Math.ceil(60000 / Math.max(1, MAX_RPM)) + 50;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
