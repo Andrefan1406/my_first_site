@@ -10,6 +10,7 @@ const { startConcreteSync } = require('./syncConcrete');
 const { startObjectsSync } = require('./syncObjects');
 const { startPeopleSync } = require('./syncPeople');
 const { startDefectActsSync } = require('./syncDefectActs');
+const { startRascenkiSync } = require('./syncRascenki');
 const { startGprReportSync } = require('./syncGprReport');
 const { handleChat } = require('./chatHandler');
 const peopleGapsAdminRouter = require('./peopleGapsAdmin');
@@ -67,6 +68,7 @@ startConcreteSync();
 startObjectsSync();
 startPeopleSync();
 startDefectActsSync();
+startRascenkiSync();
 startGprReportSync();
 
 // Render передаёт порт через PORT — слушаем его в первую очередь,

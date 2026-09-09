@@ -7,7 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, LabelList
 } from "recharts";
-import { TbCrane, TbBuildingCommunity, TbUsers, TbFileAlert, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
+import { TbCrane, TbBuildingCommunity, TbUsers, TbFileAlert, TbReportMoney, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -73,6 +73,26 @@ const DOMAINS = [
       "Сколько дефектных актов открыто по каждому объекту?",
       "Сколько актов устранено за этот месяц?",
       "Какие объекты чаще всего фигурируют в дефектных актах?",
+    ],
+  },
+  {
+    key: "rascenki",
+    label: "Поиск по расценкам",
+    Icon: TbReportMoney,
+    emptyTitle: "Поиск по расценкам",
+    emptyHint:
+      "Спросите расценку на любой вид работ на естественном языке — ответ придёт таблицей, сгруппированной по классам расценок:",
+    placeholder: "Спросите расценку на работы...",
+    // Не text-to-SQL, а семантический поиск по своду расценок 2026 — ответ
+    // всегда таблица фиксированного формата (см. server/rascenkiSearch.js),
+    // поэтому дисклеймер про SQL-запрос тут не подходит.
+    disclaimer:
+      "Поиск по смыслу — цены и обоснования даны дословно из свода, проверяйте объект по каждой строке.",
+    suggestions: [
+      "Какая расценка на штукатурные работы?",
+      "Сколько стоит облицовка стен плиткой?",
+      "Расценка на кладку из газоблока",
+      "Устройство натяжного потолка",
     ],
   },
 ];
@@ -625,7 +645,7 @@ const ConcreteChatPage = () => {
                 ↑
               </button>
             </div>
-            <p style={s.disclaimer}>Ответы формирует ИИ — сверяйтесь по SQL-запросу под ответом.</p>
+            <p style={s.disclaimer}>{domain.disclaimer || "Ответы формирует ИИ — сверяйтесь по SQL-запросу под ответом."}</p>
           </div>
         </div>
       </div>
