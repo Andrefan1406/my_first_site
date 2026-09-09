@@ -24,12 +24,23 @@ const { embedBatch, EMBEDDING_DIM } = require('./embeddings');
 const { getClient, upsertPoints } = require('./qdrantClient');
 
 const QDRANT_COLLECTION = 'rascenki_2026';
-const EMBED_BATCH_SIZE = 32;
+// 16, а не 32 как у defect_acts: меньше пиковая аллокация тензоров на батч —
+// на 512МБ инстансе Render это заметно снижает риск OOM при ~2000 строк свода.
+const EMBED_BATCH_SIZE = Number(process.env.RASCENKI_EMBED_BATCH_SIZE || 16);
 
 // Свод правится редко (входящие согласования расценок приходят пачками раз в
 // несколько дней) — переиндексация раз в сутки с запасом.
 const CRON_SCHEDULE = process.env.RASCENKI_SYNC_CRON || '30 4 * * *';
 const CSV_URL = process.env.RASCENKI_SYNC_CSV_URL || '';
+
+// Первый синк — НЕ в момент старта процесса. На Render Starter (512МБ, ~256МБ
+// heap у Node) одновременная загрузка всех синков на старте (people ~131k строк,
+// gpr ~150k, concrete ~11k) плюс загрузка ONNX-модели эмбеддингов (~150МБ вне
+// heap) для переиндексации Qdrant валит процесс по OOM. Откладываем первый
+// прогон на несколько минут: к этому моменту стартовый «шторм» уже отработал и
+// освободил память, а переиндексация defect_acts (тоже грузит ту же модель)
+// успевает закончиться до нашей.
+const FIRST_RUN_DELAY_MS = Number(process.env.RASCENKI_FIRST_SYNC_DELAY_MS || 6 * 60 * 1000);
 
 // В шапке свода 3 «титульных» строки (название свода, название компании,
 // пустая) перед строкой заголовков колонок — точную позицию не хардкодим, а
@@ -209,7 +220,12 @@ function startRascenkiSync() {
     );
     return;
   }
-  runSyncOnce().catch((err) => console.error('[rascenki-sync] ошибка стартового синка:', err.message));
+  // .unref() — таймер не держит процесс живым сам по себе (сервер и так слушает порт).
+  setTimeout(() => {
+    console.log(`[rascenki-sync] запускаю первый синк (отложен на ${Math.round(FIRST_RUN_DELAY_MS / 1000)}с после старта)`);
+    runSyncOnce().catch((err) => console.error('[rascenki-sync] ошибка первого синка:', err.message));
+  }, FIRST_RUN_DELAY_MS).unref();
+
   cron.schedule(CRON_SCHEDULE, () => {
     runSyncOnce().catch((err) => console.error('[rascenki-sync] ошибка планового синка:', err.message));
   });
