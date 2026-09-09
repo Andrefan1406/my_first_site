@@ -141,6 +141,7 @@ function normalizeMatrix(matrix) {
 // точки смысла нет.
 async function reindexRascenki(rows) {
   const client = getClient();
+  console.log(`[rascenki-sync] переиндексация: ${rows.length} строк, коллекция ${QDRANT_COLLECTION} пересоздаётся (${EMBEDDING_DIM}-мерные векторы)`);
   await client.recreateCollection(QDRANT_COLLECTION, {
     vectors: { size: EMBEDDING_DIM, distance: 'Cosine' },
   });
@@ -165,8 +166,11 @@ async function reindexRascenki(rows) {
       payload: { ...row, searchable_text: buildSearchableText(row) },
     }));
     await upsertPoints(QDRANT_COLLECTION, points);
+    const done = Math.min(i + EMBED_BATCH_SIZE, rows.length);
+    console.log(`[rascenki-sync] эмбеддинги и загрузка: ${done}/${rows.length}`);
   }
 
+  console.log(`[rascenki-sync] переиндексация завершена: ${rows.length} строк в ${QDRANT_COLLECTION}`);
   return rows.length;
 }
 
