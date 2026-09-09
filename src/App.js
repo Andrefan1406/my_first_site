@@ -14,6 +14,10 @@ import ConcreteProductionReport from './ConcreteProductionReport';
 import ConcreteDailyReportPage from './ConcreteDailyReportPage';
 import ConcreteRequestPage from './ConcreteRequestPage';
 import ConcreteChatPage from './pages/ConcreteChatPage';
+// ВРЕМЕННО: публичная (без авторизации) страница для тестирования поиска по
+// расценкам — маршрут /rascenki-test ниже. Удалить вместе с маршрутом и
+// src/pages/RascenkiSearchTestPage.jsx после тестирования.
+import RascenkiSearchTestPage from './pages/RascenkiSearchTestPage';
 import BLBRequestPage from './BLBRequestPage';
 import ZnbRequestPage from './ZnbRequestPage';
 import LabTestRequestPaje from "./LabTestRequestPaje";
@@ -34,6 +38,7 @@ import GprReportGapsAdminPage from "./pages/GprReportGapsAdminPage";
 import PeopleGapsUsersAdminPage from "./pages/PeopleGapsUsersAdminPage";
 import BlockedUsersAdminPage from "./pages/BlockedUsersAdminPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+import RascenkiReindexAdminPage from "./pages/RascenkiReindexAdminPage";
 import ConcreteDashboardPage from "./pages/ConcreteDashboardPage";
 
 
@@ -51,6 +56,10 @@ const App = () => {
 
         {/* Авторизация */}
         <Route path="/login" element={<LoginPage />} />
+
+        {/* ВРЕМЕННО: публичный тест поиска по расценкам, без <Protected>.
+            Удалить после тестирования (см. RascenkiSearchTestPage.jsx). */}
+        <Route path="/rascenki-test" element={<RascenkiSearchTestPage />} />
 
         {/* Главная */}
         <Route path="/" element={<Protected><HomePage /></Protected>} />
@@ -281,6 +290,16 @@ const App = () => {
             <Protected>
               <AdminRoute>
                 <BlockedUsersAdminPage />
+              </AdminRoute>
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin/rascenki"
+          element={
+            <Protected>
+              <AdminRoute>
+                <RascenkiReindexAdminPage />
               </AdminRoute>
             </Protected>
           }

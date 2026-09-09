@@ -7,7 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, LabelList
 } from "recharts";
-import { TbCrane, TbBuildingCommunity, TbUsers, TbFileAlert, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
+import { TbCrane, TbBuildingCommunity, TbUsers, TbFileAlert, TbReportMoney, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -73,6 +73,26 @@ const DOMAINS = [
       "Сколько дефектных актов открыто по каждому объекту?",
       "Сколько актов устранено за этот месяц?",
       "Какие объекты чаще всего фигурируют в дефектных актах?",
+    ],
+  },
+  {
+    key: "rascenki",
+    label: "Поиск по расценкам",
+    Icon: TbReportMoney,
+    emptyTitle: "Поиск по расценкам",
+    emptyHint:
+      "Спросите расценку на любой вид работ на естественном языке — ответ придёт таблицей, сгруппированной по классам расценок:",
+    placeholder: "Спросите расценку на работы...",
+    // Не text-to-SQL, а семантический поиск по своду расценок 2026 — ответ
+    // всегда таблица фиксированного формата (см. server/rascenkiSearch.js),
+    // поэтому дисклеймер про SQL-запрос тут не подходит.
+    disclaimer:
+      "Поиск по смыслу — цены и обоснования даны дословно из свода, проверяйте объект по каждой строке.",
+    suggestions: [
+      "Какая расценка на штукатурные работы?",
+      "Сколько стоит облицовка стен плиткой?",
+      "Расценка на кладку из газоблока",
+      "Устройство натяжного потолка",
     ],
   },
 ];
@@ -448,9 +468,13 @@ const EmptyState = ({ domain, onPick }) => (
   </div>
 );
 
-const ConcreteChatPage = () => {
+// soloDomain — показать ТОЛЬКО один домен без сайдбара и без переключения
+// (используется временной страницей /rascenki-test для доступа к поиску по
+// расценкам без авторизации). disableUsageLog — не писать в Firestore
+// (на публичной странице пользователь неавторизован).
+const ConcreteChatPage = ({ soloDomain = null, disableUsageLog = false }) => {
   const navigate = useNavigate();
-  const [activeDomain, setActiveDomain] = useState(DEFAULT_DOMAIN);
+  const [activeDomain, setActiveDomain] = useState(soloDomain || DEFAULT_DOMAIN);
   const [messagesByDomain, setMessagesByDomain] = useState(() => buildInitialByDomain([]));
   const [loadingByDomain, setLoadingByDomain] = useState(() => buildInitialByDomain(false));
   const [errorByDomain, setErrorByDomain] = useState(() => buildInitialByDomain(""));
@@ -488,7 +512,7 @@ const ConcreteChatPage = () => {
     requestAnimationFrame(resizeTextarea);
     setErrorByDomain((prev) => ({ ...prev, [domainKey]: "" }));
     setLoadingByDomain((prev) => ({ ...prev, [domainKey]: true }));
-    logChatUsage(question, domainKey);
+    if (!disableUsageLog) logChatUsage(question, domainKey);
 
     try {
       const history = nextMessages.slice(-MAX_HISTORY).map((m) => ({
@@ -564,23 +588,25 @@ const ConcreteChatPage = () => {
         }
       `}</style>
 
-      <nav style={s.sidebar} className="analytics-sidebar">
-        <div style={s.sidebarTitle} className="analytics-sidebar-title">Аналитика</div>
-        {DOMAINS.map((d) => (
-          <button
-            key={d.key}
-            style={{ ...s.sidebarItem, ...(d.key === activeDomain ? s.sidebarItemActive : null) }}
-            onClick={() => setActiveDomain(d.key)}
-          >
-            <d.Icon size={17} />
-            {d.label}
-          </button>
-        ))}
-      </nav>
+      {!soloDomain && (
+        <nav style={s.sidebar} className="analytics-sidebar">
+          <div style={s.sidebarTitle} className="analytics-sidebar-title">Аналитика</div>
+          {DOMAINS.map((d) => (
+            <button
+              key={d.key}
+              style={{ ...s.sidebarItem, ...(d.key === activeDomain ? s.sidebarItemActive : null) }}
+              onClick={() => setActiveDomain(d.key)}
+            >
+              <d.Icon size={17} />
+              {d.label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <div style={s.main}>
         <header style={s.header}>
-          <button onClick={() => navigate("/")} style={s.back}>←</button>
+          {!soloDomain && <button onClick={() => navigate("/")} style={s.back}>←</button>}
           <span style={s.headerTitle}>{domain.label}</span>
         </header>
 
@@ -625,7 +651,7 @@ const ConcreteChatPage = () => {
                 ↑
               </button>
             </div>
-            <p style={s.disclaimer}>Ответы формирует ИИ — сверяйтесь по SQL-запросу под ответом.</p>
+            <p style={s.disclaimer}>{domain.disclaimer || "Ответы формирует ИИ — сверяйтесь по SQL-запросу под ответом."}</p>
           </div>
         </div>
       </div>

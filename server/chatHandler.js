@@ -9,6 +9,7 @@ const { assertSafeSelect, SqlGuardError } = require('./sqlGuard');
 const { callOllamaJson } = require('./ollamaClient');
 const { embed } = require('./embeddings');
 const { searchSimilar } = require('./qdrantClient');
+const { searchRascenki } = require('./rascenkiSearch');
 
 const MAX_ATTEMPTS = 3; // 1 попытка + до 2 повторов, как в ТЗ
 const MAX_HISTORY = 10;
@@ -450,6 +451,15 @@ const DOMAIN_CONFIG = {
     // финальной LLM вместе — она сама решает, что из этого relevant вопросу.
     ragCollection: 'defect_acts',
   },
+  // «Поиск по расценкам» — особый домен: не text-to-SQL, а чистый
+  // семантический поиск по своду расценок с ответом фиксированной таблицей
+  // (см. server/rascenkiSearch.js). handleChat отдаёт управление search()
+  // и не запускает генерацию SQL вообще.
+  rascenki: {
+    syncKey: 'rascenki_last_synced_at',
+    notReadyText: 'Свод расценок ещё индексируется для поиска, попробуйте через минуту.',
+    search: searchRascenki,
+  },
 };
 
 function resolveDomain(domainKey) {
@@ -578,6 +588,21 @@ async function handleChat(req, res) {
     const question = [...messages].reverse().find((m) => m.role === 'user')?.content;
     if (!question) {
       return res.status(400).json({ error: 'Не найден вопрос пользователя в messages' });
+    }
+
+    // Домены с собственным обработчиком (сейчас — «Поиск по расценкам»):
+    // никакого text-to-SQL, ответ формирует search() и возвращает уже
+    // готовый { answer, sql }.
+    if (typeof domain.search === 'function') {
+      try {
+        const result = await domain.search(question);
+        return res.json(result);
+      } catch (err) {
+        console.error('[chat] ошибка обработчика домена:', err);
+        return res.status(err.status && err.status >= 400 && err.status < 600 ? err.status : 500).json({
+          error: err.message || 'Не удалось выполнить поиск',
+        });
+      }
     }
 
     const history = messages.slice(-MAX_HISTORY);
