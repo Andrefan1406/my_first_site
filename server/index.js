@@ -10,7 +10,6 @@ const { startConcreteSync } = require('./syncConcrete');
 const { startObjectsSync } = require('./syncObjects');
 const { startPeopleSync } = require('./syncPeople');
 const { startDefectActsSync } = require('./syncDefectActs');
-const { startRascenkiSync } = require('./syncRascenki');
 const { startGprReportSync } = require('./syncGprReport');
 const { handleChat } = require('./chatHandler');
 const peopleGapsAdminRouter = require('./peopleGapsAdmin');
@@ -18,6 +17,7 @@ const peopleGapsCheckRouter = require('./peopleGapsCheck');
 const gprReportAdminRouter = require('./gprReportAdmin');
 const gprReportCheckRouter = require('./gprReportCheck');
 const blockedUsersAdminRouter = require('./blockedUsersAdmin');
+const rascenkiAdminRouter = require('./rascenkiAdmin');
 const concreteDailyReportRouter = require('./concreteDailyReport');
 const concreteDashboardRouter = require('./concreteDashboard');
 const concreteRequestsBoardRouter = require('./concreteRequestsBoard');
@@ -55,6 +55,7 @@ app.use('/api/people-gaps', peopleGapsCheckRouter);
 app.use('/api/admin/gpr-report', gprReportAdminRouter);
 app.use('/api/gpr-report', gprReportCheckRouter);
 app.use('/api/admin/blocked-users', blockedUsersAdminRouter);
+app.use('/api/admin/rascenki', rascenkiAdminRouter);
 // Оба роутера смонтированы на одном префиксе — их пути не пересекаются
 // (daily-report у одного, options/monthly/unexecuted/chart-titles у
 // другого), Express пробует их по очереди и падает в 404 только если ни
@@ -68,7 +69,8 @@ startConcreteSync();
 startObjectsSync();
 startPeopleSync();
 startDefectActsSync();
-startRascenkiSync();
+// Индексация свода расценок — только принудительно из личного кабинета
+// администратора (POST /api/admin/rascenki/reindex), планового синка нет.
 startGprReportSync();
 
 // Render передаёт порт через PORT — слушаем его в первую очередь,

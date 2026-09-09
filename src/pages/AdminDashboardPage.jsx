@@ -36,6 +36,12 @@ const SECTIONS = [
     path: "/admin/statistics",
     color: "#6610f2",
   },
+  {
+    title: "Индексация расценок",
+    description: "Принудительно переиндексировать свод расценок для поиска (после обновления таблицы)",
+    path: "/admin/rascenki",
+    color: "#10a37f",
+  },
 ];
 
 const AdminDashboardPage = () => {

@@ -18,7 +18,6 @@
 // "Наименование работ + Ед.изм + Раздел + Подраздел" (см. buildSearchableText:
 // название работы первым, таксономия как контекст). Остальные поля не
 // эмбеддятся, а хранятся в payload для фильтрации по классу/объекту и вывода.
-const cron = require('node-cron');
 const Papa = require('papaparse');
 const { getWriteDb } = require('./db');
 const { embedBatch, EMBEDDING_DIM } = require('./embeddings');
@@ -26,20 +25,15 @@ const { getClient, upsertPoints } = require('./qdrantClient');
 
 const QDRANT_COLLECTION = 'rascenki_2026';
 // Размер батча: столько строк уходит в один вызов эмбеддингов и в один upsert
-// в Qdrant. 96 — под лимит Gemini batchEmbedContents (100 запросов за вызов).
+// в Qdrant.
 const EMBED_BATCH_SIZE = Number(process.env.RASCENKI_EMBED_BATCH_SIZE || 96);
 
-// Свод правится редко (входящие согласования расценок приходят пачками раз в
-// несколько дней) — переиндексация раз в сутки с запасом.
-const CRON_SCHEDULE = process.env.RASCENKI_SYNC_CRON || '30 4 * * *';
+// Переиндексация свода расценок запускается ТОЛЬКО принудительно — из личного
+// кабинета администратора (кнопка → POST /api/admin/rascenki/reindex →
+// runSyncOnce, см. server/rascenkiAdmin.js). Ни планового cron, ни синка на
+// старте процесса нет: свод правится редко и большими пачками, а эмбеддинги
+// считает внешний сервис с квотой — гонять их по расписанию смысла нет.
 const CSV_URL = process.env.RASCENKI_SYNC_CSV_URL || '';
-
-// Первый синк — не в момент старта процесса, а через пару минут: на старте
-// Render Starter (512МБ) и так параллельно грузит все остальные синки (people
-// ~131k строк, gpr ~150k, concrete ~11k) и балансирует на грани памяти —
-// не подкидываем туда ещё и переиндексацию свода. К моменту отложенного
-// запуска стартовый «шторм» уже отработал.
-const FIRST_RUN_DELAY_MS = Number(process.env.RASCENKI_FIRST_SYNC_DELAY_MS || 2 * 60 * 1000);
 
 // В шапке свода 3 «титульных» строки (название свода, название компании,
 // пустая) перед строкой заголовков колонок — точную позицию не хардкодим, а
@@ -220,27 +214,7 @@ async function runSyncOnce() {
   return rows.length;
 }
 
-function startRascenkiSync() {
-  if (!CSV_URL) {
-    console.warn(
-      '[rascenki-sync] RASCENKI_SYNC_CSV_URL не задан — плановый синк расценок отключён ' +
-        '(разовая загрузка из xlsx: npm run rascenki:seed -- "<путь к rascenki_2026_svod.xlsx>")'
-    );
-    return;
-  }
-  // .unref() — таймер не держит процесс живым сам по себе (сервер и так слушает порт).
-  setTimeout(() => {
-    console.log(`[rascenki-sync] запускаю первый синк (отложен на ${Math.round(FIRST_RUN_DELAY_MS / 1000)}с после старта)`);
-    runSyncOnce().catch((err) => console.error('[rascenki-sync] ошибка первого синка:', err.message));
-  }, FIRST_RUN_DELAY_MS).unref();
-
-  cron.schedule(CRON_SCHEDULE, () => {
-    runSyncOnce().catch((err) => console.error('[rascenki-sync] ошибка планового синка:', err.message));
-  });
-}
-
 module.exports = {
-  startRascenkiSync,
   runSyncOnce,
   normalizeMatrix,
   reindexRascenki,

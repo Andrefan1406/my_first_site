@@ -38,6 +38,7 @@ import GprReportGapsAdminPage from "./pages/GprReportGapsAdminPage";
 import PeopleGapsUsersAdminPage from "./pages/PeopleGapsUsersAdminPage";
 import BlockedUsersAdminPage from "./pages/BlockedUsersAdminPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+import RascenkiReindexAdminPage from "./pages/RascenkiReindexAdminPage";
 import ConcreteDashboardPage from "./pages/ConcreteDashboardPage";
 
 
@@ -289,6 +290,16 @@ const App = () => {
             <Protected>
               <AdminRoute>
                 <BlockedUsersAdminPage />
+              </AdminRoute>
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin/rascenki"
+          element={
+            <Protected>
+              <AdminRoute>
+                <RascenkiReindexAdminPage />
               </AdminRoute>
             </Protected>
           }
