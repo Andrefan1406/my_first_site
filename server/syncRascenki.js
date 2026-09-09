@@ -24,23 +24,21 @@ const { embedBatch, EMBEDDING_DIM } = require('./embeddings');
 const { getClient, upsertPoints } = require('./qdrantClient');
 
 const QDRANT_COLLECTION = 'rascenki_2026';
-// 16, а не 32 как у defect_acts: меньше пиковая аллокация тензоров на батч —
-// на 512МБ инстансе Render это заметно снижает риск OOM при ~2000 строк свода.
-const EMBED_BATCH_SIZE = Number(process.env.RASCENKI_EMBED_BATCH_SIZE || 16);
+// Размер батча: столько строк уходит в один вызов эмбеддингов и в один upsert
+// в Qdrant. 96 — под лимит Gemini batchEmbedContents (100 запросов за вызов).
+const EMBED_BATCH_SIZE = Number(process.env.RASCENKI_EMBED_BATCH_SIZE || 96);
 
 // Свод правится редко (входящие согласования расценок приходят пачками раз в
 // несколько дней) — переиндексация раз в сутки с запасом.
 const CRON_SCHEDULE = process.env.RASCENKI_SYNC_CRON || '30 4 * * *';
 const CSV_URL = process.env.RASCENKI_SYNC_CSV_URL || '';
 
-// Первый синк — НЕ в момент старта процесса. На Render Starter (512МБ, ~256МБ
-// heap у Node) одновременная загрузка всех синков на старте (people ~131k строк,
-// gpr ~150k, concrete ~11k) плюс загрузка ONNX-модели эмбеддингов (~150МБ вне
-// heap) для переиндексации Qdrant валит процесс по OOM. Откладываем первый
-// прогон на несколько минут: к этому моменту стартовый «шторм» уже отработал и
-// освободил память, а переиндексация defect_acts (тоже грузит ту же модель)
-// успевает закончиться до нашей.
-const FIRST_RUN_DELAY_MS = Number(process.env.RASCENKI_FIRST_SYNC_DELAY_MS || 6 * 60 * 1000);
+// Первый синк — не в момент старта процесса, а через пару минут: на старте
+// Render Starter (512МБ) и так параллельно грузит все остальные синки (people
+// ~131k строк, gpr ~150k, concrete ~11k) и балансирует на грани памяти —
+// не подкидываем туда ещё и переиндексацию свода. К моменту отложенного
+// запуска стартовый «шторм» уже отработал.
+const FIRST_RUN_DELAY_MS = Number(process.env.RASCENKI_FIRST_SYNC_DELAY_MS || 2 * 60 * 1000);
 
 // В шапке свода 3 «титульных» строки (название свода, название компании,
 // пустая) перед строкой заголовков колонок — точную позицию не хардкодим, а
