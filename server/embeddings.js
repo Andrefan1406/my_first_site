@@ -1,48 +1,47 @@
-// Эмбеддинги через Google Gemini API (модель gemini-embedding-001).
+// Эмбеддинги через Voyage AI (модель voyage-3.5-lite).
 //
-// Раньше эмбеддинги считались локально в этом же процессе через
-// @xenova/transformers (ONNX-модель multilingual-e5-small, ~113МБ весов + WASM-
-// рантайм). На Render Starter (512МБ / ~256МБ heap у Node) загрузка модели
-// поверх стартовой пакетной загрузки всех синков (people ~131k строк, gpr
-// ~150k, concrete ~11k) валила процесс по OOM. Вынос расчёта во внешний сервис
-// эту нагрузку с инстанса снимает полностью.
+// История: сначала считалось локально через @xenova/transformers (ONNX
+// multilingual-e5-small) — на Render Starter (512МБ) загрузка модели поверх
+// стартовой загрузки всех синков валила процесс по OOM. Перешли на внешний
+// сервис. Google Gemini (gemini-embedding-001) не подошёл: бесплатный тариф
+// жёстко ограничен ~100 эмбеддингами в сутки, а нам нужно ~3000. У Voyage
+// бесплатно 200 млн токенов — для этих данных это фактически бессрочно.
 //
-// Требуется переменная окружения GEMINI_API_KEY (тот же ключ Google AI Studio,
-// что уже используется в проекте).
+// Требуется переменная окружения VOYAGE_API_KEY.
 //
-// Особенности gemini-embedding-001:
-//   - при outputDimensionality != 3072 векторы НЕ нормированы — нормируем сами
-//     (L2), т.к. коллекции Qdrant используют косинусную метрику;
-//   - taskType RETRIEVAL_QUERY / RETRIEVAL_DOCUMENT — прямой аналог префиксов
-//     "query: " / "passage: " у E5: для индексируемого текста и для текста
-//     запроса нужны РАЗНЫЕ режимы, иначе релевантность заметно хуже.
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const MODEL_NAME = process.env.EMBEDDING_MODEL || 'gemini-embedding-001';
-// 768 — компромисс размер/качество (по умолчанию модель отдаёт 3072). Значение
-// зашито в схему коллекций Qdrant (server/qdrantClient.js использует
-// EMBEDDING_DIM при создании коллекции) — менять только вместе с переиндексацией.
-const EMBEDDING_DIM = 768;
+// Особенности voyage-3.5-lite:
+//   - размерность по умолчанию 1024 (поддерживает 256/512/1024/2048 через
+//     output_dimension); векторы уже нормированы, но нормируем ещё раз на
+//     всякий случай — коллекции Qdrant на косинусной метрике;
+//   - input_type: "query" / "document" — прямой аналог префиксов "query: " /
+//     "passage: " у E5: для индексируемого текста и для текста запроса нужны
+//     РАЗНЫЕ режимы, иначе релевантность заметно хуже;
+//   - до 1000 текстов и ~1 млн токенов на один запрос.
+const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY;
+const MODEL_NAME = process.env.EMBEDDING_MODEL || 'voyage-3.5-lite';
+// Значение зашито в схему коллекций Qdrant (server/qdrantClient.js использует
+// EMBEDDING_DIM при создании коллекции) — менять только вместе с переиндексацией
+// обеих коллекций (rascenki_2026, defect_acts).
+const EMBEDDING_DIM = Number(process.env.EMBEDDING_DIM || 1024);
 
-const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-// batchEmbedContents допускает до 100 запросов за вызов.
-const MAX_BATCH = 100;
-const RETRY_ATTEMPTS = 5;
-const RETRY_BASE_MS = 4000;
+const API_URL = 'https://api.voyageai.com/v1/embeddings';
+// Сколько текстов шлём в одном HTTP-запросе. Voyage допускает до 1000, но
+// держим умеренно — это же размер батча upsert'а в Qdrant.
+const MAX_BATCH = Number(process.env.EMBEDDING_MAX_BATCH || 128);
+const RETRY_ATTEMPTS = 4;
+const RETRY_BASE_MS = 3000;
 
-// Бесплатный тариф Gemini для gemini-embedding-001 — порядка 5 запросов/мин.
-// Переиндексация свода/актов шлёт десятки батчей подряд и без паузы мгновенно
-// ловит 429. Держим минимальный интервал между ЛЮБЫМИ вызовами API (общий на
-// весь процесс — и переиндексация, и эмбеддинг запросов в поиске идут через
-// одну очередь). На платном тарифе лимит поднять через EMBEDDING_MAX_RPM.
-const MAX_RPM = Number(process.env.EMBEDDING_MAX_RPM || 5);
-const MIN_GAP_MS = Math.ceil(60000 / Math.max(1, MAX_RPM)) + 300;
+// Общий на весь процесс троттлинг (переиндексация и эмбеддинг запросов в поиске
+// идут через одну очередь). Бесплатный аккаунт Voyage без привязанной карты —
+// 3 запроса/мин; с картой (но всё ещё в рамках бесплатных 200 млн токенов) —
+// 2000/мин, тогда EMBEDDING_MAX_RPM можно поднять переменной окружения.
+const MAX_RPM = Number(process.env.EMBEDDING_MAX_RPM || 3);
+const MIN_GAP_MS = Math.ceil(60000 / Math.max(1, MAX_RPM)) + 200;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let rateGate = Promise.resolve();
 let lastCallAt = 0;
-// Последовательная очередь: каждый вызов ждёт, пока с момента предыдущего
-// пройдёт MIN_GAP_MS.
 function throttle() {
   rateGate = rateGate.then(async () => {
     const wait = lastCallAt + MIN_GAP_MS - Date.now();
@@ -60,24 +59,32 @@ function l2normalize(vec) {
 }
 
 function assertKey() {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY не задан на сервере (.env) — нужен для расчёта эмбеддингов');
+  if (!VOYAGE_API_KEY) {
+    throw new Error('VOYAGE_API_KEY не задан на сервере (.env) — нужен для расчёта эмбеддингов');
   }
 }
 
-// Ретраи только на 429 (rate limit) и 5xx — при индексации свода/актов за раз
-// уходят десятки батчей, в бесплатном тарифе Gemini можно упереться в лимит.
-async function callGemini(path, body) {
+// Один вызов Voyage на массив текстов. Ретраи на 429 (rate limit) и 5xx —
+// при переиндексации за раз уходит несколько батчей подряд.
+async function callVoyage(inputs, inputType) {
   assertKey();
   let lastErr;
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     await throttle();
     let res;
     try {
-      res = await fetch(`${API_BASE}/${path}?key=${GEMINI_API_KEY}`, {
+      res = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${VOYAGE_API_KEY}`,
+        },
+        body: JSON.stringify({
+          input: inputs,
+          model: MODEL_NAME,
+          input_type: inputType, // 'query' | 'document'
+          output_dimension: EMBEDDING_DIM,
+        }),
       });
     } catch (err) {
       lastErr = err;
@@ -89,50 +96,45 @@ async function callGemini(path, body) {
     }
 
     if (res.status === 429 || res.status >= 500) {
-      lastErr = new Error(`Gemini API ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      const retryAfter = Number(res.headers.get('retry-after')) * 1000;
+      lastErr = new Error(`Voyage API ${res.status}: ${(await res.text()).slice(0, 200)}`);
       if (attempt < RETRY_ATTEMPTS) {
-        await sleep(RETRY_BASE_MS * attempt * 2);
+        await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : RETRY_BASE_MS * attempt * 2);
         continue;
       }
       throw lastErr;
     }
 
     if (!res.ok) {
-      throw new Error(`Gemini API ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      throw new Error(`Voyage API ${res.status}: ${(await res.text()).slice(0, 300)}`);
     }
-    return res.json();
+
+    const json = await res.json();
+    // data приходит с полем index — сортируем по нему, чтобы порядок совпал с inputs.
+    return json.data
+      .slice()
+      .sort((a, b) => a.index - b.index)
+      .map((d) => l2normalize(d.embedding));
   }
   throw lastErr;
 }
 
-const taskTypeFor = (isQuery) => (isQuery ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT');
-
 async function embed(text, { isQuery = false } = {}) {
-  const json = await callGemini(`models/${MODEL_NAME}:embedContent`, {
-    content: { parts: [{ text: String(text) }] },
-    taskType: taskTypeFor(isQuery),
-    outputDimensionality: EMBEDDING_DIM,
-  });
-  return l2normalize(json.embedding.values);
+  const [vector] = await callVoyage([String(text)], isQuery ? 'query' : 'document');
+  return vector;
 }
 
-// Батч — один HTTP-вызов на несколько текстов (см. MAX_BATCH). Используется при
-// переиндексации после синка (server/syncDefectActs.js, server/syncRascenki.js).
+// Батч — минимум HTTP-вызовов на большой список текстов (см. MAX_BATCH).
+// Используется при переиндексации после синка (server/syncDefectActs.js,
+// server/syncRascenki.js).
 async function embedBatch(texts, { isQuery = false } = {}) {
   if (!texts.length) return [];
-  const taskType = taskTypeFor(isQuery);
+  const inputType = isQuery ? 'query' : 'document';
   const vectors = [];
   for (let i = 0; i < texts.length; i += MAX_BATCH) {
-    const chunk = texts.slice(i, i + MAX_BATCH);
-    const json = await callGemini(`models/${MODEL_NAME}:batchEmbedContents`, {
-      requests: chunk.map((t) => ({
-        model: `models/${MODEL_NAME}`,
-        content: { parts: [{ text: String(t) }] },
-        taskType,
-        outputDimensionality: EMBEDDING_DIM,
-      })),
-    });
-    for (const e of json.embeddings) vectors.push(l2normalize(e.values));
+    const chunk = texts.slice(i, i + MAX_BATCH).map((t) => String(t));
+    const part = await callVoyage(chunk, inputType);
+    vectors.push(...part);
   }
   return vectors;
 }

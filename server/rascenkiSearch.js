@@ -56,12 +56,12 @@ const COLUMNS = ['Класс', 'Наименование работ', 'Ед.из
 
 const CANDIDATES_PER_BLOCK = 12;
 const MAX_ROWS_PER_BLOCK = 8;
-// Мягкий пол по косинусной близости (эмбеддинги Gemini gemini-embedding-001).
-// У Gemini значения косинуса ниже, чем у E5: близкое совпадение ~0.75–0.85,
-// слабо связанное ~0.6–0.7, мусор < 0.55. Порог — лишь грубый шумовой фильтр,
-// основную фильтрацию делает LLM-реранкер (см. rerankByLlm). Настраивается
-// через RASCENKI_MIN_SCORE — подобрать по реальным запросам после деплоя.
-const MIN_SCORE = Number(process.env.RASCENKI_MIN_SCORE || 0.62);
+// Мягкий пол по косинусной близости (эмбеддинги Voyage voyage-3.5-lite).
+// Порог — лишь грубый шумовой фильтр, основную фильтрацию делает LLM-реранкер
+// (см. rerankByLlm), поэтому по умолчанию он мягкий. ОБЯЗАТЕЛЬНО подобрать
+// через RASCENKI_MIN_SCORE по реальным запросам после первого деплоя с Voyage —
+// у разных моделей эмбеддингов разброс косинуса разный.
+const MIN_SCORE = Number(process.env.RASCENKI_MIN_SCORE || 0.45);
 
 const fmtPrice = (v) => (v === null || v === undefined ? '—' : Number(v).toLocaleString('ru-RU'));
 
