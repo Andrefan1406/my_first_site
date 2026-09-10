@@ -30,6 +30,9 @@ const API_URL = 'https://api.voyageai.com/v1/embeddings';
 const MAX_BATCH = Number(process.env.EMBEDDING_MAX_BATCH || 128);
 const RETRY_ATTEMPTS = 4;
 const RETRY_BASE_MS = 3000;
+// У fetch в Node таймаута нет — зависший запрос к Voyage повесил бы весь
+// вызов поиска/переиндексации. Подстроить через VOYAGE_TIMEOUT_MS.
+const VOYAGE_TIMEOUT_MS = Number(process.env.VOYAGE_TIMEOUT_MS || 30000);
 
 // Общий на весь процесс троттлинг (переиндексация и эмбеддинг запросов в поиске
 // идут через одну очередь). У Voyage с привязанной картой лимит 2000 запросов/
@@ -67,10 +70,10 @@ function assertKey() {
 
 // Один вызов Voyage на массив текстов. Ретраи на 429 (rate limit) и 5xx —
 // при переиндексации за раз уходит несколько батчей подряд.
-async function callVoyage(inputs, inputType) {
+async function callVoyage(inputs, inputType, attempts = RETRY_ATTEMPTS) {
   assertKey();
   let lastErr;
-  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     await throttle();
     let res;
     try {
@@ -86,10 +89,11 @@ async function callVoyage(inputs, inputType) {
           input_type: inputType, // 'query' | 'document'
           output_dimension: EMBEDDING_DIM,
         }),
+        signal: AbortSignal.timeout(VOYAGE_TIMEOUT_MS),
       });
     } catch (err) {
       lastErr = err;
-      if (attempt < RETRY_ATTEMPTS) {
+      if (attempt < attempts) {
         await sleep(RETRY_BASE_MS * attempt);
         continue;
       }
@@ -99,7 +103,7 @@ async function callVoyage(inputs, inputType) {
     if (res.status === 429 || res.status >= 500) {
       const retryAfter = Number(res.headers.get('retry-after')) * 1000;
       lastErr = new Error(`Voyage API ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      if (attempt < RETRY_ATTEMPTS) {
+      if (attempt < attempts) {
         await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : RETRY_BASE_MS * attempt * 2);
         continue;
       }
@@ -120,8 +124,11 @@ async function callVoyage(inputs, inputType) {
   throw lastErr;
 }
 
+// Эмбеддинг одиночного запроса (текст поиска) — тут важнее ответить быстро,
+// чем дожать через все ретраи: 2 попытки, дальше пусть падает и вызывающий
+// код деградирует (см. rascenkiSearch).
 async function embed(text, { isQuery = false } = {}) {
-  const [vector] = await callVoyage([String(text)], isQuery ? 'query' : 'document');
+  const [vector] = await callVoyage([String(text)], isQuery ? 'query' : 'document', 2);
   return vector;
 }
 

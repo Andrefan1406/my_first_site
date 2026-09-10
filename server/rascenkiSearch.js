@@ -14,7 +14,7 @@
 // Внутри блока — по релевантности. Пустой блок не пропускаем молча, а выводим
 // строку-заглушку «нет расценок в этой категории».
 const { embed } = require('./embeddings');
-const { getClient } = require('./qdrantClient');
+const { getClient, collectionStats } = require('./qdrantClient');
 const { callOllamaJson } = require('./ollamaClient');
 
 const COLLECTION = 'rascenki_2026';
@@ -109,10 +109,39 @@ async function rerankByLlm(question, candidates) {
   return out.relevant_ids.map(Number).filter((n) => Number.isInteger(n));
 }
 
-async function searchRascenki(question) {
-  const vector = await embed(question, { isQuery: true });
+const NEEDS_REINDEX_TEXT =
+  'Поиск по расценкам сейчас недоступен: индекс свода не построен или устарел. ' +
+  'Запустите переиндексацию в личном кабинете администратора (раздел «Расценки»).';
 
-  const perBlock = await Promise.all(BLOCKS.map((b) => fetchBlockCandidates(vector, b)));
+function unavailable(text) {
+  return { answer: { type: 'text', text }, sql: null };
+}
+
+async function searchRascenki(question) {
+  // Индекс мог не создаться (переиндексацию по расценкам запускают вручную,
+  // автосинка нет) или устареть по размерности вектора после смены модели
+  // эмбеддингов — тогда запросы к нему падают/висят. Проверяем заранее и
+  // отвечаем понятно, а не роняем чат в 500 или бесконечный спиннер.
+  const stats = await collectionStats(COLLECTION);
+  if (!stats.exists || stats.pointsCount === 0) {
+    return unavailable(NEEDS_REINDEX_TEXT);
+  }
+
+  let vector;
+  try {
+    vector = await embed(question, { isQuery: true });
+  } catch (err) {
+    console.error('[rascenki] эмбеддинг запроса не удался:', err.message);
+    return unavailable('Не удалось обработать запрос — сервис эмбеддингов временно недоступен, попробуйте позже.');
+  }
+
+  let perBlock;
+  try {
+    perBlock = await Promise.all(BLOCKS.map((b) => fetchBlockCandidates(vector, b)));
+  } catch (err) {
+    console.error('[rascenki] поиск в Qdrant не удался:', err.message);
+    return unavailable(NEEDS_REINDEX_TEXT);
+  }
   // Мягкий пол по score применяем всегда — и как единственный фильтр без
   // реранкера, и как страховку от того, что реранкер оставит явный мусор.
   const filteredPerBlock = perBlock.map((items) => items.filter((it) => it.score >= MIN_SCORE));

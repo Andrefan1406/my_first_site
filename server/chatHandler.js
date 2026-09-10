@@ -463,7 +463,17 @@ const DOMAIN_CONFIG = {
 };
 
 function resolveDomain(domainKey) {
-  return DOMAIN_CONFIG[domainKey] || DOMAIN_CONFIG.concrete;
+  if (!domainKey) return DOMAIN_CONFIG.concrete; // старые клиенты без поля domain
+  const cfg = DOMAIN_CONFIG[domainKey];
+  if (!cfg) {
+    // Раньше неизвестный домен молча уходил в «бетон» — из-за этого
+    // рассинхрон деплоя (фронт знает домен, бэк ещё нет) выглядел как
+    // «в базе только бетон», а не как явная ошибка. Теперь отвечаем 400.
+    const err = new Error(`Неизвестный домен запроса: ${domainKey}. Возможно, бэкенд не обновлён.`);
+    err.status = 400;
+    throw err;
+  }
+  return cfg;
 }
 
 // ragResults (опционально) — записи, найденные СЕМАНТИЧЕСКИМ поиском по

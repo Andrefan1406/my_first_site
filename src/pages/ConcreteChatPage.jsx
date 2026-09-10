@@ -520,10 +520,14 @@ const ConcreteChatPage = ({ soloDomain = null, disableUsageLog = false }) => {
         content: m.text,
       }));
 
+      // Жёсткий потолок на ожидание: у бэкенда бывают зависания на внешних
+      // сервисах (LLM/эмбеддинги/векторный поиск) — без этого вкладка
+      // крутила бы спиннер бесконечно.
       const res = await fetch(`${CHAT_API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: history, domain: domainKey }),
+        signal: AbortSignal.timeout(120000),
       });
 
       const data = await res.json();
@@ -549,9 +553,12 @@ const ConcreteChatPage = ({ soloDomain = null, disableUsageLog = false }) => {
         ],
       }));
     } catch (err) {
+      const isTimeout = err.name === "TimeoutError" || err.name === "AbortError";
       setErrorByDomain((prev) => ({
         ...prev,
-        [domainKey]: err.message || "Не удалось получить ответ. Попробуйте ещё раз.",
+        [domainKey]: isTimeout
+          ? "Сервер слишком долго не отвечает. Попробуйте ещё раз чуть позже."
+          : err.message || "Не удалось получить ответ. Попробуйте ещё раз.",
       }));
     } finally {
       setLoadingByDomain((prev) => ({ ...prev, [domainKey]: false }));

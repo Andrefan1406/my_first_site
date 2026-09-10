@@ -18,12 +18,31 @@ function getClient() {
     // port: 443 — без этого клиент по умолчанию подставляет 6333 (порт
     // self-hosted Qdrant), а не парсит его из URL, если он явно не указан
     // в самом URL. Qdrant Cloud слушает REST API на стандартном HTTPS 443.
-    client = new QdrantClient({ url: QDRANT_URL, apiKey: QDRANT_API_KEY, port: 443 });
+    // timeout — чтобы недоступный/уснувший кластер отдавал ошибку, а не
+    // держал запрос чата бесконечно (подстроить через QDRANT_TIMEOUT_MS).
+    client = new QdrantClient({
+      url: QDRANT_URL,
+      apiKey: QDRANT_API_KEY,
+      port: 443,
+      timeout: Number(process.env.QDRANT_TIMEOUT_MS || 20000),
+    });
   }
   return client;
 }
 
 const ensuredCollections = new Set();
+
+// Есть ли коллекция и сколько в ней точек — для доменов поиска, чтобы
+// отвечать «нужна переиндексация» вместо падения/зависания, когда индекс
+// пуст или ещё не создан (см. server/rascenkiSearch.js).
+async function collectionStats(name) {
+  try {
+    const info = await getClient().getCollection(name);
+    return { exists: true, pointsCount: info.points_count ?? 0 };
+  } catch (err) {
+    return { exists: false, pointsCount: 0 };
+  }
+}
 
 // Идемпотентно — создаёт коллекцию, только если её ещё нет. Вызывается
 // перед upsert/search, поэтому не нужен отдельный шаг миграции/деплоя.
@@ -66,4 +85,4 @@ async function deletePoints(collection, ids) {
   await getClient().delete(collection, { wait: true, points: ids });
 }
 
-module.exports = { getClient, ensureCollection, upsertPoints, searchSimilar, deletePoints };
+module.exports = { getClient, ensureCollection, collectionStats, upsertPoints, searchSimilar, deletePoints };

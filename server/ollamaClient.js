@@ -2,6 +2,11 @@
 // fetch+Bearer-ключ между /api/smart-request и новым text-to-SQL чатом.
 const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY;
 const OLLAMA_MODEL = 'gpt-oss:120b-cloud';
+// Ollama Cloud (ollama.com) периодически подвисает или обрывает соединение
+// без ответа. У fetch в Node таймаута нет — без него запрос к /api/chat
+// висит бесконечно, а вместе с ним и вкладка чата. Жёсткий потолок на один
+// вызов; подстроить через OLLAMA_TIMEOUT_MS.
+const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 60000);
 
 // Низкоуровневый вызов: отдаёт статус и сырое тело ответа как есть —
 // используется /api/smart-request, который просто проксирует ответ клиенту.
@@ -12,21 +17,33 @@ async function callOllama(messages, { format = 'json', temperature = 0, think = 
     throw err;
   }
 
-  const ollamaRes = await fetch('https://ollama.com/api/chat', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${OLLAMA_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-      think,
-      format,
-      options: { temperature },
-    }),
-  });
+  let ollamaRes;
+  try {
+    ollamaRes = await fetch('https://ollama.com/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OLLAMA_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        think,
+        format,
+        options: { temperature },
+      }),
+      signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const e = new Error(
+      err.name === 'TimeoutError'
+        ? `Ollama Cloud не ответил за ${Math.round(OLLAMA_TIMEOUT_MS / 1000)} с`
+        : `Не удалось связаться с Ollama Cloud: ${err.message}`
+    );
+    e.status = 504;
+    throw e;
+  }
 
   const bodyText = await ollamaRes.text();
   return { status: ollamaRes.status, bodyText };
