@@ -11,6 +11,7 @@ const { startObjectsSync } = require('./syncObjects');
 const { startPeopleSync } = require('./syncPeople');
 const { startDefectActsSync } = require('./syncDefectActs');
 const { startGprReportSync } = require('./syncGprReport');
+const { startRascenkiSync } = require('./syncRascenki');
 const { handleChat } = require('./chatHandler');
 const peopleGapsAdminRouter = require('./peopleGapsAdmin');
 const peopleGapsCheckRouter = require('./peopleGapsCheck');
@@ -69,8 +70,10 @@ startConcreteSync();
 startObjectsSync();
 startPeopleSync();
 startDefectActsSync();
-// Индексация свода расценок — только принудительно из личного кабинета
-// администратора (POST /api/admin/rascenki/reindex), планового синка нет.
+// Индексация свода расценок: плановая (ночью, по будням, по чётным датам —
+// см. syncRascenki.js) + принудительно из личного кабинета администратора
+// (POST /api/admin/rascenki/reindex).
+startRascenkiSync();
 startGprReportSync();
 
 // Render передаёт порт через PORT — слушаем его в первую очередь,

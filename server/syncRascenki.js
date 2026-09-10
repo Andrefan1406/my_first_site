@@ -18,21 +18,30 @@
 // "Наименование работ + Ед.изм + Раздел + Подраздел" (см. buildSearchableText:
 // название работы первым, таксономия как контекст). Остальные поля не
 // эмбеддятся, а хранятся в payload для фильтрации по классу/объекту и вывода.
+const cron = require('node-cron');
 const Papa = require('papaparse');
-const { getWriteDb } = require('./db');
+const { getWriteDb, getLastSyncedAt } = require('./db');
 const { embedBatch, EMBEDDING_DIM } = require('./embeddings');
 const { getClient, upsertPoints } = require('./qdrantClient');
 
 const QDRANT_COLLECTION = 'rascenki_2026';
+
+// Плановая переиндексация: ночью, по будням, по чётным датам (Алматы) —
+// как и переиндексация эмбеддингов дефектных актов. '0 3 * * *' = 03:00.
+// День недели и чётность даты проверяются в коде (shouldReindex), в cron
+// оставляем только час.
+const SYNC_CRON = process.env.RASCENKI_SYNC_CRON || '0 3 * * *';
+const SYNC_TZ = process.env.RASCENKI_SYNC_TZ || 'Asia/Almaty';
 // Размер батча: столько строк уходит в один вызов эмбеддингов и в один upsert
 // в Qdrant.
 const EMBED_BATCH_SIZE = Number(process.env.RASCENKI_EMBED_BATCH_SIZE || 96);
 
-// Переиндексация свода расценок запускается ТОЛЬКО принудительно — из личного
-// кабинета администратора (кнопка → POST /api/admin/rascenki/reindex →
-// runSyncOnce, см. server/rascenkiAdmin.js). Ни планового cron, ни синка на
-// старте процесса нет: свод правится редко и большими пачками, а эмбеддинги
-// считает внешний сервис с квотой — гонять их по расписанию смысла нет.
+// Переиндексацию свода можно запустить принудительно из личного кабинета
+// администратора (кнопка → POST /api/admin/rascenki/reindex → runSyncOnce,
+// см. server/rascenkiAdmin.js). Плюс плановая переиндексация по расписанию
+// (startRascenkiSync): ночью, по будням, по чётным датам — эмбеддинги
+// считает внешний сервис с квотой, поэтому редко. На старте процесса
+// плановую НЕ гоняем (только самолечение, если индекс сломан/пуст).
 const CSV_URL = process.env.RASCENKI_SYNC_CSV_URL || '';
 
 // В шапке свода 3 «титульных» строки (название свода, название компании,
@@ -214,8 +223,68 @@ async function runSyncOnce() {
   return rows.length;
 }
 
+// Нужно ли переиндексировать сейчас. Самолечение (индекса нет / пуст /
+// размерность вектора не та) — да, немедленно. Иначе — только по будням,
+// по чётным датам (Алматы), не чаще раза в день.
+async function shouldReindex() {
+  try {
+    const info = await getClient().getCollection(QDRANT_COLLECTION);
+    if (!info?.points_count || info?.config?.params?.vectors?.size !== EMBEDDING_DIM) {
+      return { should: true, selfHeal: true, reason: 'коллекция пуста или размерность вектора изменилась' };
+    }
+  } catch (err) {
+    return { should: true, selfHeal: true, reason: 'коллекция недоступна или ещё не создана' };
+  }
+
+  const dateStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Almaty' }).format(new Date());
+  const dayOfMonth = Number(dateStr.slice(8, 10));
+  const dow = new Date(`${dateStr}T12:00:00Z`).getUTCDay(); // 0=вс … 6=сб
+  if (dow === 0 || dow === 6) return { should: false, reason: `выходной (${dateStr})` };
+  if (dayOfMonth % 2 !== 0) return { should: false, reason: `нечётная дата (${dateStr})` };
+  const last = getLastSyncedAt('rascenki_last_synced_at');
+  if (last && String(last).slice(0, 10) === dateStr) {
+    return { should: false, reason: `уже переиндексировано сегодня (${dateStr})` };
+  }
+  return { should: true, reason: `рабочий день, чётная дата (${dateStr})` };
+}
+
+async function runScheduledSync() {
+  const decision = await shouldReindex();
+  if (!decision.should) {
+    console.log(`[rascenki-sync] переиндексация пропущена: ${decision.reason}`);
+    return 0;
+  }
+  console.log(`[rascenki-sync] переиндексация: ${decision.reason}`);
+  return runSyncOnce();
+}
+
+function startRascenkiSync() {
+  // На старте — только самолечение сломанного/пустого индекса, не дожидаясь
+  // ночи. Плановую (по будням/чётным) на старте не гоняем, чтобы не грузить
+  // процесс во время загрузочного шторма остальных синков.
+  shouldReindex()
+    .then((d) => {
+      if (d.selfHeal) {
+        console.log(`[rascenki-sync] стартовая переиндексация: ${d.reason}`);
+        return runSyncOnce();
+      }
+    })
+    .catch((err) => console.error('[rascenki-sync] стартовая проверка/переиндексация не удалась:', err.message));
+
+  cron.schedule(
+    SYNC_CRON,
+    () => {
+      runScheduledSync().catch((err) => console.error('[rascenki-sync] ошибка планового синка:', err.message));
+    },
+    { timezone: SYNC_TZ }
+  );
+}
+
 module.exports = {
   runSyncOnce,
+  runScheduledSync,
+  startRascenkiSync,
+  shouldReindex,
   normalizeMatrix,
   reindexRascenki,
   setLastSynced,

@@ -81,7 +81,7 @@ const DOMAINS = [
     Icon: TbReportMoney,
     emptyTitle: "Поиск по расценкам",
     emptyHint:
-      "Спросите расценку на любой вид работ на естественном языке — ответ придёт таблицей, сгруппированной по классам расценок:",
+      "Спросите расценку на любой вид работ на естественном языке — ответ придёт таблицей, сгруппированной по категориям расценок:",
     placeholder: "Спросите расценку на работы...",
     // Не text-to-SQL, а семантический поиск по своду расценок 2026 — ответ
     // всегда таблица фиксированного формата (см. server/rascenkiSearch.js),
@@ -497,6 +497,10 @@ const ConcreteChatPage = ({ soloDomain = null, disableUsageLog = false }) => {
   const textareaRef = useRef(null);
 
   const domain = DOMAINS.find((d) => d.key === activeDomain);
+  // На отдельной странице поиска по расценкам (soloDomain) ответ —
+  // широкая таблица на 7 столбцов; даём ей заметно больше места, чтобы не
+  // было горизонтального скролла.
+  const columnStyle = soloDomain ? { ...s.column, maxWidth: "1120px" } : s.column;
   const messages = messagesByDomain[activeDomain];
   const loading = loadingByDomain[activeDomain];
   const error = errorByDomain[activeDomain];
@@ -632,7 +636,7 @@ const ConcreteChatPage = ({ soloDomain = null, disableUsageLog = false }) => {
         </header>
 
         <div style={s.scrollArea}>
-          <div style={s.column}>
+          <div style={columnStyle}>
             {messages.length === 0 ? (
               <EmptyState domain={domain} onPick={sendQuestion} />
             ) : (
@@ -644,7 +648,7 @@ const ConcreteChatPage = ({ soloDomain = null, disableUsageLog = false }) => {
         </div>
 
         <div style={s.composerWrap}>
-          <div style={s.column}>
+          <div style={columnStyle}>
             {error && <div style={s.error}>{error}</div>}
             <div style={s.composer}>
               <textarea

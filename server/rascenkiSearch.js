@@ -22,12 +22,15 @@ const COLLECTION = 'rascenki_2026';
 const APPROVED = 'Расценки утверждённые на предприятии';
 const ALL_OBJECTS = 'Все объекты';
 
-// Блоки квадранта: класс 1 и 4 различаются только полем object (оба —
-// «утверждённые на предприятии»), поэтому фильтры строим через must/must_not
-// по object, а не только по class.
+// Блоки квадранта: блоки 1 и 4 — одна категория («утверждённые на
+// предприятии»), различаются только полем object, поэтому фильтры строим
+// через must/must_not по object. Столбец «Категория» их не различает
+// (это дублировало бы столбец «Объект») — при пустом блоке отличие уходит
+// в emptyObject.
 const BLOCKS = [
   {
-    label: 'Расценки утверждённые на предприятии — все объекты',
+    label: 'Расценки утверждённые на предприятии',
+    emptyObject: ALL_OBJECTS,
     filter: {
       must: [
         { key: 'class', match: { value: APPROVED } },
@@ -44,7 +47,8 @@ const BLOCKS = [
     filter: { must: [{ key: 'class', match: { value: 'Расценки из ЕНиР для фирм' } }] },
   },
   {
-    label: 'Расценки утверждённые на предприятии — коммерция',
+    label: 'Расценки утверждённые на предприятии',
+    emptyObject: 'Коммерческие объекты',
     filter: {
       must: [{ key: 'class', match: { value: APPROVED } }],
       must_not: [{ key: 'object', match: { value: ALL_OBJECTS } }],
@@ -52,10 +56,10 @@ const BLOCKS = [
   },
 ];
 
-const COLUMNS = ['Класс', 'Наименование работ', 'Ед.изм', 'Цена без НДС', 'Цена с НДС 16%', 'Объект', 'Обоснование'];
+const COLUMNS = ['Категория', 'Наименование работ', 'Ед.изм', 'Цена без НДС', 'Цена с НДС 16%', 'Объект', 'Обоснование'];
 // Относительные ширины столбцов (см. TableAnswer в ConcreteChatPage) —
 // «Наименование работ» самое длинное, единица и цены узкие.
-const COL_WIDTHS = ['17%', '32%', '5%', '8%', '8%', '13%', '17%'];
+const COL_WIDTHS = ['16%', '34%', '5%', '8%', '8%', '12%', '17%'];
 
 const CANDIDATES_PER_BLOCK = Number(process.env.RASCENKI_CANDIDATES_PER_BLOCK || 15);
 // Сколько строк показываем в блоке. Если LLM-реранкер отработал — можно
@@ -226,7 +230,7 @@ async function searchRascenki(question) {
     }
 
     if (!items.length) {
-      rows.push([block.label, 'нет расценок в этой категории', '', '', '', '', '']);
+      rows.push([block.label, 'нет расценок в этой категории', '', '', '', block.emptyObject || '', '']);
       return;
     }
     totalRows += items.length;
