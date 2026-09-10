@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 import { ridesApiFetch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
-import { formatRoute, formatEstimate } from "../../rides/format";
+import { formatRoute, formatEstimate, formatClock } from "../../rides/format";
 import MapPicker from "../../rides/MapPicker";
 import CancelRequestModal from "../../rides/CancelRequestModal";
 
@@ -55,10 +55,21 @@ export default function EmployeeRidesPage() {
   const [cancelTargetId, setCancelTargetId] = useState(null); // id заявки, для которой открыта модалка отмены
   const [proposeFor, setProposeFor] = useState(null); // id заявки, для которой добавляем точку через карту
   const [notice, setNotice] = useState("");
+  const [fleet, setFleet] = useState(null); // { hasFree, freeCount, nextFreeAt } — занятость парка
 
   useEffect(() => {
     ridesApiFetch("/api/v1/users/me").then(({ user }) => setRole(user?.role || null)).catch(() => {});
   }, []);
+
+  const loadFleet = useCallback(() => {
+    ridesApiFetch("/api/v1/fleet-status").then(setFleet).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadFleet();
+    const t = setInterval(loadFleet, 60000);
+    return () => clearInterval(t);
+  }, [loadFleet]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,8 +91,9 @@ export default function EmployeeRidesPage() {
     const onUpdate = (req) => {
       setRequests((prev) => prev.map((r) => (r.id === req.id ? req : r)));
     };
-    socket.on("request:assigned", onUpdate);
-    socket.on("request:status", onUpdate);
+    const onUpdateAndFleet = (req) => { onUpdate(req); loadFleet(); };
+    socket.on("request:assigned", onUpdateAndFleet);
+    socket.on("request:status", onUpdateAndFleet);
     socket.on("proposal:updated", (p) => {
       if (p.status === "approved") setNotice(`Точка «${p.address}» добавлена в маршрут заявки #${p.requestId}.`);
       else if (p.status === "rejected") setNotice(`Диспетчер отклонил точку «${p.address}»${p.decisionReason ? `: ${p.decisionReason}` : ""}.`);
@@ -92,7 +104,7 @@ export default function EmployeeRidesPage() {
     });
     socket.on("connect_error", () => {});
     return () => socket.disconnect();
-  }, []);
+  }, [loadFleet]);
 
   const proposeStop = async (requestId, address) => {
     setProposeFor(null);
@@ -154,6 +166,22 @@ export default function EmployeeRidesPage() {
       </div>
       {error && <div style={s.error}>{error}</div>}
       {notice && <div style={s.notice} onClick={() => setNotice("")}>{notice}</div>}
+
+      {fleet && (
+        fleet.hasFree ? (
+          <div style={s.fleetOk}>
+            🚗 Свободные машины есть{fleet.freeCount > 1 ? ` — ${fleet.freeCount}` : ""}. Заявку возьмёт первый освободившийся водитель.
+          </div>
+        ) : (
+          <div style={s.fleetBusy}>
+            <b>Все машины сейчас заняты.</b>{" "}
+            {fleet.nextFreeAt
+              ? `Ближайшая освободится ${formatClock(fleet.nextFreeAt)}.`
+              : "Время освобождения пока не определено."}
+            <div style={s.fleetHint}>Заявку можно подать — она встанет в очередь и её возьмёт первый освободившийся водитель.</div>
+          </div>
+        )
+      )}
 
       <form onSubmit={submit} style={s.form}>
         <div style={s.formRow}>
@@ -321,6 +349,9 @@ const s = {
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
   notice: { background: "#eef6ff", color: "#0b5cad", border: "1px solid #b8d9f7", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px", cursor: "pointer" },
+  fleetOk: { background: "#eaf7ec", color: "#1a7f37", border: "1px solid #b6e0bf", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
+  fleetBusy: { background: "#fff7e6", color: "#8a5a00", border: "1px solid #f0d19a", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
+  fleetHint: { marginTop: "4px", fontSize: "12px", color: "#a07840" },
   muted: { color: "#888", fontSize: "14px" },
   cardActions: { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" },
   pendingBox: { marginTop: "8px", background: "#fffdf6", border: "1px solid #f0d9a8", borderRadius: "8px", padding: "8px 10px", fontSize: "12px", color: "#8a6d2f" },

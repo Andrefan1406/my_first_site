@@ -219,7 +219,7 @@ router.post('/:id/decline', requireRideRole('driver'), validate(declineSchema), 
 });
 
 // Водитель меняет статус своего текущего заказа: assigned -> in_progress -> completed.
-router.post('/:id/status', requireRideRole('driver'), validate(statusSchema), (req, res) => {
+router.post('/:id/status', requireRideRole('driver'), validate(statusSchema), async (req, res) => {
   const db = getWriteDb();
   const driver = db.prepare('SELECT * FROM drivers WHERE user_id = ?').get(req.rideUser.id);
   if (!driver) return res.status(403).json({ error: 'Вы не зарегистрированы как водитель' });
@@ -228,20 +228,32 @@ router.post('/:id/status', requireRideRole('driver'), validate(statusSchema), (r
   const newStatus = req.body.status;
   const allowedFrom = newStatus === 'in_progress' ? 'assigned' : 'in_progress';
 
-  const result = db.transaction(() => {
+  const ok = db.transaction(() => {
     const upd = db
       .prepare(`UPDATE requests SET status = ? WHERE id = ? AND driver_id = ? AND status = ?`)
       .run(newStatus, requestId, driver.id, allowedFrom);
-    if (upd.changes === 0) return null;
+    if (upd.changes === 0) return false;
     if (newStatus === 'completed') db.prepare(`UPDATE drivers SET status = 'available' WHERE id = ?`).run(driver.id);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, ?, ?)`)
       .run(requestId, newStatus, req.rideUser.id);
     logEvent(db, { requestId, type: 'status_changed', actorUserId: req.rideUser.id, payload: { from: allowedFrom, to: newStatus } });
-    return getRow(db, requestId);
+    return true;
   })();
 
-  if (!result) return res.status(409).json({ error: 'Нельзя сменить статус — заказ не ваш или уже в другом статусе' });
+  if (!ok) return res.status(409).json({ error: 'Нельзя сменить статус — заказ не ваш или уже в другом статусе' });
 
+  // При выходе в рейс пересчитываем оценку от «сейчас» (до этого
+  // expected_completion_at считался от желаемого времени подачи) — иначе
+  // прогноз освобождения машины в форме заказа и у диспетчера врёт.
+  if (newStatus === 'in_progress') {
+    try {
+      await recomputeRequestEstimate(requestId, { actorUserId: req.rideUser.id });
+    } catch (err) {
+      console.error('[rides] recompute on in_progress failed:', err.message);
+    }
+  }
+
+  const result = getRow(db, requestId);
   emitToDispatcher('request:updated', serializeForDispatcher(result, staleThreshold()));
   emitToEmployee(result.employee_id, 'request:status', serializeForEmployee(result));
   res.json({ request: serializeForDriver(result) });

@@ -13,6 +13,21 @@ export function formatDelta(min) {
   return `${min > 0 ? "+" : "−"}${Math.abs(min)} мин к поездке`;
 }
 
+// «~14:20» / «завтра ~09:05» / «~12.09 08:30» — ориентировочное время
+// освобождения машины (expected_completion_at приходит уже в ISO с 'Z').
+export function formatClock(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  const hhmm = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  if (d.toDateString() === now.toDateString()) return `~${hhmm}`;
+  if (d.toDateString() === tomorrow.toDateString()) return `завтра ~${hhmm}`;
+  return `~${d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })} ${hhmm}`;
+}
+
 // Сколько минут назад — для метки возраста предложения. Время с сервера
 // приходит в UTC без зоны ('YYYY-MM-DD HH:MM:SS'), дорисовываем 'Z'.
 export function minutesSince(ts) {

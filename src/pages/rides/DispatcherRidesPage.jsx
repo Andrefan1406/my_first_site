@@ -10,7 +10,7 @@ import { ridesApiFetch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
 import MapPicker from "../../rides/MapPicker";
-import { formatRoute, formatEstimate, formatDelta, minutesSince } from "../../rides/format";
+import { formatRoute, formatEstimate, formatDelta, formatClock, minutesSince } from "../../rides/format";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -33,6 +33,7 @@ export default function DispatcherRidesPage() {
   const [requests, setRequests] = useState([]);
   const [summary, setSummary] = useState(null);
   const [proposals, setProposals] = useState([]);
+  const [fleet, setFleet] = useState(null);
   const [availableDrivers, setAvailableDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,13 +47,15 @@ export default function DispatcherRidesPage() {
     setLoading(true);
     setError("");
     try {
-      const [{ requests: rows, summary: sum }, { proposals: props }] = await Promise.all([
+      const [{ requests: rows, summary: sum }, { proposals: props }, fleetRes] = await Promise.all([
         ridesApiFetch("/api/v1/requests"),
         ridesApiFetch("/api/v1/requests/stop-changes/pending"),
+        ridesApiFetch("/api/v1/fleet-status"),
       ]);
       setRequests(rows);
       setSummary(sum);
       setProposals(props);
+      setFleet(fleetRes);
     } catch (err) {
       setError(err.message || "Не удалось загрузить заявки");
     } finally {
@@ -64,10 +67,14 @@ export default function DispatcherRidesPage() {
 
   useEffect(() => {
     const socket = createRidesSocket();
-    const upsert = (req) => setRequests((prev) => {
-      const exists = prev.some((r) => r.id === req.id);
-      return exists ? prev.map((r) => (r.id === req.id ? req : r)) : [req, ...prev];
-    });
+    const refreshFleet = () => ridesApiFetch("/api/v1/fleet-status").then(setFleet).catch(() => {});
+    const upsert = (req) => {
+      setRequests((prev) => {
+        const exists = prev.some((r) => r.id === req.id);
+        return exists ? prev.map((r) => (r.id === req.id ? req : r)) : [req, ...prev];
+      });
+      refreshFleet();
+    };
     socket.on("request:new", upsert);
     socket.on("request:updated", upsert);
     socket.on("proposal:new", (p) => setProposals((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p])));
@@ -187,6 +194,15 @@ export default function DispatcherRidesPage() {
         <div style={{ ...s.card, ...(proposals.length ? s.cardAlert : null) }}>
           <div style={s.cardLabel}>Предложений по маршруту</div><div style={s.cardValue}>{proposals.length}</div>
         </div>
+        <div style={s.card}>
+          <div style={s.cardLabel}>Свободные машины</div>
+          <div style={s.cardValue}>{fleet ? fleet.freeCount : "—"}</div>
+          {fleet && !fleet.hasFree && (
+            <div style={s.cardSub}>
+              {fleet.nextFreeAt ? `ближайшая ${formatClock(fleet.nextFreeAt)}` : "время уточняется"}
+            </div>
+          )}
+        </div>
       </div>
 
       {proposals.length > 0 && (
@@ -225,6 +241,7 @@ export default function DispatcherRidesPage() {
               <th style={s.th}>Время</th>
               <th style={s.th}>Маршрут</th>
               <th style={s.th}>≈ км / мин</th>
+              <th style={s.th}>Освободится</th>
               <th style={s.th}>Заказчик</th>
               <th style={s.th}>Статус</th>
               <th style={s.th}>Водитель</th>
@@ -241,6 +258,11 @@ export default function DispatcherRidesPage() {
                     {r.stopProposals?.length > 0 && <span style={s.pendingBadge}>+{r.stopProposals.length} на модерации</span>}
                   </td>
                   <td style={s.td}>{formatEstimate(r) || "—"}</td>
+                  <td style={s.td}>
+                    {["assigned", "in_progress"].includes(r.status) && r.expectedCompletionAt
+                      ? formatClock(r.expectedCompletionAt)
+                      : "—"}
+                  </td>
                   <td style={s.td}>{r.employeeName}</td>
                   <td style={s.td}>
                     {STATUS_LABEL[r.status] || r.status}
@@ -263,7 +285,7 @@ export default function DispatcherRidesPage() {
                 </tr>
                 {stopsPanelFor === r.id && (
                   <tr>
-                    <td style={s.td} colSpan={7}>
+                    <td style={s.td} colSpan={8}>
                       <div style={s.stopsPanel}>
                         <b>Точки маршрута заявки #{r.id}</b>
                         <div style={s.stopsList}>
@@ -338,6 +360,7 @@ const s = {
   cardAlert: { boxShadow: "0 0 0 2px #e67e22" },
   cardLabel: { fontSize: "12px", color: "#888", marginBottom: "6px" },
   cardValue: { fontSize: "24px", fontWeight: 700 },
+  cardSub: { fontSize: "11px", color: "#8a5a00", marginTop: "2px" },
 
   proposalsBox: { background: "#fffdf6", border: "1px solid #f0d9a8", borderRadius: "10px", padding: "14px 16px", marginBottom: "20px" },
   proposalRow: { display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", padding: "10px 0", borderTop: "1px solid #f0e2c4" },
@@ -347,7 +370,7 @@ const s = {
   proposalActions: { display: "flex", gap: "8px", alignItems: "flex-start", flexWrap: "wrap" },
 
   tableWrap: { overflowX: "auto", WebkitOverflowScrolling: "touch", marginBottom: "12px" },
-  table: { width: "100%", minWidth: "760px", borderCollapse: "collapse" },
+  table: { width: "100%", minWidth: "860px", borderCollapse: "collapse" },
   th: { textAlign: "left", padding: "10px", borderBottom: "2px solid #ddd", background: "#fafafa", fontSize: "13px", whiteSpace: "nowrap" },
   td: { padding: "10px", borderBottom: "1px solid #eee", fontSize: "13px", verticalAlign: "top" },
   staleRow: { background: "#fff8e1" },
