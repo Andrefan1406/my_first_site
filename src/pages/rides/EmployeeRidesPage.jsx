@@ -11,6 +11,8 @@ import { formatRoute, formatEstimate } from "../../rides/format";
 import MapPicker from "../../rides/MapPicker";
 import CancelRequestModal from "../../rides/CancelRequestModal";
 
+const CAN_EDIT_ROUTE = ["pending_assignment", "assigned", "in_progress"];
+
 function formatDateTime(value) {
   if (!value) return "—";
   const d = new Date(value.replace(" ", "T"));
@@ -51,6 +53,8 @@ export default function EmployeeRidesPage() {
   const [mapPickerTarget, setMapPickerTarget] = useState(null); // "fromAddress" | "toAddress" | { stopIndex } | null
   const [role, setRole] = useState(null); // диспетчер, зашедший сюда сам себе заказать машину, видит ссылку назад на /dispatcher
   const [cancelTargetId, setCancelTargetId] = useState(null); // id заявки, для которой открыта модалка отмены
+  const [proposeFor, setProposeFor] = useState(null); // id заявки, для которой добавляем точку через карту
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     ridesApiFetch("/api/v1/users/me").then(({ user }) => setRole(user?.role || null)).catch(() => {});
@@ -78,9 +82,33 @@ export default function EmployeeRidesPage() {
     };
     socket.on("request:assigned", onUpdate);
     socket.on("request:status", onUpdate);
+    socket.on("proposal:updated", (p) => {
+      if (p.status === "approved") setNotice(`Точка «${p.address}» добавлена в маршрут заявки #${p.requestId}.`);
+      else if (p.status === "rejected") setNotice(`Диспетчер отклонил точку «${p.address}»${p.decisionReason ? `: ${p.decisionReason}` : ""}.`);
+      else if (p.status === "auto_rejected") setNotice(`Точка «${p.address}» отклонена автоматически — диспетчер не успел рассмотреть.`);
+      setRequests((prev) => prev.map((r) => (
+        r.id === p.requestId ? { ...r, stopProposals: (r.stopProposals || []).filter((sp) => sp.id !== p.id) } : r
+      )));
+    });
     socket.on("connect_error", () => {});
     return () => socket.disconnect();
   }, []);
+
+  const proposeStop = async (requestId, address) => {
+    setProposeFor(null);
+    setError("");
+    try {
+      const { proposal } = await ridesApiPost(`/api/v1/requests/${requestId}/stop-changes`, { action: "add", address });
+      setNotice(
+        proposal.status === "approved"
+          ? `Точка «${address}» добавлена в маршрут.`
+          : `Точка «${address}» отправлена диспетчеру на согласование.`
+      );
+      load();
+    } catch (err) {
+      setError(err.message || "Не удалось добавить точку");
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -125,6 +153,7 @@ export default function EmployeeRidesPage() {
         </div>
       </div>
       {error && <div style={s.error}>{error}</div>}
+      {notice && <div style={s.notice} onClick={() => setNotice("")}>{notice}</div>}
 
       <form onSubmit={submit} style={s.form}>
         <div style={s.formRow}>
@@ -224,9 +253,21 @@ export default function EmployeeRidesPage() {
                 {formatEstimate(r) && <div style={s.cardMeta}>{formatEstimate(r)}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
                 <div style={{ ...s.cardStatus, color: statusColor(r.status) }}>{statusLabel(r)}</div>
-                {["pending_assignment", "assigned"].includes(r.status) && (
-                  <button type="button" style={s.cancelButton} onClick={() => setCancelTargetId(r.id)}>Отменить заявку</button>
+                {r.stopProposals?.length > 0 && (
+                  <div style={s.pendingBox}>
+                    {r.stopProposals.map((sp) => (
+                      <div key={sp.id}>🕓 точка «{sp.address}» — ждёт решения диспетчера</div>
+                    ))}
+                  </div>
                 )}
+                <div style={s.cardActions}>
+                  {CAN_EDIT_ROUTE.includes(r.status) && (
+                    <button type="button" style={s.addPointButton} onClick={() => setProposeFor(r.id)}>+ Добавить точку</button>
+                  )}
+                  {["pending_assignment", "assigned"].includes(r.status) && (
+                    <button type="button" style={s.cancelButton} onClick={() => setCancelTargetId(r.id)}>Отменить заявку</button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -234,6 +275,9 @@ export default function EmployeeRidesPage() {
 
         {cancelTargetId && (
           <CancelRequestModal onClose={() => setCancelTargetId(null)} onConfirm={cancelRequest} />
+        )}
+        {proposeFor && (
+          <MapPicker onClose={() => setProposeFor(null)} onSelect={(address) => proposeStop(proposeFor, address)} />
         )}
       </section>
 
@@ -276,7 +320,11 @@ const s = {
   title: { fontSize: "clamp(18px, 5vw, 22px)", margin: 0 },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
+  notice: { background: "#eef6ff", color: "#0b5cad", border: "1px solid #b8d9f7", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px", cursor: "pointer" },
   muted: { color: "#888", fontSize: "14px" },
+  cardActions: { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" },
+  pendingBox: { marginTop: "8px", background: "#fffdf6", border: "1px solid #f0d9a8", borderRadius: "8px", padding: "8px 10px", fontSize: "12px", color: "#8a6d2f" },
+  addPointButton: { background: "none", border: "1px dashed #1976d2", color: "#1976d2", borderRadius: "6px", padding: "8px 12px", cursor: "pointer", fontSize: "13px" },
 
   form: { background: "#fff", border: "1px solid #eee", borderRadius: "10px", padding: "16px", marginBottom: "28px", display: "flex", flexDirection: "column", gap: "12px", boxSizing: "border-box" },
   formRow: { display: "flex", gap: "12px", flexWrap: "wrap" },

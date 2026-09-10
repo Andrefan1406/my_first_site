@@ -245,4 +245,65 @@ async function estimateRoute(addresses, withReturn) {
   }
 }
 
-module.exports = { estimateRoute, recomputeRequestEstimate, geocodeAddress };
+// Куда вставить новую точку, чтобы крюк был минимальным («ближайший
+// участок маршрута», П.1 ТЗ). chain — координаты узлов ПОСЛЕ точки подачи:
+// chain[0] — адрес назначения (to), chain[1..] — существующие доп. пункты
+// по порядку; элементы могут быть null (координата не определилась).
+// Возвращает stop_order для новой точки (0..N): существующие пункты с
+// order >= результата сдвигаются на +1. Нет координат — в конец.
+function chooseInsertIndex(chain, newC) {
+  const n = chain.length - 1; // число доп. пунктов (chain[0] — это to)
+  if (!newC) return n;
+  let best = n;
+  let bestCost = Infinity;
+  for (let k = 0; k <= n; k++) {
+    const a = chain[k];
+    if (!a) continue;
+    const b = chain[k + 1] || null;
+    const cost = haversineKm(a, newC) + (b ? haversineKm(newC, b) - haversineKm(a, b) : 0);
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = k;
+    }
+  }
+  return best;
+}
+
+// Ориентировочная разница во времени поездки от предлагаемого изменения
+// маршрута — «≈ +X мин», которую видит диспетчер в очереди на модерацию.
+// За «до» берём уже посчитанное requests.duration_min (не гоняем маршрут
+// повторно), «после» считаем на лету. Для add точка добавляется в конец —
+// это верхняя оценка (реальная вставка «по ближайшему участку» короче).
+async function estimateProposalImpact(requestId, { action, targetStopId, address }) {
+  const db = getWriteDb();
+  const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(requestId);
+  if (!request || request.duration_min == null) return null;
+  const stops = db
+    .prepare('SELECT * FROM request_stops WHERE request_id = ? ORDER BY stop_order ASC')
+    .all(requestId);
+  const baseAddrs = [request.from_address, request.to_address, ...stops.map((s) => s.address)];
+  const idx = stops.findIndex((s) => s.id === targetStopId);
+
+  let nextAddrs;
+  if (action === 'add') {
+    nextAddrs = [...baseAddrs, address];
+  } else if (action === 'remove') {
+    if (idx < 0) return null;
+    nextAddrs = baseAddrs.filter((_, i) => i !== idx + 2);
+  } else {
+    if (idx < 0) return null;
+    nextAddrs = baseAddrs.map((a, i) => (i === idx + 2 ? address : a));
+  }
+
+  const after = await estimateRoute(nextAddrs, !!request.with_return);
+  if (!after) return null;
+  return after.durationMin - request.duration_min;
+}
+
+module.exports = {
+  estimateRoute,
+  recomputeRequestEstimate,
+  geocodeAddress,
+  chooseInsertIndex,
+  estimateProposalImpact,
+};

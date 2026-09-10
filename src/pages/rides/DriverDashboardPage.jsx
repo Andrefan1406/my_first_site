@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ridesApiFetch, ridesApiPatch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
+import MapPicker from "../../rides/MapPicker";
 import { formatRoute, formatEstimate } from "../../rides/format";
 
 function formatDateTime(value) {
@@ -31,6 +32,8 @@ export default function DriverDashboardPage() {
   const [historyTo, setHistoryTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [proposeFor, setProposeFor] = useState(null); // requestId, для которого открыт выбор точки на карте
   const [busyIds, setBusyIds] = useState(new Set());
 
   const setRowBusy = (id, val) => {
@@ -76,6 +79,20 @@ export default function DriverDashboardPage() {
     socket.on("request:assigned", (req) => {
       setCurrent((prev) => (prev.some((r) => r.id === req.id) ? prev : [...prev, req]));
       setPool((prev) => prev.filter((r) => r.id !== req.id));
+    });
+    // Маршрут текущего заказа изменился (диспетчер одобрил/добавил точку) —
+    // подменяем карточку, чтобы водитель сразу видел новую точку.
+    socket.on("request:updated", (req) => {
+      setCurrent((prev) => prev.map((r) => (r.id === req.id ? req : r)));
+    });
+    // Решение по предложенной этим водителем точке.
+    socket.on("proposal:updated", (p) => {
+      if (p.status === "approved") setNotice(`Диспетчер добавил точку «${p.address}» в маршрут заявки #${p.requestId}.`);
+      else if (p.status === "rejected") setNotice(`Диспетчер отклонил точку «${p.address}»${p.decisionReason ? `: ${p.decisionReason}` : ""}.`);
+      else if (p.status === "auto_rejected") setNotice(`Предложение точки «${p.address}» отклонено автоматически — диспетчер не успел рассмотреть.`);
+      setCurrent((prev) => prev.map((r) => (
+        r.id === p.requestId ? { ...r, stopProposals: (r.stopProposals || []).filter((sp) => sp.id !== p.id) } : r
+      )));
     });
     socket.on("connect_error", () => {});
     return () => socket.disconnect();
@@ -132,6 +149,22 @@ export default function DriverDashboardPage() {
     }
   };
 
+  const proposeStop = async (requestId, address) => {
+    setProposeFor(null);
+    setError("");
+    try {
+      const { proposal } = await ridesApiPost(`/api/v1/requests/${requestId}/stop-changes`, { action: "add", address });
+      setNotice(
+        proposal.status === "approved"
+          ? `Точка «${address}» добавлена в маршрут.`
+          : `Точка «${address}» отправлена диспетчеру на согласование.`
+      );
+      loadAll();
+    } catch (err) {
+      setError(err.message || "Не удалось предложить точку");
+    }
+  };
+
   const toggleOnline = async () => {
     if (!driver) return;
     const nextStatus = driver.status === "offline" ? "available" : "offline";
@@ -181,6 +214,7 @@ export default function DriverDashboardPage() {
       </div>
 
       {error && <div style={s.error}>{error}</div>}
+      {notice && <div style={s.notice} onClick={() => setNotice("")}>{notice}</div>}
 
       <section style={s.section}>
         <h2 style={s.sectionTitle}>Мои текущие заказы ({current.length})</h2>
@@ -199,6 +233,13 @@ export default function DriverDashboardPage() {
                   Заказчик: {r.employeeName} — <a href={`tel:${r.employeePhone}`} style={s.phoneLink}>{r.employeePhone}</a>
                 </div>
                 <div style={s.cardStatus}>{STATUS_LABEL[r.status] || r.status}</div>
+                {r.stopProposals?.length > 0 && (
+                  <div style={s.pendingBox}>
+                    {r.stopProposals.map((sp) => (
+                      <div key={sp.id}>🕓 точка «{sp.address}» ожидает решения диспетчера</div>
+                    ))}
+                  </div>
+                )}
                 <div style={s.cardActions}>
                   {r.status === "assigned" && (
                     <button style={s.primaryButton} disabled={busyIds.has(r.id)} onClick={() => setStatus(r.id, "in_progress")}>В пути</button>
@@ -206,6 +247,7 @@ export default function DriverDashboardPage() {
                   {r.status === "in_progress" && (
                     <button style={s.primaryButton} disabled={busyIds.has(r.id)} onClick={() => setStatus(r.id, "completed")}>Завершено</button>
                   )}
+                  <button style={s.secondaryButton} disabled={busyIds.has(r.id)} onClick={() => setProposeFor(r.id)}>Предложить точку</button>
                   <button style={s.dangerButton} disabled={busyIds.has(r.id)} onClick={() => decline(r.id)}>Отказаться</button>
                 </div>
               </div>
@@ -270,6 +312,13 @@ export default function DriverDashboardPage() {
           </div>
         )}
       </section>
+
+      {proposeFor && (
+        <MapPicker
+          onClose={() => setProposeFor(null)}
+          onSelect={(address) => proposeStop(proposeFor, address)}
+        />
+      )}
     </div>
   );
 }
@@ -282,6 +331,8 @@ const s = {
   badge: { padding: "4px 10px", borderRadius: "999px", border: "1px solid", fontSize: "13px", fontWeight: 600 },
 
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
+  notice: { background: "#eef6ff", color: "#0b5cad", border: "1px solid #b8d9f7", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px", cursor: "pointer" },
+  pendingBox: { marginTop: "8px", background: "#fffdf6", border: "1px solid #f0d9a8", borderRadius: "8px", padding: "8px 10px", fontSize: "12px", color: "#8a6d2f" },
   muted: { color: "#888", fontSize: "14px" },
 
   section: { marginBottom: "28px" },

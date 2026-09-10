@@ -30,8 +30,10 @@ const ridesUsersRouter = require('./rides/usersRouter');
 const ridesVehiclesRouter = require('./rides/vehiclesRouter');
 const ridesDriversRouter = require('./rides/driversRouter');
 const ridesRequestsRouter = require('./rides/requestsRouter');
+const ridesStopProposalsRouter = require('./rides/stopProposalsRouter');
 const ridesEventsRouter = require('./rides/eventsRouter');
 const { initSocket } = require('./rides/socket');
+const { startProposalTimeoutJob } = require('./rides/proposalTimeout');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -81,10 +83,12 @@ app.use('/api/v1/users', ridesUsersRouter);
 app.use('/api/v1/vehicles', ridesVehiclesRouter);
 app.use('/api/v1/drivers', ridesDriversRouter);
 app.use('/api/v1/requests', ridesRequestsRouter);
+app.use('/api/v1/requests', ridesStopProposalsRouter);
 app.use('/api/v1/events', ridesEventsRouter);
 
 initSchema();
 initRidesSchema();
+startProposalTimeoutJob();
 startConcreteSync();
 startObjectsSync();
 startPeopleSync();

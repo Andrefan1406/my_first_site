@@ -123,6 +123,35 @@ CREATE INDEX IF NOT EXISTS idx_request_events_request ON request_events(request_
 CREATE INDEX IF NOT EXISTS idx_request_events_type    ON request_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_request_events_created ON request_events(created_at);
 
+-- Предложения об изменении маршрута уже поданной заявки (П.1 + П.5 ТЗ
+-- доработок). Заказчик и водитель могут только ПРЕДЛОЖИТЬ точку (add) либо
+-- её правку/удаление (edit/remove) — предложение висит в status='pending',
+-- пока диспетчер не одобрит/отклонит; диспетчер и сам заказчик (пока
+-- заявка ещё в пуле) применяют сразу (status сразу 'approved'). Таймаут
+-- 5 минут переводит зависшие в 'auto_rejected' (см. proposalTimeout.js).
+-- Применённое предложение вставляет/меняет строку в request_stops и
+-- запускает пересчёт оценки; сам факт и решение пишутся в request_events.
+CREATE TABLE IF NOT EXISTS stop_proposals (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_id        INTEGER NOT NULL REFERENCES requests(id),
+  action            TEXT NOT NULL CHECK(action IN ('add','edit','remove')),
+  target_stop_id    INTEGER REFERENCES request_stops(id) ON DELETE SET NULL, -- для edit/remove
+  address           TEXT,                                 -- для add/edit
+  lat               REAL,
+  lng               REAL,
+  proposed_by       INTEGER NOT NULL REFERENCES users(id),
+  proposed_by_role  TEXT,                                 -- роль на момент предложения
+  status            TEXT NOT NULL DEFAULT 'pending'
+                     CHECK(status IN ('pending','approved','rejected','auto_rejected')),
+  decided_by        INTEGER REFERENCES users(id),
+  decision_reason   TEXT,
+  est_delta_min     INTEGER,                              -- ориентировочное «+X мин» к поездке
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  decided_at        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_stop_proposals_request ON stop_proposals(request_id);
+CREATE INDEX IF NOT EXISTS idx_stop_proposals_status  ON stop_proposals(status);
+
 -- Кэш геокодирования адресов (Nominatim): один и тот же адрес подачи/
 -- назначения встречается в заявках постоянно, а лимит бесплатного
 -- Nominatim — 1 запрос/сек. found = 0 запоминает, что адрес не удалось

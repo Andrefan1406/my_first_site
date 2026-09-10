@@ -4,109 +4,17 @@
 // отмена диспетчером. Каждый переход статуса пишется в
 // request_status_history — источник данных для отчётности.
 const express = require('express');
-const { z } = require('zod');
 const { getWriteDb } = require('./db');
 const { requireRideRole } = require('./auth');
 const { emitToDrivers, emitToDispatcher, emitToEmployee, emitToDriver } = require('./socket');
 const { recomputeRequestEstimate } = require('./routeEstimate');
 const { logEvent } = require('./events');
+const {
+  FULL_SELECT, validate, staleThreshold, hydrateRows, getRow,
+  serializeForDriver, serializeForEmployee, serializeForDispatcher, z,
+} = require('./requestView');
 
 const router = express.Router();
-
-const FULL_SELECT = `
-  SELECT
-    r.*,
-    emp.name  AS employee_name,
-    emp.phone AS employee_phone,
-    du.name   AS driver_name,
-    du.phone  AS driver_phone,
-    v.plate_number AS vehicle_plate,
-    v.model        AS vehicle_model
-  FROM requests r
-  JOIN users emp ON emp.id = r.employee_id
-  LEFT JOIN drivers d ON d.id = r.driver_id
-  LEFT JOIN users du ON du.id = d.user_id
-  LEFT JOIN vehicles v ON v.id = d.vehicle_id
-`;
-
-function validate(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({ error: result.error.issues[0]?.message || 'Некорректные данные запроса' });
-    }
-    req.body = result.data;
-    next();
-  };
-}
-
-// Общие поля заявки, без телефона заказчика — для диспетчера и для самого
-// заказчика (свой телефон ему очевиден, показывать незачем).
-function baseFields(row) {
-  return {
-    id: row.id,
-    fromAddress: row.from_address,
-    toAddress: row.to_address,
-    requestedAt: row.requested_at,
-    purpose: row.purpose,
-    passengersCount: row.passengers_count,
-    comment: row.comment,
-    status: row.status,
-    assignedBy: row.assigned_by,
-    cancelReason: row.cancel_reason,
-    createdAt: row.created_at,
-    claimedAt: row.claimed_at,
-    driverName: row.driver_name || null,
-    vehiclePlate: row.vehicle_plate || null,
-    withReturn: !!row.with_return,
-    stops: row.stops || [],
-    distanceKm: row.distance_km ?? null,
-    durationMin: row.duration_min ?? null,
-    expectedCompletionAt: row.expected_completion_at ?? null,
-  };
-}
-
-// Пул и "мои текущие" у водителя — тут телефон заказчика можно отдавать
-// (требование: только водителю, у которого заказ в пуле либо уже назначен).
-function serializeForDriver(row) {
-  return {
-    ...baseFields(row),
-    employeeName: row.employee_name,
-    employeePhone: row.employee_phone,
-  };
-}
-
-function serializeForEmployee(row) {
-  return baseFields(row);
-}
-
-function serializeForDispatcher(row, staleThresholdMinutes) {
-  const ageMinutes = (Date.now() - new Date(row.created_at + 'Z').getTime()) / 60000;
-  return {
-    ...baseFields(row),
-    employeeName: row.employee_name,
-    driverPhone: row.driver_phone || null,
-    isStale: row.status === 'pending_assignment' && ageMinutes >= staleThresholdMinutes,
-  };
-}
-
-// Доп. пункты назначения (сверх to_address) грузятся отдельным запросом,
-// не JOIN'ом в FULL_SELECT — JOIN на request_stops размножил бы строку
-// заявки по числу пунктов, что ломает все остальные списки (пул,
-// диспетчер и т.д.), которым нужна ровно одна строка на заявку.
-function getStops(db, requestId) {
-  return db.prepare('SELECT address FROM request_stops WHERE request_id = ? ORDER BY stop_order ASC').all(requestId).map((r) => r.address);
-}
-
-function attachStops(db, rows) {
-  return rows.map((row) => ({ ...row, stops: getStops(db, row.id) }));
-}
-
-function getRow(db, id) {
-  const row = db.prepare(`${FULL_SELECT} WHERE r.id = ?`).get(id);
-  if (row) row.stops = getStops(db, id);
-  return row;
-}
 
 const createRequestSchema = z.object({
   fromAddress: z.string().trim().min(1, 'Укажите адрес подачи'),
@@ -192,14 +100,14 @@ router.post('/', requireRideRole('employee', 'dispatcher'), validate(createReque
 router.get('/mine', requireRideRole('employee', 'dispatcher'), (req, res) => {
   const db = getWriteDb();
   const rows = db.prepare(`${FULL_SELECT} WHERE r.employee_id = ? ORDER BY r.created_at DESC`).all(req.rideUser.id);
-  res.json({ requests: attachStops(db, rows).map(serializeForEmployee) });
+  res.json({ requests: hydrateRows(db, rows).map(serializeForEmployee) });
 });
 
 // Водитель: пул свободных заявок, самые ранние сверху.
 router.get('/pool', requireRideRole('driver'), (req, res) => {
   const db = getWriteDb();
   const rows = db.prepare(`${FULL_SELECT} WHERE r.status = 'pending_assignment' ORDER BY r.created_at ASC`).all();
-  res.json({ requests: attachStops(db, rows).map(serializeForDriver) });
+  res.json({ requests: hydrateRows(db, rows).map(serializeForDriver) });
 });
 
 // Водитель: заказы, которые сейчас у него на руках.
@@ -210,7 +118,7 @@ router.get('/my-current', requireRideRole('driver'), (req, res) => {
   const rows = db
     .prepare(`${FULL_SELECT} WHERE r.driver_id = ? AND r.status IN ('assigned', 'in_progress') ORDER BY r.claimed_at ASC`)
     .all(driver.id);
-  res.json({ requests: attachStops(db, rows).map(serializeForDriver) });
+  res.json({ requests: hydrateRows(db, rows).map(serializeForDriver) });
 });
 
 // Водитель: история завершённых поездок за период (from/to — 'YYYY-MM-DD').
@@ -227,13 +135,13 @@ router.get('/my-history', requireRideRole('driver'), (req, res) => {
   sql += ' ORDER BY r.created_at DESC';
 
   const rows = db.prepare(sql).all(...params);
-  res.json({ requests: attachStops(db, rows).map(serializeForDriver) });
+  res.json({ requests: hydrateRows(db, rows).map(serializeForDriver) });
 });
 
 // Диспетчер: полный список + сводка по статусам для мониторинга.
 router.get('/', requireRideRole('dispatcher'), (req, res) => {
   const db = getWriteDb();
-  const rows = attachStops(db, db.prepare(`${FULL_SELECT} ORDER BY r.created_at DESC`).all());
+  const rows = hydrateRows(db, db.prepare(`${FULL_SELECT} ORDER BY r.created_at DESC`).all());
   const threshold = staleThreshold();
   res.json({
     requests: rows.map((r) => serializeForDispatcher(r, threshold)),
@@ -426,9 +334,5 @@ router.post('/:id/cancel-mine', requireRideRole('employee', 'dispatcher'), valid
   if (previousDriverId) emitToDriver(previousDriverId, 'request:removed', { id: requestId });
   res.json({ request: serializeForEmployee(result) });
 });
-
-function staleThreshold() {
-  return Number(process.env.RIDE_STALE_THRESHOLD_MINUTES || 15);
-}
 
 module.exports = router;
