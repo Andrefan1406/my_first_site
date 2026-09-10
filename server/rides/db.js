@@ -74,6 +74,13 @@ CREATE TABLE IF NOT EXISTS requests (
   comment           TEXT,
   assigned_by       TEXT CHECK(assigned_by IN ('self','dispatcher')),
   cancel_reason     TEXT,
+  -- on_hold: заявку сняли с машины (экстренная переброска диспетчером,
+  -- П.4 ТЗ доработок). Формально статус остаётся pending_assignment, но
+  -- в пул водителям такая заявка НЕ отдаётся, пока заказчик не решит:
+  -- вернуть в очередь (on_hold -> 0) или отменить. Отдельным статусом не
+  -- делаем — это потребовало бы пересборки таблицы (CHECK на status).
+  on_hold           INTEGER NOT NULL DEFAULT 0,
+  pull_reason       TEXT,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   claimed_at        TEXT
 );
@@ -204,6 +211,14 @@ function migrateSchema(db) {
   if (!requestColumns.includes('to_lng')) db.exec('ALTER TABLE requests ADD COLUMN to_lng REAL');
   if (!requestColumns.includes('expected_completion_at')) {
     db.exec('ALTER TABLE requests ADD COLUMN expected_completion_at TEXT');
+  }
+  // Экстренная переброска машины (П.4): заявку сняли с водителя, ждём
+  // решения заказчика — в пул при этом не отдаём (см. requestsRouter.js).
+  if (!requestColumns.includes('on_hold')) {
+    db.exec('ALTER TABLE requests ADD COLUMN on_hold INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!requestColumns.includes('pull_reason')) {
+    db.exec('ALTER TABLE requests ADD COLUMN pull_reason TEXT');
   }
 
   const stopColumns = db.prepare("PRAGMA table_info(request_stops)").all().map((c) => c.name);

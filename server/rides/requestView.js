@@ -102,6 +102,8 @@ function baseFields(row) {
     distanceKm: row.distance_km ?? null,
     durationMin: row.duration_min ?? null,
     expectedCompletionAt: row.expected_completion_at ?? null,
+    onHold: !!row.on_hold,
+    pullReason: row.pull_reason || null,
   };
 }
 
@@ -126,7 +128,7 @@ function serializeForDispatcher(row, staleThresholdMinutes = staleThreshold()) {
     employeeName: row.employee_name,
     driverPhone: row.driver_phone || null,
     stopsDetailed: row.stopsFull || [], // [{ id, address }] — для управления точками у диспетчера
-    isStale: row.status === 'pending_assignment' && ageMinutes >= staleThresholdMinutes,
+    isStale: row.status === 'pending_assignment' && !row.on_hold && ageMinutes >= staleThresholdMinutes,
   };
 }
 

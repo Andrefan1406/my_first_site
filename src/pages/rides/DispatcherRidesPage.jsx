@@ -41,6 +41,8 @@ export default function DispatcherRidesPage() {
   const [selectedDriverId, setSelectedDriverId] = useState("");
   const [stopsPanelFor, setStopsPanelFor] = useState(null); // requestId с раскрытым управлением точками
   const [mapForRequest, setMapForRequest] = useState(null); // requestId, для которого открыт выбор точки на карте
+  const [pullTarget, setPullTarget] = useState(null); // requestId, с которого снимаем машину
+  const [pullForm, setPullForm] = useState({ reason: "", targetRequestId: "" });
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -158,6 +160,28 @@ export default function DispatcherRidesPage() {
     }
   };
 
+  const openPull = (requestId) => {
+    setError("");
+    setPullForm({ reason: "", targetRequestId: "" });
+    setPullTarget(requestId);
+  };
+
+  const confirmPull = async () => {
+    if (!pullForm.reason.trim()) { setError("Укажите причину переброски"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const body = { reason: pullForm.reason.trim() };
+      if (pullForm.targetRequestId) body.targetRequestId = Number(pullForm.targetRequestId);
+      await ridesApiPost(`/api/v1/requests/${pullTarget}/pull`, body);
+      setPullTarget(null);
+    } catch (err) {
+      setError(err.message || "Не удалось перебросить машину");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const removeStop = async (requestId, stopId) => {
     if (!window.confirm("Убрать эту точку из маршрута?")) return;
     setBusy(true);
@@ -194,6 +218,11 @@ export default function DispatcherRidesPage() {
         <div style={{ ...s.card, ...(proposals.length ? s.cardAlert : null) }}>
           <div style={s.cardLabel}>Предложений по маршруту</div><div style={s.cardValue}>{proposals.length}</div>
         </div>
+        {summary?.onHold > 0 && (
+          <div style={{ ...s.card, ...s.cardAlert }}>
+            <div style={s.cardLabel}>Сняты с машины</div><div style={s.cardValue}>{summary.onHold}</div>
+          </div>
+        )}
         <div style={s.card}>
           <div style={s.cardLabel}>Свободные машины</div>
           <div style={s.cardValue}>{fleet ? fleet.freeCount : "—"}</div>
@@ -265,13 +294,19 @@ export default function DispatcherRidesPage() {
                   </td>
                   <td style={s.td}>{r.employeeName}</td>
                   <td style={s.td}>
-                    {STATUS_LABEL[r.status] || r.status}
+                    {r.onHold ? "Снята с машины" : (STATUS_LABEL[r.status] || r.status)}
                     {r.isStale && <span style={s.staleBadge}>висит &gt; {summary?.staleThresholdMinutes ?? 15} мин</span>}
+                    {r.onHold && <div style={s.holdNote}>ждёт решения заказчика · причина: {r.pullReason}</div>}
                   </td>
                   <td style={s.td}>{r.driverName ? `${r.driverName}${r.vehiclePlate ? ` (${r.vehiclePlate})` : ""}` : "—"}</td>
                   <td style={s.td}>
                     {r.status === "pending_assignment" && (
-                      <button style={s.secondaryButton} onClick={() => openAssign(r.id)}>Назначить</button>
+                      <button style={s.secondaryButton} onClick={() => openAssign(r.id)}>
+                        {r.onHold ? "Дать другую машину" : "Назначить"}
+                      </button>
+                    )}
+                    {["assigned", "in_progress"].includes(r.status) && (
+                      <button style={s.warnButton} onClick={() => openPull(r.id)}>Перебросить машину</button>
                     )}
                     {["pending_assignment", "assigned"].includes(r.status) && (
                       <button style={s.dangerButton} onClick={() => cancelRequest(r.id)}>Отменить</button>
@@ -340,6 +375,41 @@ export default function DispatcherRidesPage() {
           onSelect={(address) => addStop(mapForRequest, address)}
         />
       )}
+
+      {pullTarget && (
+        <div style={s.modalOverlay} onClick={() => setPullTarget(null)}>
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Снять машину с заявки #{pullTarget}</h3>
+            <p style={s.muted}>Заявка уйдёт в ожидание, заказчик получит уведомление с причиной и решит — вернуть в очередь или отменить.</p>
+            <label style={s.fieldLabel}>Причина (увидит заказчик)
+              <input
+                style={s.input}
+                value={pullForm.reason}
+                onChange={(e) => setPullForm({ ...pullForm, reason: e.target.value })}
+                placeholder="Напр.: срочный выезд на объект"
+              />
+            </label>
+            <label style={s.fieldLabel}>Сразу отдать машину заявке (необязательно)
+              <select
+                style={s.input}
+                value={pullForm.targetRequestId}
+                onChange={(e) => setPullForm({ ...pullForm, targetRequestId: e.target.value })}
+              >
+                <option value="">— освободить машину в общий доступ —</option>
+                {requests
+                  .filter((x) => x.status === "pending_assignment" && !x.onHold && x.id !== pullTarget)
+                  .map((x) => (
+                    <option key={x.id} value={x.id}>#{x.id} · {formatRoute(x)}</option>
+                  ))}
+              </select>
+            </label>
+            <div style={s.modalActions}>
+              <button style={s.secondaryButton} onClick={() => setPullTarget(null)}>Отмена</button>
+              <button style={s.warnButton} disabled={busy} onClick={confirmPull}>Снять машину</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -386,7 +456,10 @@ const s = {
 
   primaryButton: { background: "#1976d2", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px", fontWeight: 600 },
   secondaryButton: { background: "#fff", border: "1px solid #ccc", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px", marginRight: "6px" },
-  dangerButton: { background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px" },
+  dangerButton: { background: "#fff0f0", color: "#c00", border: "1px solid #f5b5b5", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px", marginRight: "6px" },
+  warnButton: { background: "#fff3e0", color: "#b45309", border: "1px solid #f0c48a", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "13px", marginRight: "6px" },
+  holdNote: { fontSize: "11px", color: "#b45309", marginTop: "3px" },
+  fieldLabel: { display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "#555", marginTop: "12px" },
 
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
   modal: { background: "#fff", borderRadius: "10px", padding: "20px", width: "360px", maxWidth: "92vw", boxSizing: "border-box" },

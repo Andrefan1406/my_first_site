@@ -26,6 +26,7 @@ const EVENT_TYPES = {
   stop_approved: 'Диспетчер одобрил точку',
   stop_rejected: 'Диспетчер отклонил точку',
   reassigned: 'Экстренная переброска машины',
+  reassign_resolved: 'Решение заказчика после переброски',
   merge_proposed: 'Предложено объединение заявок',
   merge_approved: 'Объединение заявок подтверждено',
   merge_rejected: 'Объединение заявок отклонено',

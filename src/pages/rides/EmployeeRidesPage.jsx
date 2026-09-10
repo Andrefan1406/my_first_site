@@ -94,6 +94,11 @@ export default function EmployeeRidesPage() {
     const onUpdateAndFleet = (req) => { onUpdate(req); loadFleet(); };
     socket.on("request:assigned", onUpdateAndFleet);
     socket.on("request:status", onUpdateAndFleet);
+    socket.on("request:reassigned", (req) => {
+      onUpdate(req);
+      loadFleet();
+      setNotice(`Машину с заявки #${req.id} направили на срочный вызов${req.pullReason ? `: ${req.pullReason}` : ""}. Выберите, что делать дальше.`);
+    });
     socket.on("proposal:updated", (p) => {
       if (p.status === "approved") setNotice(`Точка «${p.address}» добавлена в маршрут заявки #${p.requestId}.`);
       else if (p.status === "rejected") setNotice(`Диспетчер отклонил точку «${p.address}»${p.decisionReason ? `: ${p.decisionReason}` : ""}.`);
@@ -105,6 +110,18 @@ export default function EmployeeRidesPage() {
     socket.on("connect_error", () => {});
     return () => socket.disconnect();
   }, [loadFleet]);
+
+  const holdDecision = async (requestId, decision) => {
+    if (decision === "cancel" && !window.confirm("Отменить заявку?")) return;
+    setError("");
+    try {
+      const { request } = await ridesApiPost(`/api/v1/requests/${requestId}/hold-decision`, { decision });
+      setRequests((prev) => prev.map((r) => (r.id === request.id ? request : r)));
+      setNotice(decision === "requeue" ? "Заявка снова в очереди — её возьмёт первый свободный водитель." : "Заявка отменена.");
+    } catch (err) {
+      setError(err.message || "Не удалось обработать решение");
+    }
+  };
 
   const proposeStop = async (requestId, address) => {
     setProposeFor(null);
@@ -275,12 +292,25 @@ export default function EmployeeRidesPage() {
         ) : (
           <div style={s.cards}>
             {active.map((r) => (
-              <div key={r.id} style={s.card}>
+              <div key={r.id} style={r.onHold ? { ...s.card, ...s.cardHold } : s.card}>
                 <div style={s.cardRoute}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
                 {formatEstimate(r) && <div style={s.cardMeta}>{formatEstimate(r)}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
-                <div style={{ ...s.cardStatus, color: statusColor(r.status) }}>{statusLabel(r)}</div>
+
+                {r.onHold ? (
+                  <div style={s.holdBox}>
+                    <div style={s.holdTitle}>🔺 Машину направили на срочный вызов</div>
+                    {r.pullReason && <div style={s.cardMeta}>Причина: {r.pullReason}</div>}
+                    <div style={s.holdActions}>
+                      <button type="button" style={s.primaryButton} onClick={() => holdDecision(r.id, "requeue")}>Вернуть в очередь</button>
+                      <button type="button" style={s.cancelButton} onClick={() => holdDecision(r.id, "cancel")}>Отменить заявку</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ ...s.cardStatus, color: statusColor(r.status) }}>{statusLabel(r)}</div>
+                )}
+
                 {r.stopProposals?.length > 0 && (
                   <div style={s.pendingBox}>
                     {r.stopProposals.map((sp) => (
@@ -288,14 +318,16 @@ export default function EmployeeRidesPage() {
                     ))}
                   </div>
                 )}
-                <div style={s.cardActions}>
-                  {CAN_EDIT_ROUTE.includes(r.status) && (
-                    <button type="button" style={s.addPointButton} onClick={() => setProposeFor(r.id)}>+ Добавить точку</button>
-                  )}
-                  {["pending_assignment", "assigned"].includes(r.status) && (
-                    <button type="button" style={s.cancelButton} onClick={() => setCancelTargetId(r.id)}>Отменить заявку</button>
-                  )}
-                </div>
+                {!r.onHold && (
+                  <div style={s.cardActions}>
+                    {CAN_EDIT_ROUTE.includes(r.status) && (
+                      <button type="button" style={s.addPointButton} onClick={() => setProposeFor(r.id)}>+ Добавить точку</button>
+                    )}
+                    {["pending_assignment", "assigned"].includes(r.status) && (
+                      <button type="button" style={s.cancelButton} onClick={() => setCancelTargetId(r.id)}>Отменить заявку</button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -356,6 +388,10 @@ const s = {
   cardActions: { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" },
   pendingBox: { marginTop: "8px", background: "#fffdf6", border: "1px solid #f0d9a8", borderRadius: "8px", padding: "8px 10px", fontSize: "12px", color: "#8a6d2f" },
   addPointButton: { background: "none", border: "1px dashed #1976d2", color: "#1976d2", borderRadius: "6px", padding: "8px 12px", cursor: "pointer", fontSize: "13px" },
+  cardHold: { border: "1px solid #f0c48a", background: "#fffaf3" },
+  holdBox: { marginTop: "8px", background: "#fff3e0", border: "1px solid #f0c48a", borderRadius: "8px", padding: "10px 12px" },
+  holdTitle: { fontWeight: 700, fontSize: "13px", color: "#b45309", marginBottom: "4px" },
+  holdActions: { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" },
 
   form: { background: "#fff", border: "1px solid #eee", borderRadius: "10px", padding: "16px", marginBottom: "28px", display: "flex", flexDirection: "column", gap: "12px", boxSizing: "border-box" },
   formRow: { display: "flex", gap: "12px", flexWrap: "wrap" },

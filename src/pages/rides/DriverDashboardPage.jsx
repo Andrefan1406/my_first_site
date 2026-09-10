@@ -85,6 +85,12 @@ export default function DriverDashboardPage() {
     socket.on("request:updated", (req) => {
       setCurrent((prev) => prev.map((r) => (r.id === req.id ? req : r)));
     });
+    // Диспетчер экстренно снял заказ с водителя (переброска машины).
+    socket.on("request:pulled", ({ id, reason }) => {
+      setCurrent((prev) => prev.filter((r) => r.id !== id));
+      setNotice(`Диспетчер снял с вас заказ #${id}${reason ? `. Причина: ${reason}` : ""}.`);
+      ridesApiFetch("/api/v1/drivers/me").then(({ driver: d }) => setDriver(d)).catch(() => {});
+    });
     // Решение по предложенной этим водителем точке.
     socket.on("proposal:updated", (p) => {
       if (p.status === "approved") setNotice(`Диспетчер добавил точку «${p.address}» в маршрут заявки #${p.requestId}.`);
