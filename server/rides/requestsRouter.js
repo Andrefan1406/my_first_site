@@ -8,7 +8,8 @@ const { z } = require('zod');
 const { getWriteDb } = require('./db');
 const { requireRideRole } = require('./auth');
 const { emitToDrivers, emitToDispatcher, emitToEmployee, emitToDriver } = require('./socket');
-const { estimateRoute } = require('./routeEstimate');
+const { recomputeRequestEstimate } = require('./routeEstimate');
+const { logEvent } = require('./events');
 
 const router = express.Router();
 
@@ -61,6 +62,7 @@ function baseFields(row) {
     stops: row.stops || [],
     distanceKm: row.distance_km ?? null,
     durationMin: row.duration_min ?? null,
+    expectedCompletionAt: row.expected_completion_at ?? null,
   };
 }
 
@@ -142,33 +144,45 @@ const statusSchema = z.object({
 });
 
 // Сотрудник (и диспетчер — иногда сам себе заказывает машину) создаёт
-// заявку — сразу попадает в общий пул. Расстояние/время считаются один
-// раз здесь (см. routeEstimate.js) — обращения к геокодеру/роутеру
-// асинхронные, а better-sqlite3-транзакция должна быть синхронной,
-// поэтому расчёт идёт ДО db.transaction(), не внутри неё.
+// заявку — сразу попадает в общий пул. Строка вставляется без оценки, а
+// сразу после этого recomputeRequestEstimate геокодирует точки (с кэшем),
+// строит маршрут и дописывает в ту же строку расстояние/время/координаты
+// и пишет событие route_recomputed в журнал — обращения к геокодеру
+// асинхронные, а better-sqlite3-транзакция синхронная, поэтому это
+// отдельный шаг ПОСЛЕ вставки, а не внутри неё.
 router.post('/', requireRideRole('employee', 'dispatcher'), validate(createRequestSchema), async (req, res) => {
   const db = getWriteDb();
   const { fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn, extraStops, comment } = req.body;
 
-  const estimate = await estimateRoute([fromAddress, toAddress, ...extraStops], withReturn);
-
-  const result = db.transaction(() => {
+  const created = db.transaction(() => {
     const info = db
       .prepare(
-        `INSERT INTO requests (employee_id, from_address, to_address, requested_at, purpose, passengers_count, with_return, distance_km, duration_min, comment, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_assignment')`
+        `INSERT INTO requests (employee_id, from_address, to_address, requested_at, purpose, passengers_count, with_return, comment, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_assignment')`
       )
       .run(
-        req.rideUser.id, fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn ? 1 : 0,
-        estimate?.distanceKm ?? null, estimate?.durationMin ?? null, comment
+        req.rideUser.id, fromAddress, toAddress, requestedAt, purpose, passengersCount, withReturn ? 1 : 0, comment
       );
     const insertStop = db.prepare('INSERT INTO request_stops (request_id, address, stop_order) VALUES (?, ?, ?)');
     extraStops.forEach((address, i) => insertStop.run(info.lastInsertRowid, address, i));
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'pending_assignment', ?)`)
       .run(info.lastInsertRowid, req.rideUser.id);
-    return getRow(db, info.lastInsertRowid);
+    logEvent(db, {
+      requestId: info.lastInsertRowid,
+      type: 'request_created',
+      actorUserId: req.rideUser.id,
+      payload: { fromAddress, toAddress, extraStops, withReturn, passengersCount, purpose },
+    });
+    return info.lastInsertRowid;
   })();
 
+  try {
+    await recomputeRequestEstimate(created, { actorUserId: req.rideUser.id });
+  } catch (err) {
+    console.error('[rides] recomputeRequestEstimate on create failed:', err.message);
+  }
+
+  const result = getRow(db, created);
   emitToDrivers('request:new', serializeForDriver(result));
   emitToDispatcher('request:new', serializeForDispatcher(result, staleThreshold()));
   res.status(201).json({ request: serializeForEmployee(result) });
@@ -254,6 +268,7 @@ router.post('/:id/claim', requireRideRole('driver'), (req, res) => {
     db.prepare(`UPDATE drivers SET status = 'busy' WHERE id = ?`).run(driver.id);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'assigned', ?)`)
       .run(requestId, req.rideUser.id);
+    logEvent(db, { requestId, type: 'driver_claimed', actorUserId: req.rideUser.id, payload: { driverId: driver.id } });
     return getRow(db, requestId);
   })();
 
@@ -283,6 +298,7 @@ router.post('/:id/decline', requireRideRole('driver'), validate(declineSchema), 
     db.prepare(`UPDATE drivers SET status = 'available' WHERE id = ?`).run(driver.id);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'pending_assignment', ?)`)
       .run(requestId, req.rideUser.id);
+    logEvent(db, { requestId, type: 'driver_declined', actorUserId: req.rideUser.id, payload: { driverId: driver.id, reason: req.body.reason } });
     return getRow(db, requestId);
   })();
 
@@ -312,6 +328,7 @@ router.post('/:id/status', requireRideRole('driver'), validate(statusSchema), (r
     if (newStatus === 'completed') db.prepare(`UPDATE drivers SET status = 'available' WHERE id = ?`).run(driver.id);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, ?, ?)`)
       .run(requestId, newStatus, req.rideUser.id);
+    logEvent(db, { requestId, type: 'status_changed', actorUserId: req.rideUser.id, payload: { from: allowedFrom, to: newStatus } });
     return getRow(db, requestId);
   })();
 
@@ -337,6 +354,7 @@ router.post('/:id/assign', requireRideRole('dispatcher'), validate(assignSchema)
     db.prepare(`UPDATE drivers SET status = 'busy' WHERE id = ?`).run(driver.id);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'assigned', ?)`)
       .run(requestId, req.rideUser.id);
+    logEvent(db, { requestId, type: 'dispatcher_assigned', actorUserId: req.rideUser.id, payload: { driverId: driver.id } });
     return getRow(db, requestId);
   })();
 
@@ -363,6 +381,7 @@ router.post('/:id/cancel', requireRideRole('dispatcher'), validate(cancelSchema)
     if (row.driver_id) db.prepare(`UPDATE drivers SET status = 'available' WHERE id = ?`).run(row.driver_id);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'cancelled', ?)`)
       .run(requestId, req.rideUser.id);
+    logEvent(db, { requestId, type: 'cancelled_by_dispatcher', actorUserId: req.rideUser.id, payload: { reason: req.body.reason || null, previousStatus: row.status } });
     return getRow(db, requestId);
   })();
 
@@ -394,6 +413,7 @@ router.post('/:id/cancel-mine', requireRideRole('employee', 'dispatcher'), valid
     if (row.driver_id) db.prepare(`UPDATE drivers SET status = 'available' WHERE id = ?`).run(row.driver_id);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, 'cancelled', ?)`)
       .run(requestId, req.rideUser.id);
+    logEvent(db, { requestId, type: 'cancelled_by_employee', actorUserId: req.rideUser.id, payload: { reason: req.body.reason, previousStatus: row.status } });
     return getRow(db, requestId);
   })();
 

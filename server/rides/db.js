@@ -102,6 +102,39 @@ CREATE TABLE IF NOT EXISTS request_status_history (
   changed_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_history_request ON request_status_history(request_id);
+
+-- Единый журнал событий по заявке — шире, чем request_status_history
+-- (только смены статуса): сюда пишутся и добавление/правка точек маршрута,
+-- и пересчёт оценки времени, и модерация диспетчером, и объединение
+-- заявок (см. дорожную карту доработок агрегатора). Append-only: строки
+-- не обновляются и не удаляются. payload_json — свободная структура под
+-- конкретный тип события (адрес точки, старое/новое время и т.п.).
+-- Это источник данных для страницы «Журнал» у диспетчера/админа и выгрузки
+-- в Excel.
+CREATE TABLE IF NOT EXISTS request_events (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_id     INTEGER NOT NULL REFERENCES requests(id),
+  event_type     TEXT NOT NULL,
+  actor_user_id  INTEGER REFERENCES users(id),
+  payload_json   TEXT,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_request_events_request ON request_events(request_id);
+CREATE INDEX IF NOT EXISTS idx_request_events_type    ON request_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_request_events_created ON request_events(created_at);
+
+-- Кэш геокодирования адресов (Nominatim): один и тот же адрес подачи/
+-- назначения встречается в заявках постоянно, а лимит бесплатного
+-- Nominatim — 1 запрос/сек. found = 0 запоминает, что адрес не удалось
+-- разобрать, чтобы не долбить сервис повторно тем же мусором. fetched_at
+-- позволяет протухать кэшу (TTL проверяется в коде, см. routeEstimate.js).
+CREATE TABLE IF NOT EXISTS geocode_cache (
+  address     TEXT PRIMARY KEY,
+  lat         REAL,
+  lng         REAL,
+  found       INTEGER NOT NULL DEFAULT 1,
+  fetched_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 let writeDb = null;
@@ -128,6 +161,25 @@ function migrateSchema(db) {
   if (!requestColumns.includes('duration_min')) {
     db.exec('ALTER TABLE requests ADD COLUMN duration_min INTEGER');
   }
+  // Координаты точек маршрута храним прямо в БД (раньше геокодировали
+  // каждый раз заново) — нужно для «живой» оценки времени: пересчёт при
+  // добавлении точки в уже активную заявку не должен снова ходить в
+  // геокодер по всем адресам. expected_completion_at — ориентировочный
+  // момент освобождения машины, производная величина (см.
+  // routeEstimate.recomputeRequestEstimate), но денормализована в
+  // requests, чтобы форма подачи могла быстро показать «ближайшая машина
+  // освободится ~ЧЧ:ММ» без обхода всех точек.
+  if (!requestColumns.includes('from_lat')) db.exec('ALTER TABLE requests ADD COLUMN from_lat REAL');
+  if (!requestColumns.includes('from_lng')) db.exec('ALTER TABLE requests ADD COLUMN from_lng REAL');
+  if (!requestColumns.includes('to_lat')) db.exec('ALTER TABLE requests ADD COLUMN to_lat REAL');
+  if (!requestColumns.includes('to_lng')) db.exec('ALTER TABLE requests ADD COLUMN to_lng REAL');
+  if (!requestColumns.includes('expected_completion_at')) {
+    db.exec('ALTER TABLE requests ADD COLUMN expected_completion_at TEXT');
+  }
+
+  const stopColumns = db.prepare("PRAGMA table_info(request_stops)").all().map((c) => c.name);
+  if (!stopColumns.includes('lat')) db.exec('ALTER TABLE request_stops ADD COLUMN lat REAL');
+  if (!stopColumns.includes('lng')) db.exec('ALTER TABLE request_stops ADD COLUMN lng REAL');
 }
 
 function getWriteDb() {

@@ -1,63 +1,248 @@
-// Оценка расстояния/времени в пути: сначала геокодируем каждый
-// адрес (Nominatim), затем строим маршрут через публичный демо-сервер
-// OSRM. Оба — бесплатные OSM-сервисы без API-ключа, но по их же политике
-// использования расcчитаны на некоммерческую/невысокую нагрузку (см.
+// Оценка расстояния/времени в пути.
+//
+// Пайплайн: геокодируем каждый адрес (Nominatim, с кэшем в таблице
+// geocode_cache — см. db.js), затем строим маршрут через публичный
+// демо-сервер OSRM. Оба — бесплатные OSM-сервисы без API-ключа, но по их
+// же политике использования рассчитаны на невысокую нагрузку (см.
 // https://operations.osmfoundation.org/policies/nominatim/,
-// https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server) — для
-// внутреннего корпоративного инструмента с редкими запросами (одна заявка
-// = один расчёт при подаче) этого достаточно; при росте трафика нужен свой
-// инстанс или платный провайдер (см. про 2ГИС в server/rides/README.md).
-// Ошибка на любом шаге (адрес не нашёлся, сервис недоступен) не должна
-// ронять создание заявки — просто возвращаем null, расстояние/время
-// останутся неизвестны.
+// https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server). Кэш
+// геокодера снимает основную часть повторных запросов (один и тот же
+// адрес подачи/назначения встречается постоянно).
+//
+// Когда OSRM недоступен или часть координат не определилась — считаем по
+// эвристике: расстояние по прямой (гаверсинус) × коэффициент извилистости
+// дорог, делённое на среднюю городскую скорость. Оценка загрубляется, но
+// заявка и пересчёт при добавлении точки от этого не ломаются.
+//
+// OSRM считает время по трассовой модели скоростей (без городских пробок и
+// светофоров) — для внутригородских служебных поездок это заметно
+// оптимистичнее реальности, поэтому время считаем сами: расстояние (из
+// фактической геометрии маршрута, ему доверяем) делим на среднюю скорость
+// по городу с поправкой на пробки и добавляем буфер на посадку/высадку.
+const { getWriteDb } = require('./db');
+const { logEvent } = require('./events');
+
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
 
-// OSRM считает время по своей модели скоростей (близко к трассовой,
-// без городских пробок/светофоров) — для внутригородских служебных
-// поездок это заметно оптимистичнее реальности, поэтому время считаем
-// сами: расстояние (оно из фактической геометрии маршрута, ему доверяем)
-// делим на среднюю скорость по городу с поправкой на пробки и добавляем
-// фиксированный буфер на посадку/ожидание на месте.
-const AVERAGE_SPEED_KMH = 40;
-const WAIT_MINUTES = 10;
+const AVERAGE_SPEED_KMH = 40;   // средняя по городу с поправкой на пробки
+const WAIT_MINUTES = 10;        // посадка/высадка на конечной точке
+const PER_STOP_MINUTES = 5;     // остановка на каждом промежуточном пункте
+const ROAD_FACTOR = 1.3;        // расстояние по прямой → примерная длина по дорогам
+const GEOCODE_TTL_DAYS = 30;
 
-async function geocode(address) {
-  const url = `${NOMINATIM_URL}?q=${encodeURIComponent(address)}&format=jsonv2&limit=1`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'my-first-site-rides/1.0' } });
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (!data.length) return null;
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+function haversineKm(a, b) {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-// addresses — от точки подачи до последнего пункта назначения, по
-// порядку. withReturn достраивает маршрут обратно к первой точке тем же
-// путём в обратном порядке — грубая оценка "туда и обратно", не
-// оптимальный отдельный обратный маршрут.
+async function geocodeRaw(address) {
+  const url = `${NOMINATIM_URL}?q=${encodeURIComponent(address)}&format=jsonv2&limit=1`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'my-first-site-rides/1.0' } });
+  if (!res.ok) throw new Error(`Nominatim ${res.status}`);
+  const data = await res.json();
+  if (!data.length) return null;
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+}
+
+// Кэш geocode_cache: свежую запись (в пределах TTL) отдаём сразу, включая
+// «отрицательную» (found = 0) — чтобы не долбить Nominatim повторно тем же
+// неразбираемым адресом. Сетевую ошибку не кэшируем; если есть протухшая
+// запись с координатами — на время недоступности сервиса отдаём её.
+async function geocodeAddress(address) {
+  const key = String(address || '').trim();
+  if (!key) return null;
+  const db = getWriteDb();
+  const row = db.prepare('SELECT lat, lng, found, fetched_at FROM geocode_cache WHERE address = ?').get(key);
+  if (row) {
+    const ageDays = (Date.now() - new Date(row.fetched_at + 'Z').getTime()) / 86400000;
+    if (ageDays < GEOCODE_TTL_DAYS) {
+      return row.found ? { lat: row.lat, lng: row.lng } : null;
+    }
+  }
+  let result;
+  try {
+    result = await geocodeRaw(key);
+  } catch (err) {
+    return row && row.found ? { lat: row.lat, lng: row.lng } : null;
+  }
+  db.prepare(
+    `INSERT INTO geocode_cache (address, lat, lng, found, fetched_at)
+     VALUES (?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(address) DO UPDATE SET
+       lat = excluded.lat, lng = excluded.lng, found = excluded.found, fetched_at = excluded.fetched_at`
+  ).run(key, result ? result.lat : null, result ? result.lng : null, result ? 1 : 0);
+  return result;
+}
+
+async function osrmLegKm(points) {
+  const coordsParam = points.map((p) => `${p.lng},${p.lat}`).join(';');
+  const res = await fetch(`${OSRM_URL}/${coordsParam}?overview=false`);
+  if (!res.ok) throw new Error(`OSRM ${res.status}`);
+  const data = await res.json();
+  const route = data.routes && data.routes[0];
+  if (!route || !route.legs) throw new Error('OSRM: маршрут не построен');
+  return route.legs.map((l) => l.distance / 1000);
+}
+
+// coords — массив ({ lat, lng } | null) по порядку: подача, назначение,
+// доп. пункты. withReturn достраивает обратный путь до первой точки.
+// Возвращает { distanceKm, durationMin, perPoint, source } или null, если
+// известных точек меньше двух.
+//   perPoint[i] = { index, etaMinutes } — накопительное время от старта до
+//   прибытия в i-ю точку прямого маршрута (index 0 — старт, eta 0).
+//   source: 'osrm' | 'heuristic' | 'heuristic-partial'.
+async function estimateFromPoints(coords, withReturn) {
+  if (coords.filter(Boolean).length < 2) return null;
+
+  const forward = coords.slice();
+  const forwardLegCount = forward.length - 1;
+  const allKnown = forward.every(Boolean);
+
+  let legKm = null;
+  let source = 'heuristic';
+
+  if (allKnown) {
+    const routePoints = withReturn ? forward.concat([...forward].reverse().slice(1)) : forward;
+    try {
+      legKm = await osrmLegKm(routePoints);
+      source = 'osrm';
+    } catch (err) {
+      legKm = null;
+    }
+  }
+
+  if (!legKm) {
+    const fwdLegs = [];
+    for (let i = 1; i < forward.length; i++) {
+      const a = forward[i - 1];
+      const b = forward[i];
+      fwdLegs.push(a && b ? haversineKm(a, b) * ROAD_FACTOR : null);
+    }
+    const knownLegs = fwdLegs.filter((x) => x != null);
+    const avgLeg = knownLegs.length ? knownLegs.reduce((s, x) => s + x, 0) / knownLegs.length : 5;
+    let legs = fwdLegs.map((x) => (x == null ? avgLeg : x));
+    if (withReturn) legs = legs.concat([...legs].reverse());
+    legKm = legs;
+    source = knownLegs.length === fwdLegs.length ? 'heuristic' : 'heuristic-partial';
+  }
+
+  const totalKm = legKm.reduce((s, x) => s + x, 0);
+  const distanceKm = Math.round(totalKm * 10) / 10;
+
+  const perPoint = [{ index: 0, etaMinutes: 0 }];
+  let cumKm = 0;
+  for (let i = 0; i < forwardLegCount; i++) {
+    cumKm += legKm[i];
+    const drive = (cumKm / AVERAGE_SPEED_KMH) * 60;
+    const wait = WAIT_MINUTES + PER_STOP_MINUTES * i;
+    perPoint.push({ index: i + 1, etaMinutes: Math.round(drive + wait) });
+  }
+
+  const durationMin =
+    Math.round((totalKm / AVERAGE_SPEED_KMH) * 60) +
+    WAIT_MINUTES +
+    PER_STOP_MINUTES * Math.max(0, forwardLegCount - 1);
+
+  return { distanceKm, durationMin, perPoint, source };
+}
+
+// Единая точка пересчёта оценки для заявки: геокодирует все её точки (с
+// кэшем), строит маршрут, сохраняет координаты и оценку в БД, пишет
+// событие route_recomputed в журнал. Асинхронная и делает запись в БД
+// (маленькую синхронную транзакцию в конце) — вызывать вне
+// db.transaction(...) вызывающей стороны. Возвращает
+// { distanceKm, durationMin, expectedCompletionAt, perPoint, source } либо null.
+async function recomputeRequestEstimate(requestId, { actorUserId = null } = {}) {
+  const db = getWriteDb();
+  const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(requestId);
+  if (!request) return null;
+  const stops = db
+    .prepare('SELECT * FROM request_stops WHERE request_id = ? ORDER BY stop_order ASC')
+    .all(requestId);
+
+  const addrList = [request.from_address, request.to_address, ...stops.map((st) => st.address)];
+  const coords = [];
+  for (const addr of addrList) coords.push(await geocodeAddress(addr)); // последовательно — щадим лимит Nominatim
+
+  const estimate = await estimateFromPoints(coords, !!request.with_return);
+
+  let expectedCompletionAt = null;
+  if (estimate) {
+    // База отсчёта: для уже начатой поездки — «сейчас», иначе — желаемое
+    // время подачи (если оно в будущем).
+    let base = Date.now();
+    if (request.status !== 'in_progress' && request.requested_at) {
+      const t = new Date(request.requested_at).getTime();
+      if (!Number.isNaN(t) && t > base) base = t;
+    }
+    expectedCompletionAt = new Date(base + estimate.durationMin * 60000).toISOString();
+  }
+
+  const write = db.transaction(() => {
+    db.prepare(
+      `UPDATE requests SET
+         distance_km = ?, duration_min = ?,
+         from_lat = ?, from_lng = ?, to_lat = ?, to_lng = ?,
+         expected_completion_at = ?
+       WHERE id = ?`
+    ).run(
+      estimate ? estimate.distanceKm : null,
+      estimate ? estimate.durationMin : null,
+      coords[0] ? coords[0].lat : null,
+      coords[0] ? coords[0].lng : null,
+      coords[1] ? coords[1].lat : null,
+      coords[1] ? coords[1].lng : null,
+      expectedCompletionAt,
+      requestId
+    );
+    const updStop = db.prepare('UPDATE request_stops SET lat = ?, lng = ? WHERE id = ?');
+    stops.forEach((st, i) => {
+      const c = coords[2 + i];
+      updStop.run(c ? c.lat : null, c ? c.lng : null, st.id);
+    });
+    logEvent(db, {
+      requestId,
+      type: 'route_recomputed',
+      actorUserId,
+      payload: estimate
+        ? {
+            distanceKm: estimate.distanceKm,
+            durationMin: estimate.durationMin,
+            expectedCompletionAt,
+            source: estimate.source,
+            points: addrList.length,
+          }
+        : { ok: false, reason: 'не удалось определить координаты маршрута' },
+    });
+  });
+  write();
+
+  if (!estimate) return null;
+  return {
+    ...estimate,
+    expectedCompletionAt,
+    perPoint: estimate.perPoint.map((p) => ({ ...p, address: addrList[p.index] })),
+  };
+}
+
+// Обратная совместимость: разовая оценка по списку адресов, без записи в
+// БД. Использует тот же кэш геокодера и тот же расчёт.
 async function estimateRoute(addresses, withReturn) {
   try {
-    const geocoded = {};
-    for (const addr of new Set(addresses)) {
-      geocoded[addr] = await geocode(addr);
-    }
-    const points = addresses.map((a) => geocoded[a]).filter(Boolean);
-    if (points.length < 2) return null;
-
-    const routePoints = withReturn ? points.concat([...points].reverse().slice(1)) : points;
-    const coordsParam = routePoints.map((p) => `${p.lon},${p.lat}`).join(';');
-    const res = await fetch(`${OSRM_URL}/${coordsParam}?overview=false`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const route = data.routes && data.routes[0];
-    if (!route) return null;
-
-    const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
-    const durationMin = Math.round((distanceKm / AVERAGE_SPEED_KMH) * 60) + WAIT_MINUTES;
-    return { distanceKm, durationMin };
+    const coords = [];
+    for (const a of addresses) coords.push(await geocodeAddress(a));
+    const est = await estimateFromPoints(coords, withReturn);
+    return est ? { distanceKm: est.distanceKm, durationMin: est.durationMin } : null;
   } catch (err) {
     return null;
   }
 }
 
-module.exports = { estimateRoute };
+module.exports = { estimateRoute, recomputeRequestEstimate, geocodeAddress };

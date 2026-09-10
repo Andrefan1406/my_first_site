@@ -11,6 +11,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getAuth } from "firebase/auth";
+import * as XLSX from "xlsx";
 import { ridesApiDelete, ridesApiFetch, ridesApiPatch, ridesApiPost, ridesApiPut } from "../../rides/api";
 import LogoutButton from "../../rides/LogoutButton";
 import { SITE_ADMIN_EMAIL } from "../../rides/constants";
@@ -432,6 +433,137 @@ function DriversTab({ readOnly }) {
   );
 }
 
+// Журнал событий по заявкам — читает /api/v1/events (см.
+// server/rides/eventsRouter.js). Виден и диспетчеру, и главному админу.
+// Выгрузка в Excel собирается прямо здесь (XLSX уже в проекте).
+function fmtDateTime(s) {
+  if (!s) return "";
+  // события пишутся в UTC (datetime('now')) — дорисовываем 'Z' и показываем в локали
+  const d = new Date(s.includes("T") ? s : s.replace(" ", "T") + "Z");
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleString("ru-RU");
+}
+
+function fmtEventDetails(ev) {
+  const p = ev.payload;
+  if (!p || typeof p !== "object") return "";
+  const parts = [];
+  if (p.reason) parts.push(`причина: ${p.reason}`);
+  if (p.from && p.to) parts.push(`${p.from} → ${p.to}`);
+  if (p.previousStatus) parts.push(`было: ${p.previousStatus}`);
+  if (p.driverId) parts.push(`водитель #${p.driverId}`);
+  if (p.distanceKm != null) parts.push(`${p.distanceKm} км`);
+  if (p.durationMin != null) parts.push(`~${p.durationMin} мин`);
+  if (p.expectedCompletionAt) parts.push(`освободится ~${fmtDateTime(p.expectedCompletionAt)}`);
+  if (p.source) parts.push(`расчёт: ${p.source}`);
+  if (p.address) parts.push(p.address);
+  if (Array.isArray(p.extraStops) && p.extraStops.length) parts.push(`+${p.extraStops.length} пункт(а)`);
+  if (p.ok === false && p.reason == null) parts.push("маршрут не рассчитан");
+  return parts.join("; ");
+}
+
+function JournalTab() {
+  const [events, setEvents] = useState([]);
+  const [eventTypes, setEventTypes] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [filters, setFilters] = useState({ requestId: "", type: "", from: "", to: "" });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const qs = new URLSearchParams();
+      if (filters.requestId) qs.set("requestId", filters.requestId);
+      if (filters.type) qs.set("type", filters.type);
+      if (filters.from) qs.set("from", filters.from);
+      if (filters.to) qs.set("to", filters.to + " 23:59:59");
+      const { events: rows, eventTypes: types } = await ridesApiFetch(`/api/v1/events?${qs.toString()}`);
+      setEvents(rows);
+      setEventTypes(types || {});
+    } catch (err) {
+      setError(err.message || "Не удалось загрузить журнал");
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const setFilter = (patch) => setFilters((prev) => ({ ...prev, ...patch }));
+
+  const exportExcel = () => {
+    const aoa = [
+      ["Дата и время", "Заявка №", "Событие", "Кто", "Роль", "Маршрут", "Статус заявки", "Детали"],
+      ...events.map((ev) => [
+        fmtDateTime(ev.createdAt),
+        ev.requestId,
+        ev.typeLabel,
+        ev.actorName || ev.actorEmail || "",
+        ev.actorRole || "",
+        [ev.fromAddress, ev.toAddress].filter(Boolean).join(" → "),
+        ev.requestStatus || "",
+        fmtEventDetails(ev),
+      ]),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 19 }, { wch: 9 }, { wch: 26 }, { wch: 20 }, { wch: 12 }, { wch: 40 }, { wch: 16 }, { wch: 44 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Журнал");
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Журнал_поездок_${today}.xlsx`);
+  };
+
+  return (
+    <div>
+      {error && <div style={s.error}>{error}</div>}
+      <div style={s.inlineForm}>
+        <input style={{ ...s.inputSmall, width: "110px" }} placeholder="Заявка №" value={filters.requestId}
+          onChange={(e) => setFilter({ requestId: e.target.value.replace(/\D/g, "") })} />
+        <select style={{ ...s.inputSmall, width: "auto" }} value={filters.type} onChange={(e) => setFilter({ type: e.target.value })}>
+          <option value="">— все события —</option>
+          {Object.entries(eventTypes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <input style={{ ...s.inputSmall, width: "auto" }} type="date" value={filters.from} onChange={(e) => setFilter({ from: e.target.value })} />
+        <input style={{ ...s.inputSmall, width: "auto" }} type="date" value={filters.to} onChange={(e) => setFilter({ to: e.target.value })} />
+        <button style={s.secondaryButton} onClick={() => setFilters({ requestId: "", type: "", from: "", to: "" })}>Сбросить</button>
+        <button style={s.primaryButton} onClick={exportExcel} disabled={!events.length}>Выгрузить в Excel</button>
+      </div>
+
+      {loading ? <p style={s.muted}>Загрузка...</p> : (
+        <div style={s.tableWrap}>
+          <table style={s.table}>
+            <thead>
+              <tr>
+                <th style={s.th}>Дата и время</th>
+                <th style={s.th}>Заявка №</th>
+                <th style={s.th}>Событие</th>
+                <th style={s.th}>Кто</th>
+                <th style={s.th}>Маршрут</th>
+                <th style={s.th}>Детали</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.length === 0 && (
+                <tr><td style={s.td} colSpan={6}><span style={s.muted}>Событий нет</span></td></tr>
+              )}
+              {events.map((ev) => (
+                <tr key={ev.id}>
+                  <td style={{ ...s.td, whiteSpace: "nowrap" }}>{fmtDateTime(ev.createdAt)}</td>
+                  <td style={s.td}>{ev.requestId}</td>
+                  <td style={s.td}>{ev.typeLabel}</td>
+                  <td style={s.td}>{ev.actorName || ev.actorEmail || "—"}</td>
+                  <td style={s.td}>{[ev.fromAddress, ev.toAddress].filter(Boolean).join(" → ")}</td>
+                  <td style={s.td}>{fmtEventDetails(ev)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RidesAdminPage() {
   const isSiteAdmin = getAuth().currentUser?.email?.toLowerCase() === SITE_ADMIN_EMAIL;
   const [role, setRole] = useState(undefined); // undefined = проверяется; своя роль по rides.users (у site admin — null)
@@ -469,10 +601,12 @@ export default function RidesAdminPage() {
         </button>
         <button style={tab === "drivers" ? s.tabActive : s.tab} onClick={() => setTab("drivers")}>Водители</button>
         <button style={tab === "vehicles" ? s.tabActive : s.tab} onClick={() => setTab("vehicles")}>Машины</button>
+        <button style={tab === "journal" ? s.tabActive : s.tab} onClick={() => setTab("journal")}>Журнал</button>
       </div>
       {tab === "users" && (isSiteAdmin ? <RoleAssignmentTab /> : <UserCardsTab />)}
       {tab === "drivers" && <DriversTab readOnly={readOnly} />}
       {tab === "vehicles" && <VehiclesTab readOnly={readOnly} />}
+      {tab === "journal" && <JournalTab />}
     </div>
   );
 }
