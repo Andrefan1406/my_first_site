@@ -9,6 +9,7 @@ const { requireRideRole } = require('./auth');
 const { emitToDrivers, emitToDispatcher, emitToEmployee, emitToDriver } = require('./socket');
 const { recomputeRequestEstimate } = require('./routeEstimate');
 const { logEvent } = require('./events');
+const { dissolveMergesForA, cascadeCompleteMergedB, emitDissolvedB } = require('./mergeApply');
 const {
   FULL_SELECT, validate, staleThreshold, hydrateRows, getRow,
   serializeForDriver, serializeForEmployee, serializeForDispatcher, z,
@@ -117,10 +118,13 @@ router.get('/mine', requireRideRole('employee', 'dispatcher'), (req, res) => {
 });
 
 // Водитель: пул свободных заявок, самые ранние сверху. Снятые с машины и
-// ждущие решения заказчика (on_hold) в пул не отдаём.
+// ждущие решения заказчика (on_hold), а также заблокированные на время
+// переговоров об объединении (merge_lock) в пул не отдаём.
 router.get('/pool', requireRideRole('driver'), (req, res) => {
   const db = getWriteDb();
-  const rows = db.prepare(`${FULL_SELECT} WHERE r.status = 'pending_assignment' AND r.on_hold = 0 ORDER BY r.created_at ASC`).all();
+  const rows = db
+    .prepare(`${FULL_SELECT} WHERE r.status = 'pending_assignment' AND r.on_hold = 0 AND r.merge_lock = 0 ORDER BY r.created_at ASC`)
+    .all();
   res.json({ requests: hydrateRows(db, rows).map(serializeForDriver) });
 });
 
@@ -129,8 +133,10 @@ router.get('/my-current', requireRideRole('driver'), (req, res) => {
   const db = getWriteDb();
   const driver = db.prepare('SELECT * FROM drivers WHERE user_id = ?').get(req.rideUser.id);
   if (!driver) return res.json({ requests: [] });
+  // merged_into IS NULL — влитые в чужой маршрут заявки B отдельной
+  // карточкой у водителя не показываем, они видны как «попутно» внутри A.
   const rows = db
-    .prepare(`${FULL_SELECT} WHERE r.driver_id = ? AND r.status IN ('assigned', 'in_progress') ORDER BY r.claimed_at ASC`)
+    .prepare(`${FULL_SELECT} WHERE r.driver_id = ? AND r.status IN ('assigned', 'in_progress') AND r.merged_into IS NULL ORDER BY r.claimed_at ASC`)
     .all(driver.id);
   res.json({ requests: hydrateRows(db, rows).map(serializeForDriver) });
 });
@@ -204,7 +210,7 @@ router.post('/:id/claim', requireRideRole('driver'), (req, res) => {
 });
 
 // Водитель отказывается от уже взятого заказа — возвращается в общий пул.
-router.post('/:id/decline', requireRideRole('driver'), validate(declineSchema), (req, res) => {
+router.post('/:id/decline', requireRideRole('driver'), validate(declineSchema), async (req, res) => {
   const db = getWriteDb();
   const driver = db.prepare('SELECT * FROM drivers WHERE user_id = ?').get(req.rideUser.id);
   if (!driver) return res.status(403).json({ error: 'Вы не зарегистрированы как водитель' });
@@ -227,9 +233,18 @@ router.post('/:id/decline', requireRideRole('driver'), validate(declineSchema), 
 
   if (!result) return res.status(409).json({ error: 'Не удалось отказаться — заказ уже не ваш или сменил статус' });
 
-  emitToDrivers('request:new', serializeForDriver(result));
-  emitToDispatcher('request:updated', serializeForDispatcher(result, staleThreshold()));
-  emitToEmployee(result.employee_id, 'request:status', serializeForEmployee(result));
+  // Если на заказе висели попутные (влитые) заявки — расформировываем: их
+  // точки вынимаются из маршрута, сами они возвращаются в пул.
+  const restoredB = dissolveMergesForA(db, requestId, 'Водитель отказался от заказа', req.rideUser.id);
+  if (restoredB.length) {
+    await recomputeRequestEstimate(requestId, { actorUserId: req.rideUser.id }).catch(() => {});
+    emitDissolvedB(db, restoredB);
+  }
+
+  const fresh = getRow(db, requestId);
+  emitToDrivers('request:new', serializeForDriver(fresh));
+  emitToDispatcher('request:updated', serializeForDispatcher(fresh, staleThreshold()));
+  emitToEmployee(fresh.employee_id, 'request:status', serializeForEmployee(fresh));
   res.json({ ok: true });
 });
 
@@ -243,19 +258,26 @@ router.post('/:id/status', requireRideRole('driver'), validate(statusSchema), as
   const newStatus = req.body.status;
   const allowedFrom = newStatus === 'in_progress' ? 'assigned' : 'in_progress';
 
-  const ok = db.transaction(() => {
+  const outcome = db.transaction(() => {
     const upd = db
       .prepare(`UPDATE requests SET status = ? WHERE id = ? AND driver_id = ? AND status = ?`)
       .run(newStatus, requestId, driver.id, allowedFrom);
-    if (upd.changes === 0) return false;
+    if (upd.changes === 0) return null;
     if (newStatus === 'completed') db.prepare(`UPDATE drivers SET status = 'available' WHERE id = ?`).run(driver.id);
     db.prepare(`INSERT INTO request_status_history (request_id, status, changed_by) VALUES (?, ?, ?)`)
       .run(requestId, newStatus, req.rideUser.id);
     logEvent(db, { requestId, type: 'status_changed', actorUserId: req.rideUser.id, payload: { from: allowedFrom, to: newStatus } });
-    return true;
+    // Заявка завершена — попутные (влитые) заявки закрываются вместе с ней.
+    const completedMergedB = newStatus === 'completed' ? cascadeCompleteMergedB(db, requestId, req.rideUser.id) : [];
+    return { completedMergedB };
   })();
 
-  if (!ok) return res.status(409).json({ error: 'Нельзя сменить статус — заказ не ваш или уже в другом статусе' });
+  if (!outcome) return res.status(409).json({ error: 'Нельзя сменить статус — заказ не ваш или уже в другом статусе' });
+
+  for (const bId of outcome.completedMergedB) {
+    emitToEmployee(getRow(db, bId).employee_id, 'request:status', serializeForEmployee(getRow(db, bId)));
+    emitToDispatcher('request:updated', serializeForDispatcher(getRow(db, bId), staleThreshold()));
+  }
 
   // При выходе в рейс пересчитываем оценку от «сейчас» (до этого
   // expected_completion_at считался от желаемого времени подачи) — иначе
@@ -327,7 +349,7 @@ router.post('/:id/pull', requireRideRole('dispatcher'), validate(pullSchema), as
     let target = null;
     if (targetRequestId) {
       target = db.prepare('SELECT * FROM requests WHERE id = ?').get(targetRequestId);
-      if (!target || target.status !== 'pending_assignment' || target.on_hold) {
+      if (!target || target.status !== 'pending_assignment' || target.on_hold || target.merge_lock) {
         return { error: 'Заявка, которой хотите отдать машину, уже не в пуле' };
       }
     }
@@ -368,6 +390,14 @@ router.post('/:id/pull', requireRideRole('dispatcher'), validate(pullSchema), as
   })();
 
   if (outcome.error) return res.status(409).json({ error: outcome.error });
+
+  // Попутные заявки, влитые в снятую с машины, расформировываем — они
+  // возвращаются в общий пул отдельными заявками.
+  const restoredB = dissolveMergesForA(db, requestId, 'Машину сняли с заявки', req.rideUser.id);
+  if (restoredB.length) {
+    await recomputeRequestEstimate(requestId, { actorUserId: req.rideUser.id }).catch(() => {});
+    emitDissolvedB(db, restoredB);
+  }
 
   // На заявке, снятой с машины, число точек/маршрут не менялись — но
   // база отсчёта времени сбилась (машины больше нет), да и заказчик ещё
@@ -449,6 +479,9 @@ router.post('/:id/cancel', requireRideRole('dispatcher'), validate(cancelSchema)
 
   if (!result) return res.status(409).json({ error: 'Заказ нельзя отменить в текущем статусе' });
 
+  const restoredB = dissolveMergesForA(db, requestId, 'Заявку отменил диспетчер', req.rideUser.id);
+  if (restoredB.length) emitDissolvedB(db, restoredB);
+
   emitToDrivers('request:removed', { id: requestId });
   emitToDispatcher('request:updated', serializeForDispatcher(result, staleThreshold()));
   emitToEmployee(result.employee_id, 'request:status', serializeForEmployee(result));
@@ -482,6 +515,9 @@ router.post('/:id/cancel-mine', requireRideRole('employee', 'dispatcher'), valid
   if (!result) {
     return res.status(409).json({ error: 'Заявку нельзя отменить — водитель уже в пути, поездка завершена, либо это не ваша заявка' });
   }
+
+  const restoredB = dissolveMergesForA(db, requestId, 'Заказчик отменил заявку', req.rideUser.id);
+  if (restoredB.length) emitDissolvedB(db, restoredB);
 
   emitToDrivers('request:removed', { id: requestId });
   emitToDispatcher('request:updated', serializeForDispatcher(result, staleThreshold()));

@@ -31,6 +31,7 @@ const ridesVehiclesRouter = require('./rides/vehiclesRouter');
 const ridesDriversRouter = require('./rides/driversRouter');
 const ridesRequestsRouter = require('./rides/requestsRouter');
 const ridesStopProposalsRouter = require('./rides/stopProposalsRouter');
+const ridesMergeRouter = require('./rides/mergeRouter');
 const ridesEventsRouter = require('./rides/eventsRouter');
 const ridesFleetRouter = require('./rides/fleetRouter');
 const { initSocket } = require('./rides/socket');
@@ -85,6 +86,7 @@ app.use('/api/v1/vehicles', ridesVehiclesRouter);
 app.use('/api/v1/drivers', ridesDriversRouter);
 app.use('/api/v1/requests', ridesRequestsRouter);
 app.use('/api/v1/requests', ridesStopProposalsRouter);
+app.use('/api/v1/requests', ridesMergeRouter);
 app.use('/api/v1/events', ridesEventsRouter);
 app.use('/api/v1/fleet-status', ridesFleetRouter);
 

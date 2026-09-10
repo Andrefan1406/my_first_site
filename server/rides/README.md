@@ -19,6 +19,20 @@
 всем причастным. Всё логируется в `request_events` (см. вкладку «Журнал»
 на `/rides-admin`).
 
+### Объединение заявок водителем (П.6)
+
+Водитель с активной заявкой A предлагает подвезти попутно заявку B из
+пула: `POST /api/v1/requests/:bId/merge` c `{ intoRequestId: aId }`.
+Нужно двойное согласие — заказчик A и диспетчер (`POST
+/api/v1/requests/merges/:id/approve|reject`). Пока оба не «за» — B «мягко»
+заблокирована в пуле (`merge_lock`, из пула пропадает). Оба «за» → точки B
+вливаются в маршрут A (`request_stops.merged_from_request_id = B`),
+`B.merged_into = A`, считается `pickup_eta_at`, идёт пересчёт маршрута.
+Таблица `request_merges`. Таймаут 5 минут → `auto_rejected` (та же джоба
+`proposalTimeout.js`). Завершение A каскадом закрывает влитые B; отмена /
+отказ / переброска A — расформировывает объединение и возвращает B в пул
+(`mergeApply.dissolveMergesForA`).
+
 ### Экстренная переброска машины (П.4)
 
 `POST /api/v1/requests/:id/pull` (диспетчер) снимает машину с активной

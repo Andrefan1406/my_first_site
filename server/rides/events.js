@@ -30,6 +30,7 @@ const EVENT_TYPES = {
   merge_proposed: 'Предложено объединение заявок',
   merge_approved: 'Объединение заявок подтверждено',
   merge_rejected: 'Объединение заявок отклонено',
+  merge_dissolved: 'Объединение заявок расформировано',
 };
 
 function eventTypeLabel(type) {

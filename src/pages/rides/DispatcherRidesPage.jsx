@@ -33,6 +33,7 @@ export default function DispatcherRidesPage() {
   const [requests, setRequests] = useState([]);
   const [summary, setSummary] = useState(null);
   const [proposals, setProposals] = useState([]);
+  const [merges, setMerges] = useState([]);
   const [fleet, setFleet] = useState(null);
   const [availableDrivers, setAvailableDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,14 +50,16 @@ export default function DispatcherRidesPage() {
     setLoading(true);
     setError("");
     try {
-      const [{ requests: rows, summary: sum }, { proposals: props }, fleetRes] = await Promise.all([
+      const [{ requests: rows, summary: sum }, { proposals: props }, { merges: mrg }, fleetRes] = await Promise.all([
         ridesApiFetch("/api/v1/requests"),
         ridesApiFetch("/api/v1/requests/stop-changes/pending"),
+        ridesApiFetch("/api/v1/requests/merges/pending"),
         ridesApiFetch("/api/v1/fleet-status"),
       ]);
       setRequests(rows);
       setSummary(sum);
       setProposals(props);
+      setMerges(mrg);
       setFleet(fleetRes);
     } catch (err) {
       setError(err.message || "Не удалось загрузить заявки");
@@ -81,6 +84,10 @@ export default function DispatcherRidesPage() {
     socket.on("request:updated", upsert);
     socket.on("proposal:new", (p) => setProposals((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p])));
     socket.on("proposal:updated", (p) => setProposals((prev) => prev.filter((x) => x.id !== p.id)));
+    socket.on("merge:new", (m) => setMerges((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m])));
+    socket.on("merge:updated", (m) => setMerges((prev) => (
+      m.status === "pending" ? prev.map((x) => (x.id === m.id ? m : x)) : prev.filter((x) => x.id !== m.id)
+    )));
     socket.on("connect_error", () => {});
     return () => socket.disconnect();
   }, []);
@@ -160,6 +167,26 @@ export default function DispatcherRidesPage() {
     }
   };
 
+  const decideMerge = async (id, decision) => {
+    setBusy(true);
+    setError("");
+    try {
+      if (decision === "approve") {
+        await ridesApiPost(`/api/v1/requests/merges/${id}/approve`);
+      } else {
+        const reason = window.prompt("Причина отказа в объединении:");
+        if (reason === null) { setBusy(false); return; }
+        if (!reason.trim()) { setError("Укажите причину"); setBusy(false); return; }
+        await ridesApiPost(`/api/v1/requests/merges/${id}/reject`, { reason });
+      }
+      setMerges((prev) => prev.filter((m) => m.id !== id));
+    } catch (err) {
+      setError(err.message || "Не удалось обработать объединение");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openPull = (requestId) => {
     setError("");
     setPullForm({ reason: "", targetRequestId: "" });
@@ -223,6 +250,11 @@ export default function DispatcherRidesPage() {
             <div style={s.cardLabel}>Сняты с машины</div><div style={s.cardValue}>{summary.onHold}</div>
           </div>
         )}
+        {merges.length > 0 && (
+          <div style={{ ...s.card, ...s.cardAlert }}>
+            <div style={s.cardLabel}>Объединения заявок</div><div style={s.cardValue}>{merges.length}</div>
+          </div>
+        )}
         <div style={s.card}>
           <div style={s.cardLabel}>Свободные машины</div>
           <div style={s.cardValue}>{fleet ? fleet.freeCount : "—"}</div>
@@ -263,6 +295,36 @@ export default function DispatcherRidesPage() {
         </section>
       )}
 
+      {merges.length > 0 && (
+        <section style={s.proposalsBox}>
+          <h2 style={s.sectionTitle}>Объединение заявок — нужно решение</h2>
+          {merges.map((m) => {
+            const age = minutesSince(m.createdAt);
+            return (
+              <div key={m.id} style={s.proposalRow}>
+                <div style={s.proposalMain}>
+                  <div style={s.proposalTitle}>
+                    Заявка #{m.requestAId} + заявка #{m.requestBId} · водитель {m.driverName}
+                  </div>
+                  <div style={s.proposalMeta}>Основной маршрут: {m.aRoute}</div>
+                  <div style={s.proposalMeta}>Попутная заявка: {m.bRoute}</div>
+                  <div style={s.proposalMeta}>
+                    Согласие: заказчик {m.approvedByA ? "✓" : "ждём"} · диспетчер {m.approvedByDispatcher ? "✓" : "ждём"}
+                    {age != null && <> · {age === 0 ? "только что" : `${age} мин назад`}</>}
+                  </div>
+                </div>
+                <div style={s.proposalActions}>
+                  <button style={s.primaryButton} disabled={busy || m.approvedByDispatcher} onClick={() => decideMerge(m.id, "approve")}>
+                    {m.approvedByDispatcher ? "Вы согласовали" : "Одобрить"}
+                  </button>
+                  <button style={s.dangerButton} disabled={busy} onClick={() => decideMerge(m.id, "reject")}>Отклонить</button>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
       <div style={s.tableWrap}>
         <table style={s.table}>
           <thead>
@@ -285,6 +347,9 @@ export default function DispatcherRidesPage() {
                   <td style={s.td}>
                     {formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}
                     {r.stopProposals?.length > 0 && <span style={s.pendingBadge}>+{r.stopProposals.length} на модерации</span>}
+                    {r.mergedRequests?.length > 0 && <span style={s.mergeBadge}>🔗 попутно #{r.mergedRequests.map((m) => m.id).join(", #")}</span>}
+                    {r.mergedInto && <span style={s.mergeBadge}>🔗 в составе поездки #{r.mergedInto}</span>}
+                    {r.pendingMerges?.length > 0 && <span style={s.pendingBadge}>объединение на согласовании</span>}
                   </td>
                   <td style={s.td}>{formatEstimate(r) || "—"}</td>
                   <td style={s.td}>
@@ -300,18 +365,19 @@ export default function DispatcherRidesPage() {
                   </td>
                   <td style={s.td}>{r.driverName ? `${r.driverName}${r.vehiclePlate ? ` (${r.vehiclePlate})` : ""}` : "—"}</td>
                   <td style={s.td}>
-                    {r.status === "pending_assignment" && (
+                    {r.mergedInto && <span style={s.muted}>обслуживается заявкой #{r.mergedInto}</span>}
+                    {!r.mergedInto && r.status === "pending_assignment" && (
                       <button style={s.secondaryButton} onClick={() => openAssign(r.id)}>
                         {r.onHold ? "Дать другую машину" : "Назначить"}
                       </button>
                     )}
-                    {["assigned", "in_progress"].includes(r.status) && (
+                    {!r.mergedInto && ["assigned", "in_progress"].includes(r.status) && (
                       <button style={s.warnButton} onClick={() => openPull(r.id)}>Перебросить машину</button>
                     )}
-                    {["pending_assignment", "assigned"].includes(r.status) && (
+                    {!r.mergedInto && ["pending_assignment", "assigned"].includes(r.status) && (
                       <button style={s.dangerButton} onClick={() => cancelRequest(r.id)}>Отменить</button>
                     )}
-                    {canEditRoute(r) && (
+                    {!r.mergedInto && canEditRoute(r) && (
                       <button style={s.secondaryButton} onClick={() => setStopsPanelFor(stopsPanelFor === r.id ? null : r.id)}>
                         Маршрут
                       </button>
@@ -446,6 +512,7 @@ const s = {
   staleRow: { background: "#fff8e1" },
   staleBadge: { marginLeft: "8px", fontSize: "11px", color: "#b8860b", fontWeight: 700 },
   pendingBadge: { marginLeft: "8px", fontSize: "11px", color: "#e67e22", fontWeight: 700, whiteSpace: "nowrap" },
+  mergeBadge: { marginLeft: "8px", fontSize: "11px", color: "#0b5cad", fontWeight: 700, whiteSpace: "nowrap" },
   returnBadge: { fontSize: "12px", color: "#888" },
 
   stopsPanel: { background: "#f7f9fc", borderRadius: "8px", padding: "12px", display: "flex", flexDirection: "column", gap: "10px" },

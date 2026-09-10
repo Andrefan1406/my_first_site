@@ -8,7 +8,7 @@ import { ridesApiFetch, ridesApiPatch, ridesApiPost } from "../../rides/api";
 import { createRidesSocket } from "../../rides/socket";
 import LogoutButton from "../../rides/LogoutButton";
 import MapPicker from "../../rides/MapPicker";
-import { formatRoute, formatEstimate } from "../../rides/format";
+import { formatRoute, formatEstimate, formatClock } from "../../rides/format";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -34,6 +34,7 @@ export default function DriverDashboardPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [proposeFor, setProposeFor] = useState(null); // requestId, для которого открыт выбор точки на карте
+  const [mergeBFor, setMergeBFor] = useState(null); // id заявки из пула, которую объединяем (когда текущих заказов несколько)
   const [busyIds, setBusyIds] = useState(new Set());
 
   const setRowBusy = (id, val) => {
@@ -91,6 +92,15 @@ export default function DriverDashboardPage() {
       setNotice(`Диспетчер снял с вас заказ #${id}${reason ? `. Причина: ${reason}` : ""}.`);
       ridesApiFetch("/api/v1/drivers/me").then(({ driver: d }) => setDriver(d)).catch(() => {});
     });
+    // Ход согласования объединения заявок (П.6).
+    socket.on("merge:new", () => loadAll());
+    socket.on("merge:updated", (m) => {
+      if (m.status === "approved") setNotice(`Заявка #${m.requestBId} объединена с вашим заказом #${m.requestAId}.`);
+      else if (m.status === "rejected" || m.status === "auto_rejected") {
+        setNotice(`Объединение заявок #${m.requestAId} и #${m.requestBId} не согласовано${m.decisionReason ? `: ${m.decisionReason}` : ""}.`);
+      }
+      loadAll();
+    });
     // Решение по предложенной этим водителем точке.
     socket.on("proposal:updated", (p) => {
       if (p.status === "approved") setNotice(`Диспетчер добавил точку «${p.address}» в маршрут заявки #${p.requestId}.`);
@@ -102,7 +112,19 @@ export default function DriverDashboardPage() {
     });
     socket.on("connect_error", () => {});
     return () => socket.disconnect();
-  }, []);
+  }, [loadAll]);
+
+  const proposeMerge = async (bId, intoRequestId) => {
+    setMergeBFor(null);
+    setError("");
+    try {
+      await ridesApiPost(`/api/v1/requests/${bId}/merge`, { intoRequestId });
+      setNotice(`Предложение объединить заявку #${bId} с вашим заказом отправлено на согласование.`);
+      loadAll();
+    } catch (err) {
+      setError(err.message || "Не удалось предложить объединение");
+    }
+  };
 
   const claim = async (id) => {
     setRowBusy(id, true);
@@ -239,6 +261,26 @@ export default function DriverDashboardPage() {
                   Заказчик: {r.employeeName} — <a href={`tel:${r.employeePhone}`} style={s.phoneLink}>{r.employeePhone}</a>
                 </div>
                 <div style={s.cardStatus}>{STATUS_LABEL[r.status] || r.status}</div>
+                {r.mergedRequests?.length > 0 && (
+                  <div style={s.mergeBox}>
+                    {r.mergedRequests.map((mr) => (
+                      <div key={mr.id}>
+                        🔗 попутно заявка #{mr.id}: {mr.fromAddress} → {mr.toAddress}
+                        {mr.pickupEtaAt && <> · посадка {formatClock(mr.pickupEtaAt)}</>}
+                        {mr.employeePhone && <> · <a href={`tel:${mr.employeePhone}`} style={s.phoneLink}>{mr.employeePhone}</a></>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {r.pendingMerges?.length > 0 && (
+                  <div style={s.pendingBox}>
+                    {r.pendingMerges.map((pm) => (
+                      <div key={pm.id}>
+                        🕓 объединение с заявкой #{pm.requestBId === r.id ? pm.requestAId : pm.requestBId}: заказчик {pm.approvedByA ? "✓" : "…"}, диспетчер {pm.approvedByDispatcher ? "✓" : "…"}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {r.stopProposals?.length > 0 && (
                   <div style={s.pendingBox}>
                     {r.stopProposals.map((sp) => (
@@ -278,9 +320,27 @@ export default function DriverDashboardPage() {
                 <div style={s.cardMeta}>
                   Заказчик: {r.employeeName} — <a href={`tel:${r.employeePhone}`} style={s.phoneLink}>{r.employeePhone}</a>
                 </div>
-                <button style={s.primaryButton} disabled={busyIds.has(r.id) || driver?.status !== "available"} onClick={() => claim(r.id)}>
-                  Взять заказ
-                </button>
+                <div style={s.cardActions}>
+                  <button style={s.primaryButton} disabled={busyIds.has(r.id) || driver?.status !== "available"} onClick={() => claim(r.id)}>
+                    Взять заказ
+                  </button>
+                  {current.length > 0 && (
+                    current.length === 1 ? (
+                      <button style={s.secondaryButton} onClick={() => proposeMerge(r.id, current[0].id)}>Подвезти попутно</button>
+                    ) : mergeBFor === r.id ? (
+                      <select
+                        style={s.mergeSelect}
+                        defaultValue=""
+                        onChange={(e) => e.target.value && proposeMerge(r.id, Number(e.target.value))}
+                      >
+                        <option value="">К какому заказу?</option>
+                        {current.map((c) => <option key={c.id} value={c.id}>#{c.id} {formatRoute(c)}</option>)}
+                      </select>
+                    ) : (
+                      <button style={s.secondaryButton} onClick={() => setMergeBFor(r.id)}>Подвезти попутно</button>
+                    )
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -339,6 +399,8 @@ const s = {
   error: { background: "#fff0f0", color: "#c00", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px" },
   notice: { background: "#eef6ff", color: "#0b5cad", border: "1px solid #b8d9f7", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "13px", cursor: "pointer" },
   pendingBox: { marginTop: "8px", background: "#fffdf6", border: "1px solid #f0d9a8", borderRadius: "8px", padding: "8px 10px", fontSize: "12px", color: "#8a6d2f" },
+  mergeBox: { marginTop: "8px", background: "#eef6ff", border: "1px solid #b8d9f7", borderRadius: "8px", padding: "8px 10px", fontSize: "12px", color: "#0b5cad" },
+  mergeSelect: { padding: "8px 10px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "13px" },
   muted: { color: "#888", fontSize: "14px" },
 
   section: { marginBottom: "28px" },

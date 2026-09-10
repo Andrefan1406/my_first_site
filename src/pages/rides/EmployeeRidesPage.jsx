@@ -99,6 +99,21 @@ export default function EmployeeRidesPage() {
       loadFleet();
       setNotice(`Машину с заявки #${req.id} направили на срочный вызов${req.pullReason ? `: ${req.pullReason}` : ""}. Выберите, что делать дальше.`);
     });
+    // Объединение заявок (П.6): водитель предлагает подвезти попутно / решение принято.
+    socket.on("merge:new", () => { load(); });
+    socket.on("merge:updated", (m) => {
+      load();
+      if (m.status === "approved") setNotice(`Заявки #${m.requestAId} и #${m.requestBId} объединены — их обслужит одна поездка.`);
+      else if (m.status === "rejected" || m.status === "auto_rejected") setNotice(`Объединение заявок не состоялось${m.decisionReason ? `: ${m.decisionReason}` : ""}.`);
+    });
+    socket.on("request:merged", (req) => {
+      onUpdate(req);
+      setNotice(`Вашу заявку #${req.id} подвезут попутно${req.driverName ? `, водитель ${req.driverName}` : ""}${req.pickupEtaAt ? `, посадка ${formatClock(req.pickupEtaAt)}` : ""}.`);
+    });
+    socket.on("request:unmerged", (req) => {
+      onUpdate(req);
+      setNotice(`Заявка #${req.id} снова в общей очереди — попутная поездка расстроилась.`);
+    });
     socket.on("proposal:updated", (p) => {
       if (p.status === "approved") setNotice(`Точка «${p.address}» добавлена в маршрут заявки #${p.requestId}.`);
       else if (p.status === "rejected") setNotice(`Диспетчер отклонил точку «${p.address}»${p.decisionReason ? `: ${p.decisionReason}` : ""}.`);
@@ -109,7 +124,22 @@ export default function EmployeeRidesPage() {
     });
     socket.on("connect_error", () => {});
     return () => socket.disconnect();
-  }, [loadFleet]);
+  }, [loadFleet, load]);
+
+  const mergeDecision = async (mergeId, decision) => {
+    setError("");
+    try {
+      if (decision === "approve") {
+        await ridesApiPost(`/api/v1/requests/merges/${mergeId}/approve`);
+      } else {
+        const reason = window.prompt("Причина отказа:") || "Не подходит";
+        await ridesApiPost(`/api/v1/requests/merges/${mergeId}/reject`, { reason });
+      }
+      load();
+    } catch (err) {
+      setError(err.message || "Не удалось обработать объединение");
+    }
+  };
 
   const holdDecision = async (requestId, decision) => {
     if (decision === "cancel" && !window.confirm("Отменить заявку?")) return;
@@ -291,14 +321,38 @@ export default function EmployeeRidesPage() {
           <p style={s.muted}>Активных заявок нет.</p>
         ) : (
           <div style={s.cards}>
-            {active.map((r) => (
-              <div key={r.id} style={r.onHold ? { ...s.card, ...s.cardHold } : s.card}>
+            {active.map((r) => {
+              const carryMerge = (r.pendingMerges || []).find((m) => m.requestAId === r.id);
+              const beingCarriedMerge = (r.pendingMerges || []).find((m) => m.requestBId === r.id);
+              return (
+              <div key={r.id} style={r.onHold || r.mergedInto ? { ...s.card, ...s.cardHold } : s.card}>
                 <div style={s.cardRoute}>{formatRoute(r)}{r.withReturn && <span style={s.returnBadge}> (туда-обратно)</span>}</div>
                 <div style={s.cardMeta}>Подача: {formatDateTime(r.requestedAt)} · Пассажиров: {r.passengersCount}</div>
                 {formatEstimate(r) && <div style={s.cardMeta}>{formatEstimate(r)}</div>}
                 {r.comment && <div style={s.cardMeta}>Комментарий: {r.comment}</div>}
 
-                {r.onHold ? (
+                {r.mergedInto ? (
+                  <div style={s.holdBox}>
+                    <div style={s.holdTitle}>🔗 Вас подвезут попутно</div>
+                    <div style={s.cardMeta}>
+                      В составе поездки #{r.mergedInto}{r.driverName ? `, водитель ${r.driverName}` : ""}
+                      {r.vehiclePlate ? ` (${r.vehiclePlate})` : ""}
+                      {r.pickupEtaAt ? ` · посадка ${formatClock(r.pickupEtaAt)}` : ""}
+                    </div>
+                  </div>
+                ) : carryMerge ? (
+                  <div style={s.holdBox}>
+                    <div style={s.holdTitle}>🔗 Водитель {carryMerge.driverName} предлагает подвезти попутно заявку #{carryMerge.requestBId}</div>
+                    <div style={s.cardMeta}>Попутный маршрут: {carryMerge.bFrom} → {carryMerge.bTo}</div>
+                    <div style={s.cardMeta}>Диспетчер: {carryMerge.approvedByDispatcher ? "согласовал" : "ещё не решил"}</div>
+                    <div style={s.holdActions}>
+                      <button type="button" style={s.primaryButton} onClick={() => mergeDecision(carryMerge.id, "approve")}>Согласен подвезти</button>
+                      <button type="button" style={s.cancelButton} onClick={() => mergeDecision(carryMerge.id, "reject")}>Отказаться</button>
+                    </div>
+                  </div>
+                ) : beingCarriedMerge ? (
+                  <div style={s.pendingBox}>🔗 Водитель предлагает подвезти вас попутно к заявке #{beingCarriedMerge.requestAId} — идёт согласование.</div>
+                ) : r.onHold ? (
                   <div style={s.holdBox}>
                     <div style={s.holdTitle}>🔺 Машину направили на срочный вызов</div>
                     {r.pullReason && <div style={s.cardMeta}>Причина: {r.pullReason}</div>}
@@ -318,7 +372,7 @@ export default function EmployeeRidesPage() {
                     ))}
                   </div>
                 )}
-                {!r.onHold && (
+                {!r.onHold && !r.mergedInto && !carryMerge && (
                   <div style={s.cardActions}>
                     {CAN_EDIT_ROUTE.includes(r.status) && (
                       <button type="button" style={s.addPointButton} onClick={() => setProposeFor(r.id)}>+ Добавить точку</button>
@@ -329,7 +383,8 @@ export default function EmployeeRidesPage() {
                   </div>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
 

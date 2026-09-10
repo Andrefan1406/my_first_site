@@ -81,6 +81,14 @@ CREATE TABLE IF NOT EXISTS requests (
   -- делаем — это потребовало бы пересборки таблицы (CHECK на status).
   on_hold           INTEGER NOT NULL DEFAULT 0,
   pull_reason       TEXT,
+  -- Объединение заявок водителем (П.6). merge_lock — заявка B в пуле
+  -- заблокирована на время переговоров об объединении (из пула пропадает).
+  -- merged_into — заявка B влита в маршрут заявки A: обслуживается той же
+  -- поездкой, отдельного водителя не ищет. pickup_eta_at — ориентировочное
+  -- время посадки пассажира B в рамках маршрута A.
+  merge_lock        INTEGER NOT NULL DEFAULT 0,
+  merged_into       INTEGER REFERENCES requests(id),
+  pickup_eta_at     TEXT,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   claimed_at        TEXT
 );
@@ -97,7 +105,11 @@ CREATE TABLE IF NOT EXISTS request_stops (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   request_id  INTEGER NOT NULL REFERENCES requests(id),
   address     TEXT NOT NULL,
-  stop_order  INTEGER NOT NULL
+  stop_order  INTEGER NOT NULL,
+  -- Если точка попала в маршрут при объединении заявок (П.6) — id той
+  -- «влитой» заявки B, чтобы при расформировании объединения убрать ровно
+  -- её точки. NULL — обычная точка самой заявки.
+  merged_from_request_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_request_stops_request ON request_stops(request_id);
 
@@ -158,6 +170,32 @@ CREATE TABLE IF NOT EXISTS stop_proposals (
 );
 CREATE INDEX IF NOT EXISTS idx_stop_proposals_request ON stop_proposals(request_id);
 CREATE INDEX IF NOT EXISTS idx_stop_proposals_status  ON stop_proposals(status);
+
+-- Объединение заявок водителем (П.6 ТЗ доработок). Водитель, у которого
+-- на руках заявка A, предлагает подвезти попутно заявку B из пула.
+-- Требуется двойное согласование: заказчик A и диспетчер. Пока оба не
+-- согласились — status='pending', заявка B «мягко» заблокирована в пуле.
+-- При согласии точки B вливаются в маршрут A (request_stops с
+-- merged_from_request_id = B), B.merged_into = A. Таймаут 5 минут →
+-- auto_rejected (см. proposalTimeout.js).
+CREATE TABLE IF NOT EXISTS request_merges (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_a_id           INTEGER NOT NULL REFERENCES requests(id), -- активная заявка водителя
+  request_b_id           INTEGER NOT NULL REFERENCES requests(id), -- заявка из пула
+  driver_id              INTEGER NOT NULL REFERENCES drivers(id),
+  status                 TEXT NOT NULL DEFAULT 'pending'
+                          CHECK(status IN ('pending','approved','rejected','auto_rejected')),
+  approved_by_a          INTEGER NOT NULL DEFAULT 0, -- заказчик заявки A согласился
+  approved_by_dispatcher INTEGER NOT NULL DEFAULT 0,
+  decided_by             INTEGER REFERENCES users(id),
+  decision_reason        TEXT,
+  pickup_eta_at          TEXT, -- рассчитанное при применении время посадки пассажира B
+  created_at             TEXT NOT NULL DEFAULT (datetime('now')),
+  decided_at             TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_request_merges_status ON request_merges(status);
+CREATE INDEX IF NOT EXISTS idx_request_merges_a ON request_merges(request_a_id);
+CREATE INDEX IF NOT EXISTS idx_request_merges_b ON request_merges(request_b_id);
 
 -- Кэш геокодирования адресов (Nominatim): один и тот же адрес подачи/
 -- назначения встречается в заявках постоянно, а лимит бесплатного
@@ -220,10 +258,23 @@ function migrateSchema(db) {
   if (!requestColumns.includes('pull_reason')) {
     db.exec('ALTER TABLE requests ADD COLUMN pull_reason TEXT');
   }
+  // Объединение заявок (П.6).
+  if (!requestColumns.includes('merge_lock')) {
+    db.exec('ALTER TABLE requests ADD COLUMN merge_lock INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!requestColumns.includes('merged_into')) {
+    db.exec('ALTER TABLE requests ADD COLUMN merged_into INTEGER REFERENCES requests(id)');
+  }
+  if (!requestColumns.includes('pickup_eta_at')) {
+    db.exec('ALTER TABLE requests ADD COLUMN pickup_eta_at TEXT');
+  }
 
   const stopColumns = db.prepare("PRAGMA table_info(request_stops)").all().map((c) => c.name);
   if (!stopColumns.includes('lat')) db.exec('ALTER TABLE request_stops ADD COLUMN lat REAL');
   if (!stopColumns.includes('lng')) db.exec('ALTER TABLE request_stops ADD COLUMN lng REAL');
+  if (!stopColumns.includes('merged_from_request_id')) {
+    db.exec('ALTER TABLE request_stops ADD COLUMN merged_from_request_id INTEGER');
+  }
 }
 
 function getWriteDb() {
