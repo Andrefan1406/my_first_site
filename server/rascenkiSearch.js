@@ -53,6 +53,9 @@ const BLOCKS = [
 ];
 
 const COLUMNS = ['Класс', 'Наименование работ', 'Ед.изм', 'Цена без НДС', 'Цена с НДС 16%', 'Объект', 'Обоснование'];
+// Относительные ширины столбцов (см. TableAnswer в ConcreteChatPage) —
+// «Наименование работ» самое длинное, единица и цены узкие.
+const COL_WIDTHS = ['17%', '32%', '5%', '8%', '8%', '13%', '17%'];
 
 const CANDIDATES_PER_BLOCK = Number(process.env.RASCENKI_CANDIDATES_PER_BLOCK || 15);
 // Сколько строк показываем в блоке. Если LLM-реранкер отработал — можно
@@ -251,7 +254,7 @@ async function searchRascenki(question) {
       title: `Расценки: ${question}`.slice(0, 80),
       subtitle:
         'Семантический поиск по своду расценок 2026; блоки в фиксированном порядке (утверждённые → ЕНиР бригады → ЕНиР фирмы → коммерция)',
-      table: { columns: COLUMNS, rows },
+      table: { columns: COLUMNS, rows, colWidths: COL_WIDTHS },
     },
     sql: null,
   };

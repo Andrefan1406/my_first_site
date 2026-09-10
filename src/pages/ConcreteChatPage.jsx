@@ -219,9 +219,23 @@ const ChartAnswer = ({ chart }) => {
 
 const TableAnswer = ({ table }) => {
   if (!table?.rows?.length) return null;
+  // colWidths (необязательно) — относительные ширины столбцов из ответа
+  // (например «Наименование работ» шире прочих в поиске по расценкам).
+  // Когда заданы — таблице нужен minWidth, иначе на узком экране проценты
+  // всё равно сожмут длинные столбцы; лишнее уедет в горизонтальный скролл.
+  const colWidths = Array.isArray(table.colWidths) && table.colWidths.length === table.columns.length
+    ? table.colWidths
+    : null;
   return (
     <div style={s.tableWrap}>
-      <table style={s.table}>
+      <table style={colWidths ? { ...s.table, minWidth: "620px" } : s.table}>
+        {colWidths && (
+          <colgroup>
+            {colWidths.map((w, i) => (
+              <col key={i} style={{ width: w }} />
+            ))}
+          </colgroup>
+        )}
         <thead>
           <tr>
             {table.columns.map((col) => (
