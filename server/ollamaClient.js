@@ -10,7 +10,7 @@ const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 60000);
 
 // Низкоуровневый вызов: отдаёт статус и сырое тело ответа как есть —
 // используется /api/smart-request, который просто проксирует ответ клиенту.
-async function callOllama(messages, { format = 'json', temperature = 0, think = false, model = OLLAMA_MODEL } = {}) {
+async function callOllama(messages, { format = 'json', temperature = 0, think = false, model = OLLAMA_MODEL, timeoutMs = OLLAMA_TIMEOUT_MS } = {}) {
   if (!OLLAMA_API_KEY) {
     const err = new Error('OLLAMA_API_KEY не задан на сервере (.env)');
     err.status = 500;
@@ -33,12 +33,12 @@ async function callOllama(messages, { format = 'json', temperature = 0, think = 
         format,
         options: { temperature },
       }),
-      signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
     const e = new Error(
       err.name === 'TimeoutError'
-        ? `Ollama Cloud не ответил за ${Math.round(OLLAMA_TIMEOUT_MS / 1000)} с`
+        ? `Ollama Cloud не ответил за ${Math.round(timeoutMs / 1000)} с`
         : `Не удалось связаться с Ollama Cloud: ${err.message}`
     );
     e.status = 504;
