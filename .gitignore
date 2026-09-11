@@ -27,3 +27,8 @@ yarn-error.log*
 
 # локальный SQLite-кэш concrete_orders — пересоздаётся синком при старте сервера
 /server/data/
+# то же самое для server/rides
+/server/rides/data/
+
+# секретный ключ сервисного аккаунта Firebase — не должен попадать в репозиторий
+/firebase-key.json
