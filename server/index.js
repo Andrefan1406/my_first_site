@@ -43,7 +43,9 @@ app.post('/api/smart-request', async (req, res) => {
   }
 
   try {
-    const { status, bodyText } = await callOllama(messages);
+    // rag_agent (Python-версия, которую эта ручка заменяет) давала Ollama 120с —
+    // держим тот же потолок, а не общий дефолт callOllama в 60с.
+    const { status, bodyText } = await callOllama(messages, { timeoutMs: 120000 });
     res.status(status).setHeader('Content-Type', 'application/json').send(bodyText);
   } catch (err) {
     res.status(err.status || 502).json({ error: err.message || 'Не удалось связаться с Ollama Cloud' });
