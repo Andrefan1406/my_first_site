@@ -36,6 +36,7 @@ const ridesEventsRouter = require('./rides/eventsRouter');
 const ridesFleetRouter = require('./rides/fleetRouter');
 const { initSocket } = require('./rides/socket');
 const { startProposalTimeoutJob } = require('./rides/proposalTimeout');
+const { runGeocodeRegionBugFix } = require('./rides/fixGeocodeRegionBug');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -93,6 +94,10 @@ app.use('/api/v1/fleet-status', ridesFleetRouter);
 initSchema();
 initRidesSchema();
 startProposalTimeoutJob();
+// Одноразово: см. server/rides/fixGeocodeRegionBug.js — чинит заявки,
+// которым старый (без привязки к городу) геокодер посчитал маршрут не в
+// тот город. Не блокирует старт сервера.
+runGeocodeRegionBugFix().catch((err) => console.error('[rides] фикс гео-кэша не удался:', err.message));
 startConcreteSync();
 startObjectsSync();
 startPeopleSync();

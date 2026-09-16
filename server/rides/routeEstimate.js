@@ -25,6 +25,18 @@ const { logEvent } = require('./events');
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
 
+// Без подсказки о регионе геокодер ищет по всему миру, а одинаковые
+// названия улиц встречаются в разных городах Казахстана (например,
+// "Крылова" есть и в Усть-Каменогорске, и в Алматы) — Nominatim иногда
+// выбирал совсем не тот город, и маршрут "разъезжался" на сотни-тысячи км
+// вместо пары километров внутри города. viewbox+bounded=1 жёстко
+// ограничивает поиск окрестностями Усть-Каменогорска (где работает
+// компания, см. MapPicker.jsx) — адрес вне него просто не найдётся (null),
+// это безопаснее, чем тихо посчитать маршрут до другого города.
+const GEOCODE_COUNTRY_CODES = process.env.RIDES_GEOCODE_COUNTRY_CODES || 'kz';
+// left,bottom,right,top — ~60×55 км вокруг Усть-Каменогорска (49.948, 82.628).
+const GEOCODE_VIEWBOX = process.env.RIDES_GEOCODE_VIEWBOX || '82.20,49.70,83.05,50.20';
+
 const AVERAGE_SPEED_KMH = 40;   // средняя по городу с поправкой на пробки
 const WAIT_MINUTES = 10;        // посадка/высадка на конечной точке
 const PER_STOP_MINUTES = 5;     // остановка на каждом промежуточном пункте
@@ -43,8 +55,15 @@ function haversineKm(a, b) {
 }
 
 async function geocodeRaw(address) {
-  const url = `${NOMINATIM_URL}?q=${encodeURIComponent(address)}&format=jsonv2&limit=1`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'my-first-site-rides/1.0' } });
+  const params = new URLSearchParams({
+    q: address,
+    format: 'jsonv2',
+    limit: '1',
+    countrycodes: GEOCODE_COUNTRY_CODES,
+    viewbox: GEOCODE_VIEWBOX,
+    bounded: '1',
+  });
+  const res = await fetch(`${NOMINATIM_URL}?${params.toString()}`, { headers: { 'User-Agent': 'my-first-site-rides/1.0' } });
   if (!res.ok) throw new Error(`Nominatim ${res.status}`);
   const data = await res.json();
   if (!data.length) return null;
