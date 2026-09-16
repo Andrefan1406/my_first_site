@@ -13,6 +13,27 @@ import CancelRequestModal from "../../rides/CancelRequestModal";
 
 const CAN_EDIT_ROUTE = ["pending_assignment", "assigned", "in_progress"];
 
+// step="900" на datetime-local подсказывает нативному пикеру шаг в 15 минут
+// (стрелки/выпадающий список), но при ручном вводе минут браузер это не
+// навязывает — округляем сами до ближайших 0/15/30/45, чтобы диспетчер и
+// водитель видели ровное время подачи в любом случае.
+function roundToQuarterHour(value) {
+  if (!value) return value;
+  const [datePart, timePart] = value.split("T");
+  if (!datePart || !timePart) return value;
+  const [hStr, mStr] = timePart.split(":");
+  const hours = Number(hStr);
+  const minutes = Number(mStr);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
+  const [y, mo, d] = datePart.split("-").map(Number);
+  const date = new Date(y, mo - 1, d, hours, minutes);
+  // setMinutes сам переносит час/сутки/месяц, если округление даёт 60 —
+  // например 23:53 корректно уходит на 00:00 следующего дня.
+  date.setMinutes(Math.round(date.getMinutes() / 15) * 15, 0, 0);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   const d = new Date(value.replace(" ", "T"));
@@ -278,7 +299,13 @@ export default function EmployeeRidesPage() {
 
         <div style={s.formRow}>
           <label style={s.label}>Дата и время подачи
-            <input type="datetime-local" style={s.input} value={form.requestedAt} onChange={(e) => setForm({ ...form, requestedAt: e.target.value })} />
+            <input
+              type="datetime-local"
+              step="900"
+              style={s.input}
+              value={form.requestedAt}
+              onChange={(e) => setForm({ ...form, requestedAt: roundToQuarterHour(e.target.value) })}
+            />
           </label>
           <label style={s.label}>Кол-во пассажиров
             <input type="number" min={1} max={50} style={s.input} value={form.passengersCount} onChange={(e) => setForm({ ...form, passengersCount: e.target.value })} />
