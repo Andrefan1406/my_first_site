@@ -13,25 +13,22 @@ import CancelRequestModal from "../../rides/CancelRequestModal";
 
 const CAN_EDIT_ROUTE = ["pending_assignment", "assigned", "in_progress"];
 
-// step="900" на datetime-local подсказывает нативному пикеру шаг в 15 минут
-// (стрелки/выпадающий список), но при ручном вводе минут браузер это не
-// навязывает — округляем сами до ближайших 0/15/30/45, чтобы диспетчер и
-// водитель видели ровное время подачи в любом случае.
-function roundToQuarterHour(value) {
-  if (!value) return value;
-  const [datePart, timePart] = value.split("T");
-  if (!datePart || !timePart) return value;
-  const [hStr, mStr] = timePart.split(":");
-  const hours = Number(hStr);
-  const minutes = Number(mStr);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
-  const [y, mo, d] = datePart.split("-").map(Number);
-  const date = new Date(y, mo - 1, d, hours, minutes);
-  // setMinutes сам переносит час/сутки/месяц, если округление даёт 60 —
-  // например 23:53 корректно уходит на 00:00 следующего дня.
-  date.setMinutes(Math.round(date.getMinutes() / 15) * 15, 0, 0);
+// datetime-local со step="900" не годится: нативный пикер (см. скриншот
+// пользователя) в своей выпадашке всё равно листает КАЖДУЮ минуту — step
+// там влияет только на стрелки при вводе с клавиатуры, а не на список
+// выбора. Поэтому время подачи — отдельный <select> с ровно 96 пунктами
+// (00:00, 00:15, ... 23:45): выбрать что-то, кроме кратного 15 мин, в
+// принципе нельзя.
+const QUARTER_HOUR_OPTIONS = Array.from({ length: 96 }, (_, i) => {
+  const h = String(Math.floor(i / 4)).padStart(2, "0");
+  const m = String((i % 4) * 15).padStart(2, "0");
+  return `${h}:${m}`;
+});
+
+function todayLocalDateStr() {
+  const d = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function formatDateTime(value) {
@@ -77,6 +74,13 @@ export default function EmployeeRidesPage() {
   const [proposeFor, setProposeFor] = useState(null); // id заявки, для которой добавляем точку через карту
   const [notice, setNotice] = useState("");
   const [fleet, setFleet] = useState(null); // { hasFree, freeCount, nextFreeAt } — занятость парка
+
+  // requestedAt хранится одной строкой "YYYY-MM-DDTHH:MM" (как раньше у
+  // datetime-local), но вводится двумя раздельными полями — датой и
+  // временем с шагом 15 мин (см. QUARTER_HOUR_OPTIONS).
+  const [requestedDate, requestedTime] = form.requestedAt ? form.requestedAt.split("T") : ["", ""];
+  const setRequestedDate = (value) => setForm((f) => ({ ...f, requestedAt: value ? `${value}T${requestedTime || "09:00"}` : "" }));
+  const setRequestedTime = (value) => setForm((f) => ({ ...f, requestedAt: `${requestedDate || todayLocalDateStr()}T${value}` }));
 
   useEffect(() => {
     ridesApiFetch("/api/v1/users/me").then(({ user }) => setRole(user?.role || null)).catch(() => {});
@@ -299,13 +303,24 @@ export default function EmployeeRidesPage() {
 
         <div style={s.formRow}>
           <label style={s.label}>Дата и время подачи
-            <input
-              type="datetime-local"
-              step="900"
-              style={s.input}
-              value={form.requestedAt}
-              onChange={(e) => setForm({ ...form, requestedAt: roundToQuarterHour(e.target.value) })}
-            />
+            <div style={s.addressRow}>
+              <input
+                type="date"
+                style={{ ...s.input, flex: "1 1 140px" }}
+                value={requestedDate}
+                onChange={(e) => setRequestedDate(e.target.value)}
+              />
+              <select
+                style={{ ...s.input, flex: "0 0 100px" }}
+                value={requestedTime || ""}
+                onChange={(e) => setRequestedTime(e.target.value)}
+              >
+                <option value="" disabled>Время</option>
+                {QUARTER_HOUR_OPTIONS.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
           </label>
           <label style={s.label}>Кол-во пассажиров
             <input type="number" min={1} max={50} style={s.input} value={form.passengersCount} onChange={(e) => setForm({ ...form, passengersCount: e.target.value })} />
