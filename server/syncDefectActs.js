@@ -12,7 +12,7 @@
 // до конца таблицы.
 const cron = require('node-cron');
 const Papa = require('papaparse');
-const { getWriteDb } = require('./db');
+const { getWriteDb, getLastSyncedAt } = require('./db');
 const { embedBatch } = require('./embeddings');
 const { getClient, upsertPoints } = require('./qdrantClient');
 const { EMBEDDING_DIM } = require('./embeddings');
@@ -229,19 +229,73 @@ async function reindexEmbeddings() {
   return withText.length;
 }
 
+const EMBEDDING_SYNCED_DATE_KEY = 'defect_acts_embedding_synced_date';
+
+function setEmbeddingSyncedDate(dateStr) {
+  getWriteDb()
+    .prepare(
+      `INSERT INTO sync_meta (key, value) VALUES (@key, @value)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    )
+    .run({ key: EMBEDDING_SYNCED_DATE_KEY, value: dateStr });
+}
+
+// Переиндексация эмбеддингов в Qdrant (в отличие от загрузки SQL-данных)
+// расходует внешнюю квоту эмбеддингов (Voyage), поэтому гоняем её РЕДКО: по
+// требованию пользователя — только в рабочие дни (пн–пт) по чётным датам, и
+// не чаще раза в день. SQL-синк реестра при этом продолжает идти по обычному
+// расписанию (каждые 6 ч) — текстовый чат по актам остаётся свежим.
+//
+// Исключение (самолечение): если коллекции в Qdrant нет, она пуста или
+// размерность вектора не совпадает с текущей моделью эмбеддингов — индексируем
+// сразу, независимо от дня, иначе семантический поиск по актам будет сломан до
+// следующей чётной рабочей даты.
+async function shouldReindexEmbeddings() {
+  try {
+    const info = await getClient().getCollection(QDRANT_COLLECTION);
+    const vectorSize = info?.config?.params?.vectors?.size;
+    if (!info?.points_count || vectorSize !== EMBEDDING_DIM) {
+      return { should: true, reason: 'коллекция пуста или размерность вектора изменилась' };
+    }
+  } catch (err) {
+    return { should: true, reason: 'коллекция недоступна или ещё не создана' };
+  }
+
+  // Дата в часовом поясе Алматы (как и остальные даты в проекте).
+  const dateStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Almaty' }).format(new Date());
+  const dayOfMonth = Number(dateStr.slice(8, 10));
+  const dow = new Date(`${dateStr}T12:00:00Z`).getUTCDay(); // 0=вс … 6=сб
+
+  if (dow === 0 || dow === 6) return { should: false, reason: `выходной (${dateStr})` };
+  if (dayOfMonth % 2 !== 0) return { should: false, reason: `нечётная дата (${dateStr})` };
+  if (getLastSyncedAt(EMBEDDING_SYNCED_DATE_KEY) === dateStr) {
+    return { should: false, reason: `уже переиндексировано сегодня (${dateStr})` };
+  }
+  return { should: true, reason: `рабочий день, чётная дата (${dateStr})`, dateStr };
+}
+
 async function runSyncOnce() {
   const rawRows = await fetchAndParseCsv();
   const normalizedRows = rawRows.map(normalizeRow);
   const count = syncDefectActsData(normalizedRows);
   console.log(`[defect-acts-sync] загружено ${count} строк`);
 
+  const decision = await shouldReindexEmbeddings();
+  if (!decision.should) {
+    console.log(`[defect-acts-sync] переиндексация эмбеддингов пропущена: ${decision.reason}`);
+    return count;
+  }
+
   try {
+    console.log(`[defect-acts-sync] переиндексация эмбеддингов: ${decision.reason}`);
     const embedded = await reindexEmbeddings();
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Almaty' }).format(new Date());
+    setEmbeddingSyncedDate(today);
     console.log(`[defect-acts-sync] проиндексировано в Qdrant ${embedded} строк`);
   } catch (err) {
     // Провал переиндексации не должен ронять сам синк SQL-данных — RAG-поиск
-    // деградирует до следующего успешного синка, но текстовый чат по обычным
-    // (SQL) вопросам продолжит работать.
+    // деградирует до следующей успешной переиндексации, но текстовый чат по
+    // обычным (SQL) вопросам продолжит работать.
     console.error('[defect-acts-sync] ошибка переиндексации эмбеддингов:', err.message);
   }
 

@@ -7,7 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, LabelList
 } from "recharts";
-import { TbCrane, TbBuildingCommunity, TbUsers, TbFileAlert, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
+import { TbCrane, TbBuildingCommunity, TbUsers, TbFileAlert, TbReportMoney, TbFileTypePdf, TbCopy, TbCheck } from "react-icons/tb";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -73,6 +73,26 @@ const DOMAINS = [
       "Сколько дефектных актов открыто по каждому объекту?",
       "Сколько актов устранено за этот месяц?",
       "Какие объекты чаще всего фигурируют в дефектных актах?",
+    ],
+  },
+  {
+    key: "rascenki",
+    label: "Поиск по расценкам",
+    Icon: TbReportMoney,
+    emptyTitle: "Поиск по расценкам",
+    emptyHint:
+      "Спросите расценку на любой вид работ на естественном языке — ответ придёт таблицей, сгруппированной по категориям расценок:",
+    placeholder: "Спросите расценку на работы...",
+    // Не text-to-SQL, а семантический поиск по своду расценок 2026 — ответ
+    // всегда таблица фиксированного формата (см. server/rascenkiSearch.js),
+    // поэтому дисклеймер про SQL-запрос тут не подходит.
+    disclaimer:
+      "Поиск по смыслу — цены и обоснования даны дословно из свода, проверяйте объект по каждой строке.",
+    suggestions: [
+      "Какая расценка на штукатурные работы?",
+      "Сколько стоит облицовка стен плиткой?",
+      "Расценка на кладку из газоблока",
+      "Устройство натяжного потолка",
     ],
   },
 ];
@@ -199,9 +219,23 @@ const ChartAnswer = ({ chart }) => {
 
 const TableAnswer = ({ table }) => {
   if (!table?.rows?.length) return null;
+  // colWidths (необязательно) — относительные ширины столбцов из ответа
+  // (например «Наименование работ» шире прочих в поиске по расценкам).
+  // Когда заданы — таблице нужен minWidth, иначе на узком экране проценты
+  // всё равно сожмут длинные столбцы; лишнее уедет в горизонтальный скролл.
+  const colWidths = Array.isArray(table.colWidths) && table.colWidths.length === table.columns.length
+    ? table.colWidths
+    : null;
   return (
     <div style={s.tableWrap}>
-      <table style={s.table}>
+      <table style={colWidths ? { ...s.table, minWidth: "620px" } : s.table}>
+        {colWidths && (
+          <colgroup>
+            {colWidths.map((w, i) => (
+              <col key={i} style={{ width: w }} />
+            ))}
+          </colgroup>
+        )}
         <thead>
           <tr>
             {table.columns.map((col) => (
@@ -448,9 +482,13 @@ const EmptyState = ({ domain, onPick }) => (
   </div>
 );
 
-const ConcreteChatPage = () => {
+// soloDomain — показать ТОЛЬКО один домен без сайдбара и без переключения
+// (используется временной страницей /rascenki-test для доступа к поиску по
+// расценкам без авторизации). disableUsageLog — не писать в Firestore
+// (на публичной странице пользователь неавторизован).
+const ConcreteChatPage = ({ soloDomain = null, disableUsageLog = false }) => {
   const navigate = useNavigate();
-  const [activeDomain, setActiveDomain] = useState(DEFAULT_DOMAIN);
+  const [activeDomain, setActiveDomain] = useState(soloDomain || DEFAULT_DOMAIN);
   const [messagesByDomain, setMessagesByDomain] = useState(() => buildInitialByDomain([]));
   const [loadingByDomain, setLoadingByDomain] = useState(() => buildInitialByDomain(false));
   const [errorByDomain, setErrorByDomain] = useState(() => buildInitialByDomain(""));
@@ -459,6 +497,10 @@ const ConcreteChatPage = () => {
   const textareaRef = useRef(null);
 
   const domain = DOMAINS.find((d) => d.key === activeDomain);
+  // На отдельной странице поиска по расценкам (soloDomain) ответ —
+  // широкая таблица на 7 столбцов; даём ей заметно больше места, чтобы не
+  // было горизонтального скролла.
+  const columnStyle = soloDomain ? { ...s.column, maxWidth: "1120px" } : s.column;
   const messages = messagesByDomain[activeDomain];
   const loading = loadingByDomain[activeDomain];
   const error = errorByDomain[activeDomain];
@@ -488,7 +530,7 @@ const ConcreteChatPage = () => {
     requestAnimationFrame(resizeTextarea);
     setErrorByDomain((prev) => ({ ...prev, [domainKey]: "" }));
     setLoadingByDomain((prev) => ({ ...prev, [domainKey]: true }));
-    logChatUsage(question, domainKey);
+    if (!disableUsageLog) logChatUsage(question, domainKey);
 
     try {
       const history = nextMessages.slice(-MAX_HISTORY).map((m) => ({
@@ -496,10 +538,14 @@ const ConcreteChatPage = () => {
         content: m.text,
       }));
 
+      // Жёсткий потолок на ожидание: у бэкенда бывают зависания на внешних
+      // сервисах (LLM/эмбеддинги/векторный поиск) — без этого вкладка
+      // крутила бы спиннер бесконечно.
       const res = await fetch(`${CHAT_API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: history, domain: domainKey }),
+        signal: AbortSignal.timeout(120000),
       });
 
       const data = await res.json();
@@ -525,9 +571,12 @@ const ConcreteChatPage = () => {
         ],
       }));
     } catch (err) {
+      const isTimeout = err.name === "TimeoutError" || err.name === "AbortError";
       setErrorByDomain((prev) => ({
         ...prev,
-        [domainKey]: err.message || "Не удалось получить ответ. Попробуйте ещё раз.",
+        [domainKey]: isTimeout
+          ? "Сервер слишком долго не отвечает. Попробуйте ещё раз чуть позже."
+          : err.message || "Не удалось получить ответ. Попробуйте ещё раз.",
       }));
     } finally {
       setLoadingByDomain((prev) => ({ ...prev, [domainKey]: false }));
@@ -564,28 +613,30 @@ const ConcreteChatPage = () => {
         }
       `}</style>
 
-      <nav style={s.sidebar} className="analytics-sidebar">
-        <div style={s.sidebarTitle} className="analytics-sidebar-title">Аналитика</div>
-        {DOMAINS.map((d) => (
-          <button
-            key={d.key}
-            style={{ ...s.sidebarItem, ...(d.key === activeDomain ? s.sidebarItemActive : null) }}
-            onClick={() => setActiveDomain(d.key)}
-          >
-            <d.Icon size={17} />
-            {d.label}
-          </button>
-        ))}
-      </nav>
+      {!soloDomain && (
+        <nav style={s.sidebar} className="analytics-sidebar">
+          <div style={s.sidebarTitle} className="analytics-sidebar-title">Аналитика</div>
+          {DOMAINS.map((d) => (
+            <button
+              key={d.key}
+              style={{ ...s.sidebarItem, ...(d.key === activeDomain ? s.sidebarItemActive : null) }}
+              onClick={() => setActiveDomain(d.key)}
+            >
+              <d.Icon size={17} />
+              {d.label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <div style={s.main}>
         <header style={s.header}>
-          <button onClick={() => navigate("/")} style={s.back}>←</button>
+          {!soloDomain && <button onClick={() => navigate("/")} style={s.back}>←</button>}
           <span style={s.headerTitle}>{domain.label}</span>
         </header>
 
         <div style={s.scrollArea}>
-          <div style={s.column}>
+          <div style={columnStyle}>
             {messages.length === 0 ? (
               <EmptyState domain={domain} onPick={sendQuestion} />
             ) : (
@@ -597,7 +648,7 @@ const ConcreteChatPage = () => {
         </div>
 
         <div style={s.composerWrap}>
-          <div style={s.column}>
+          <div style={columnStyle}>
             {error && <div style={s.error}>{error}</div>}
             <div style={s.composer}>
               <textarea
@@ -625,7 +676,7 @@ const ConcreteChatPage = () => {
                 ↑
               </button>
             </div>
-            <p style={s.disclaimer}>Ответы формирует ИИ — сверяйтесь по SQL-запросу под ответом.</p>
+            <p style={s.disclaimer}>{domain.disclaimer || "Ответы формирует ИИ — сверяйтесь по SQL-запросу под ответом."}</p>
           </div>
         </div>
       </div>

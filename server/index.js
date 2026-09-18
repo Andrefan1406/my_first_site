@@ -12,12 +12,14 @@ const { startObjectsSync } = require('./syncObjects');
 const { startPeopleSync } = require('./syncPeople');
 const { startDefectActsSync } = require('./syncDefectActs');
 const { startGprReportSync } = require('./syncGprReport');
+const { startRascenkiSync } = require('./syncRascenki');
 const { handleChat } = require('./chatHandler');
 const peopleGapsAdminRouter = require('./peopleGapsAdmin');
 const peopleGapsCheckRouter = require('./peopleGapsCheck');
 const gprReportAdminRouter = require('./gprReportAdmin');
 const gprReportCheckRouter = require('./gprReportCheck');
 const blockedUsersAdminRouter = require('./blockedUsersAdmin');
+const rascenkiAdminRouter = require('./rascenkiAdmin');
 const concreteDailyReportRouter = require('./concreteDailyReport');
 const concreteDashboardRouter = require('./concreteDashboard');
 const concreteRequestsBoardRouter = require('./concreteRequestsBoard');
@@ -62,7 +64,9 @@ app.post('/api/smart-request', async (req, res) => {
   }
 
   try {
-    const { status, bodyText } = await callOllama(messages);
+    // rag_agent (Python-версия, которую эта ручка заменяет) давала Ollama 120с —
+    // держим тот же потолок, а не общий дефолт callOllama в 60с.
+    const { status, bodyText } = await callOllama(messages, { timeoutMs: 120000 });
     res.status(status).setHeader('Content-Type', 'application/json').send(bodyText);
   } catch (err) {
     res.status(err.status || 502).json({ error: err.message || 'Не удалось связаться с Ollama Cloud' });
@@ -75,6 +79,7 @@ app.use('/api/people-gaps', peopleGapsCheckRouter);
 app.use('/api/admin/gpr-report', gprReportAdminRouter);
 app.use('/api/gpr-report', gprReportCheckRouter);
 app.use('/api/admin/blocked-users', blockedUsersAdminRouter);
+app.use('/api/admin/rascenki', rascenkiAdminRouter);
 // Оба роутера смонтированы на одном префиксе — их пути не пересекаются
 // (daily-report у одного, options/monthly/unexecuted/chart-titles у
 // другого), Express пробует их по очереди и падает в 404 только если ни
@@ -102,6 +107,10 @@ startConcreteSync();
 startObjectsSync();
 startPeopleSync();
 startDefectActsSync();
+// Индексация свода расценок: плановая (ночью, по будням, по чётным датам —
+// см. syncRascenki.js) + принудительно из личного кабинета администратора
+// (POST /api/admin/rascenki/reindex).
+startRascenkiSync();
 startGprReportSync();
 
 const server = http.createServer(app);

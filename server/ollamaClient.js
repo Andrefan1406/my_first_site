@@ -2,31 +2,48 @@
 // fetch+Bearer-ключ между /api/smart-request и новым text-to-SQL чатом.
 const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY;
 const OLLAMA_MODEL = 'gpt-oss:120b-cloud';
+// Ollama Cloud (ollama.com) периодически подвисает или обрывает соединение
+// без ответа. У fetch в Node таймаута нет — без него запрос к /api/chat
+// висит бесконечно, а вместе с ним и вкладка чата. Жёсткий потолок на один
+// вызов; подстроить через OLLAMA_TIMEOUT_MS.
+const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 60000);
 
 // Низкоуровневый вызов: отдаёт статус и сырое тело ответа как есть —
 // используется /api/smart-request, который просто проксирует ответ клиенту.
-async function callOllama(messages, { format = 'json', temperature = 0, think = false, model = OLLAMA_MODEL } = {}) {
+async function callOllama(messages, { format = 'json', temperature = 0, think = false, model = OLLAMA_MODEL, timeoutMs = OLLAMA_TIMEOUT_MS } = {}) {
   if (!OLLAMA_API_KEY) {
     const err = new Error('OLLAMA_API_KEY не задан на сервере (.env)');
     err.status = 500;
     throw err;
   }
 
-  const ollamaRes = await fetch('https://ollama.com/api/chat', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${OLLAMA_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-      think,
-      format,
-      options: { temperature },
-    }),
-  });
+  let ollamaRes;
+  try {
+    ollamaRes = await fetch('https://ollama.com/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OLLAMA_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        think,
+        format,
+        options: { temperature },
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const e = new Error(
+      err.name === 'TimeoutError'
+        ? `Ollama Cloud не ответил за ${Math.round(timeoutMs / 1000)} с`
+        : `Не удалось связаться с Ollama Cloud: ${err.message}`
+    );
+    e.status = 504;
+    throw e;
+  }
 
   const bodyText = await ollamaRes.text();
   return { status: ollamaRes.status, bodyText };
