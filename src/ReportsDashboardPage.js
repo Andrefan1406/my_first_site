@@ -8,7 +8,7 @@ const ReportsDashboardPage = () => {
     <div style={{ padding: '20px', textAlign: 'center' }}>
       <h2>Направления отчётности</h2>
       <button
-        onClick={() => navigate('/concrete-chat')}
+        onClick={() => navigate('/ai-assistant')}
         style={styles.smartButton}
       >
         ✦ Чат-аналитика (AI)
