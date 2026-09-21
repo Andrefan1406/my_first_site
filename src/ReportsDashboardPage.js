@@ -43,6 +43,12 @@ const ReportsDashboardPage = () => {
       >
         Дашборд по бетону и раствору
       </button>
+      <button
+        onClick={() => navigate('/financing-plan')}
+        style={{ ...styles.button, background: 'linear-gradient(135deg, #7c5cff, #33d6c0)' }}
+      >
+        Смета · График · Финплан
+      </button>
     </div>
 
   );

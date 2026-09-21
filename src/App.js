@@ -40,6 +40,7 @@ import BlockedUsersAdminPage from "./pages/BlockedUsersAdminPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import RascenkiReindexAdminPage from "./pages/RascenkiReindexAdminPage";
 import ConcreteDashboardPage from "./pages/ConcreteDashboardPage";
+import FinancingPlanDashboardPage from "./pages/FinancingPlanDashboardPage";
 
 
 const Protected = ({ children }) => (
@@ -207,6 +208,15 @@ const App = () => {
           element={
             <Protected>
               <ConcreteDashboardPage />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/financing-plan"
+          element={
+            <Protected>
+              <FinancingPlanDashboardPage />
             </Protected>
           }
         />
