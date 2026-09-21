@@ -69,6 +69,10 @@ const DOMAINS = [
     emptyTitle: "Аналитика по дефектным актам",
     emptyHint: "Спросите про дефектные акты на естественном языке — например:",
     placeholder: "Спросите про дефектные акты...",
+    // Таблица дефектных актов широкая (номер, даты, ответственные, суммы,
+    // статусы) — узкая колонка ломает читаемость переносами почти в каждой
+    // ячейке, поэтому используем тот же widescreen-режим, что и у расценок.
+    wide: true,
     suggestions: [
       "Сколько дефектных актов открыто по каждому объекту?",
       "Сколько актов устранено за этот месяц?",
@@ -88,6 +92,8 @@ const DOMAINS = [
     // поэтому дисклеймер про SQL-запрос тут не подходит.
     disclaimer:
       "Поиск по смыслу — цены и обоснования даны дословно из свода, проверяйте объект по каждой строке.",
+    // Ответ — широкая таблица на 7 столбцов, ей тоже нужен widescreen-режим.
+    wide: true,
     suggestions: [
       "Какая расценка на штукатурные работы?",
       "Сколько стоит облицовка стен плиткой?",
@@ -228,7 +234,7 @@ const TableAnswer = ({ table }) => {
     : null;
   return (
     <div style={s.tableWrap}>
-      <table style={colWidths ? { ...s.table, minWidth: "620px" } : s.table}>
+      <table style={colWidths ? { ...s.table, tableLayout: "fixed", minWidth: "620px" } : s.table}>
         {colWidths && (
           <colgroup>
             {colWidths.map((w, i) => (
@@ -493,9 +499,9 @@ const ConcreteChatPage = () => {
   const textareaRef = useRef(null);
 
   const domain = DOMAINS.find((d) => d.key === activeDomain);
-  // Ответ поиска по расценкам — широкая таблица на 7 столбцов; даём ей
-  // заметно больше места, чтобы не было горизонтального скролла.
-  const columnStyle = activeDomain === "rascenki" ? { ...s.column, maxWidth: "1120px" } : s.column;
+  // Домены с широкими таблицами (расценки, дефектные акты) получают более
+  // широкую колонку, чтобы содержимое ячеек меньше переносилось по словам.
+  const columnStyle = domain.wide ? { ...s.column, maxWidth: "1120px" } : s.column;
   const messages = messagesByDomain[activeDomain];
   const loading = loadingByDomain[activeDomain];
   const error = errorByDomain[activeDomain];
@@ -713,7 +719,10 @@ const s = {
   typingDot: { width: "6px", height: "6px", borderRadius: "50%", background: "#8e8ea0", animation: "concreteChatBounce 1.2s infinite ease-in-out" },
 
   tableWrap: { overflowX: "auto", marginTop: "8px" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "13px", tableLayout: "fixed" },
+  // tableLayout: "auto" (по умолчанию) — колонки распределяются по ширине
+  // естественно, в зависимости от содержимого; для таблиц с явными colWidths
+  // (см. TableAnswer) выставляется "fixed", иначе colgroup не сработает.
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "13px", tableLayout: "auto" },
   th: { textAlign: "left", color: "#6e6e80", fontWeight: 600, padding: "6px 12px 6px 0", borderBottom: "1px solid #eceef0", whiteSpace: "normal", wordBreak: "break-word" },
   td: { padding: "6px 12px 6px 0", color: "#0d0d0d", borderBottom: "1px solid #f4f4f5", whiteSpace: "normal", wordBreak: "break-word", overflowWrap: "break-word" },
 
