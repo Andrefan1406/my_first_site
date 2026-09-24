@@ -313,6 +313,20 @@ CREATE TABLE IF NOT EXISTS gpr_report_check_rules (
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(email, source_key)
 );
+
+-- manual_user_blocks — ручная блокировка пользователя администратором (см.
+-- server/manualBlock.js, /admin/blocked-users), независимо от пропусков в
+-- отчётах по людям/ГПР. Строка на email; blocked=0 — блокировка снята, но
+-- комментарий сохраняется, чтобы при повторном включении не вводить заново.
+-- comment показывается самому пользователю на главной — ВЫШЕ сообщений об
+-- автоматических блокировках. ПОСТОЯННОЕ хранилище, как и *_check_rules.
+CREATE TABLE IF NOT EXISTS manual_user_blocks (
+  email      TEXT PRIMARY KEY,
+  blocked    INTEGER NOT NULL DEFAULT 0,
+  comment    TEXT,
+  updated_by TEXT,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
 `;
 
 let writeDb = null;

@@ -9,6 +9,7 @@ const express = require('express');
 const { getWriteDb } = require('./db');
 const { requireAdmin } = require('./adminAuth');
 const { computeGprReportGaps } = require('./syncGprReport');
+const { listManualBlocks } = require('./manualBlock');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -32,7 +33,12 @@ router.get('/', (req, res) => {
 
   const peopleRules = db.prepare('SELECT DISTINCT email, site FROM people_gap_check_rules').all();
   const gprRules = db.prepare('SELECT DISTINCT email, source_key FROM gpr_report_check_rules').all();
-  const emails = [...new Set([...peopleRules.map((r) => r.email), ...gprRules.map((r) => r.email)])];
+  const manualBlocks = new Map(listManualBlocks().filter((b) => b.blocked).map((b) => [b.email, b]));
+  const emails = [...new Set([
+    ...peopleRules.map((r) => r.email),
+    ...gprRules.map((r) => r.email),
+    ...manualBlocks.keys(),
+  ])];
 
   const missingDatesForSite = db.prepare(`
     SELECT report_date FROM people_report_gaps
@@ -56,8 +62,10 @@ router.get('/', (req, res) => {
 
     const gprGaps = allGprGaps.filter((g) => sourceKeys.includes(g.source_key));
 
-    if (peopleGaps.length || gprGaps.length) {
-      blockedUsers.push({ email, peopleGaps, gprGaps });
+    const manualBlock = manualBlocks.get(email) || null;
+
+    if (manualBlock || peopleGaps.length || gprGaps.length) {
+      blockedUsers.push({ email, manualBlock, peopleGaps, gprGaps });
     }
   }
 
