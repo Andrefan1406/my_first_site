@@ -5,12 +5,17 @@
 // что видит сам заблокированный пользователь (gapWarningMessage/
 // gprBlockMessage — те же функции, что используются в самой форме заявки),
 // чтобы администратор читал ровно то сообщение, из-за которого человеку
-// недоступна подача, а не отдельный пересказ той же логики.
+// недоступна подача, а не отдельный пересказ той же логики. Здесь же —
+// ручная блокировка администратором (server/manualBlock.js): переключатель +
+// комментарий, который пользователь видит на главной выше остальных причин.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAuth } from "firebase/auth";
+import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
+import { db } from "../firebase";
 import { gapWarningMessage } from "../peopleGapsGate";
 import { gprBlockMessage } from "../gprReportGate";
+import { manualBlockMessage } from "../manualBlockGate";
 
 const API_URL = process.env.REACT_APP_CONCRETE_CHAT_API_URL || "http://localhost:4000";
 
@@ -24,7 +29,11 @@ async function apiFetch(path, options = {}) {
   const token = await getIdToken();
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: { Authorization: `Bearer ${token}`, ...options.headers },
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      Authorization: `Bearer ${token}`,
+      ...options.headers,
+    },
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Ошибка сервера (${res.status})`);
@@ -46,6 +55,9 @@ function groupGprGapsBySource(gprGaps) {
 
 function buildReasons(user) {
   const reasons = [];
+  if (user.manualBlock) {
+    reasons.push({ kind: "manual", text: `Вручную: ${manualBlockMessage(user.manualBlock.comment)}` });
+  }
   for (const pg of user.peopleGaps) {
     reasons.push({ kind: "people", text: `Люди, участок «${pg.site}»: ${gapWarningMessage(pg.missingDates)}` });
   }
@@ -54,6 +66,219 @@ function buildReasons(user) {
   }
   return reasons;
 }
+
+const Toggle = ({ checked, disabled, onChange }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    disabled={disabled}
+    onClick={() => onChange(!checked)}
+    style={{ ...s.toggle, background: checked ? "#c0392b" : "#ccc", opacity: disabled ? 0.6 : 1 }}
+    title={checked ? "Заблокирован — нажмите, чтобы разблокировать" : "Не заблокирован — нажмите, чтобы заблокировать"}
+  >
+    <span style={{ ...s.toggleKnob, left: checked ? "22px" : "2px" }} />
+  </button>
+);
+
+// Одна запись manual_user_blocks: переключатель сохраняется сразу,
+// комментарий — по кнопке «Сохранить» (чтобы не слать запрос на каждый символ).
+const ManualBlockRow = ({ block, onSave, onDelete }) => {
+  const [comment, setComment] = useState(block.comment || "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setComment(block.comment || "");
+  }, [block.comment]);
+
+  const save = async (blocked) => {
+    setSaving(true);
+    try {
+      await onSave({ email: block.email, blocked, comment });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const commentChanged = comment.trim() !== (block.comment || "");
+
+  return (
+    <tr>
+      <td style={{ ...s.td, ...s.tdEmail }}>{block.email}</td>
+      <td style={s.td}>
+        <Toggle checked={block.blocked} disabled={saving} onChange={save} />
+      </td>
+      <td style={s.td}>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          rows={2}
+          style={s.textarea}
+          placeholder="Комментарий для пользователя"
+        />
+        <div style={s.meta}>
+          {block.updated_by || "—"}, {(block.updated_at || "").replace("T", " ").slice(0, 16)}
+        </div>
+      </td>
+      <td style={{ ...s.td, whiteSpace: "nowrap" }}>
+        <button onClick={() => save(block.blocked)} disabled={saving || !commentChanged} style={s.saveBtn}>
+          Сохранить
+        </button>{" "}
+        <button onClick={() => onDelete(block.email)} disabled={saving} style={s.deleteBtn}>
+          Удалить
+        </button>
+      </td>
+    </tr>
+  );
+};
+
+// Подсказки для поля email — все, кто заходил в приложение (page_views, как в
+// AdminStatistics). Отдельного списка пользователей нет (Firebase Auth без
+// сервисного аккаунта не перечислить), поэтому это только подсказка: email
+// можно ввести и вручную.
+async function loadKnownEmails() {
+  const snapshot = await getDocs(query(collection(db, "page_views"), orderBy("timestamp", "desc"), limit(5000)));
+  const emails = snapshot.docs.map((d) => (d.data().email || "").toLowerCase()).filter(Boolean);
+  return [...new Set(emails)].sort();
+}
+
+const ManualBlocksSection = ({ onChanged }) => {
+  const [blocks, setBlocks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newBlocked, setNewBlocked] = useState(true);
+  const [newComment, setNewComment] = useState("");
+  const [knownEmails, setKnownEmails] = useState([]);
+
+  useEffect(() => {
+    loadKnownEmails()
+      .then(setKnownEmails)
+      .catch((err) => console.error("Не удалось загрузить список пользователей:", err));
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiFetch("/api/admin/blocked-users/manual");
+      setBlocks(data.blocks || []);
+    } catch (err) {
+      setError(err.message || "Не удалось загрузить ручные блокировки");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const save = async (payload) => {
+    setError("");
+    try {
+      const data = await apiFetch("/api/admin/blocked-users/manual", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setBlocks(data.blocks || []);
+      onChanged();
+      return true;
+    } catch (err) {
+      setError(err.message || "Не удалось сохранить");
+      return false;
+    }
+  };
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    const ok = await save({ email: newEmail.trim(), blocked: newBlocked, comment: newComment });
+    setSaving(false);
+    if (ok) {
+      setNewEmail("");
+      setNewComment("");
+      setNewBlocked(true);
+    }
+  };
+
+  const handleDelete = async (email) => {
+    if (!window.confirm(`Удалить запись о ручной блокировке ${email}?`)) return;
+    setError("");
+    try {
+      const data = await apiFetch(`/api/admin/blocked-users/manual/${encodeURIComponent(email)}`, { method: "DELETE" });
+      setBlocks(data.blocks || []);
+      onChanged();
+    } catch (err) {
+      setError(err.message || "Не удалось удалить");
+    }
+  };
+
+  return (
+    <section style={s.section}>
+      <h2 style={s.sectionTitle}>Ручная блокировка</h2>
+      <p style={s.hint}>
+        Блокирует подачу заявки на технику и на бетон/раствор независимо от отчётов по людям и ГПР.
+        Комментарий пользователь увидит на главной — выше сообщений об остальных блокировках.
+      </p>
+
+      <form onSubmit={handleAdd} style={s.form}>
+        <input
+          type="email"
+          placeholder="email пользователя"
+          list="manual-block-known-emails"
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+          style={s.input}
+        />
+        <datalist id="manual-block-known-emails">
+          {knownEmails.map((email) => (
+            <option key={email} value={email} />
+          ))}
+        </datalist>
+        <label style={s.toggleLabel}>
+          <Toggle checked={newBlocked} onChange={setNewBlocked} />
+          {newBlocked ? "Заблокирован" : "Не заблокирован"}
+        </label>
+        <textarea
+          placeholder="Комментарий (будет показан пользователю)"
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          rows={2}
+          style={{ ...s.textarea, flex: "1 1 100%" }}
+        />
+        <button type="submit" disabled={saving} style={s.addBtn}>
+          {saving ? "Сохраняю..." : "Сохранить"}
+        </button>
+      </form>
+
+      {error && <div style={s.error}>{error}</div>}
+
+      {loading ? (
+        <p>Загрузка...</p>
+      ) : blocks.length === 0 ? (
+        <p style={s.muted}>Ручных блокировок нет.</p>
+      ) : (
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Email</th>
+              <th style={s.th}>Блокировка</th>
+              <th style={s.th}>Комментарий</th>
+              <th style={s.th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {blocks.map((b) => (
+              <ManualBlockRow key={b.email} block={b} onSave={save} onDelete={handleDelete} />
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+};
 
 const BlockedUsersAdminPage = () => {
   const navigate = useNavigate();
@@ -83,6 +308,7 @@ const BlockedUsersAdminPage = () => {
   const summary = useMemo(
     () => ({
       total: blockedUsers.length,
+      byManual: blockedUsers.filter((u) => u.manualBlock).length,
       byPeople: blockedUsers.filter((u) => u.peopleGaps.length).length,
       byGpr: blockedUsers.filter((u) => u.gprGaps.length).length,
     }),
@@ -102,6 +328,10 @@ const BlockedUsersAdminPage = () => {
           <div style={{ ...s.cardValue, color: summary.total ? "#c0392b" : "#1a7f37" }}>{summary.total}</div>
         </div>
         <div style={s.card}>
+          <div style={s.cardLabel}>Вручную</div>
+          <div style={s.cardValue}>{summary.byManual}</div>
+        </div>
+        <div style={s.card}>
           <div style={s.cardLabel}>Из-за пропусков по людям</div>
           <div style={s.cardValue}>{summary.byPeople}</div>
         </div>
@@ -110,6 +340,8 @@ const BlockedUsersAdminPage = () => {
           <div style={s.cardValue}>{summary.byGpr}</div>
         </div>
       </div>
+
+      <ManualBlocksSection onChanged={load} />
 
       <div style={s.actions}>
         <button onClick={load} disabled={loading}>Обновить</button>
@@ -136,7 +368,9 @@ const BlockedUsersAdminPage = () => {
                 <td style={s.td}>
                   <ul style={s.reasonList}>
                     {buildReasons(user).map((r, i) => (
-                      <li key={i} style={s.reasonItem}>{r.text}</li>
+                      <li key={i} style={r.kind === "manual" ? { ...s.reasonItem, ...s.reasonManual } : s.reasonItem}>
+                        {r.text}
+                      </li>
                     ))}
                   </ul>
                 </td>
@@ -155,7 +389,7 @@ const s = {
   back: { background: "none", border: "1px solid #ddd", borderRadius: "6px", padding: "6px 12px", cursor: "pointer" },
   title: { margin: 0, fontSize: "22px" },
 
-  cards: { display: "grid", gridTemplateColumns: "repeat(3, minmax(180px, 1fr))", gap: "16px", marginBottom: "20px" },
+  cards: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "20px" },
   card: { background: "#fff", borderRadius: "10px", padding: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" },
   cardLabel: { fontSize: "12px", color: "#888", marginBottom: "6px" },
   cardValue: { fontSize: "24px", fontWeight: 700 },
@@ -172,6 +406,21 @@ const s = {
 
   reasonList: { margin: 0, paddingLeft: "18px" },
   reasonItem: { marginBottom: "4px", fontSize: "13px", color: "#444" },
+  reasonManual: { color: "#c0392b", fontWeight: 600, whiteSpace: "pre-wrap" },
+
+  section: { background: "#fff", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", marginBottom: "24px" },
+  sectionTitle: { margin: "0 0 6px", fontSize: "17px" },
+  hint: { color: "#666", fontSize: "13px", margin: "0 0 16px", lineHeight: 1.5 },
+  form: { display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "16px" },
+  input: { padding: "8px 10px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "13px", minWidth: "220px" },
+  textarea: { width: "100%", boxSizing: "border-box", padding: "8px 10px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "13px", fontFamily: "inherit", resize: "vertical" },
+  meta: { fontSize: "11px", color: "#999", marginTop: "4px" },
+  addBtn: { background: "#007bff", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 16px", cursor: "pointer", fontSize: "13px" },
+  saveBtn: { background: "#007bff", color: "#fff", border: "none", borderRadius: "6px", padding: "4px 10px", cursor: "pointer", fontSize: "12px" },
+  deleteBtn: { background: "none", border: "1px solid #f0b0b0", color: "#c00", borderRadius: "6px", padding: "4px 10px", cursor: "pointer", fontSize: "12px" },
+  toggleLabel: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" },
+  toggle: { position: "relative", width: "44px", height: "24px", borderRadius: "12px", border: "none", cursor: "pointer", padding: 0, flexShrink: 0, transition: "background 0.15s" },
+  toggleKnob: { position: "absolute", top: "2px", width: "20px", height: "20px", borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.3)", transition: "left 0.15s" },
 };
 
 export default BlockedUsersAdminPage;

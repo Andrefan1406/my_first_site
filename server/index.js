@@ -17,6 +17,7 @@ const peopleGapsCheckRouter = require('./peopleGapsCheck');
 const gprReportAdminRouter = require('./gprReportAdmin');
 const gprReportCheckRouter = require('./gprReportCheck');
 const blockedUsersAdminRouter = require('./blockedUsersAdmin');
+const { checkRouter: manualBlockCheckRouter, adminRouter: manualBlockAdminRouter } = require('./manualBlock');
 const rascenkiAdminRouter = require('./rascenkiAdmin');
 const concreteDailyReportRouter = require('./concreteDailyReport');
 const concreteDashboardRouter = require('./concreteDashboard');
@@ -54,7 +55,9 @@ app.use('/api/admin/people-gaps', peopleGapsAdminRouter);
 app.use('/api/people-gaps', peopleGapsCheckRouter);
 app.use('/api/admin/gpr-report', gprReportAdminRouter);
 app.use('/api/gpr-report', gprReportCheckRouter);
+app.use('/api/admin/blocked-users/manual', manualBlockAdminRouter);
 app.use('/api/admin/blocked-users', blockedUsersAdminRouter);
+app.use('/api/manual-block', manualBlockCheckRouter);
 app.use('/api/admin/rascenki', rascenkiAdminRouter);
 // Оба роутера смонтированы на одном префиксе — их пути не пересекаются
 // (daily-report у одного, options/monthly/unexecuted/chart-titles у

@@ -31,6 +31,7 @@ import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import PeopleGapsGuard from './components/PeopleGapsGuard';
 import GprReportGuard from './components/GprReportGuard';
+import ManualBlockGuard from './components/ManualBlockGuard';
 import PageTracker from './components/PageTracker';
 import AdminStatistics from "./pages/AdminStatistics";
 import PeopleGapsAdminPage from "./pages/PeopleGapsAdminPage";
@@ -69,11 +70,13 @@ const App = () => {
           path="/request"
           element={
             <Protected>
-              <GprReportGuard>
-                <PeopleGapsGuard>
-                  <RequestPage />
-                </PeopleGapsGuard>
-              </GprReportGuard>
+              <ManualBlockGuard>
+                <GprReportGuard>
+                  <PeopleGapsGuard>
+                    <RequestPage />
+                  </PeopleGapsGuard>
+                </GprReportGuard>
+              </ManualBlockGuard>
             </Protected>
           }
         />
@@ -100,11 +103,13 @@ const App = () => {
           path="/concrete-request"
           element={
             <Protected>
-              <GprReportGuard>
-                <PeopleGapsGuard>
-                  <ConcreteRequestPage />
-                </PeopleGapsGuard>
-              </GprReportGuard>
+              <ManualBlockGuard>
+                <GprReportGuard>
+                  <PeopleGapsGuard>
+                    <ConcreteRequestPage />
+                  </PeopleGapsGuard>
+                </GprReportGuard>
+              </ManualBlockGuard>
             </Protected>
           }
         />

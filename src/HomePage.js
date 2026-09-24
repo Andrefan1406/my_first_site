@@ -4,6 +4,7 @@ import { signOut, getAuth } from "firebase/auth";
 import { auth } from "./firebase";
 import { fetchMissingGapDates, gapWarningMessage } from './peopleGapsGate';
 import { fetchGprReportBlock, gprBlockMessage } from './gprReportGate';
+import { fetchManualBlock, manualBlockMessage } from './manualBlockGate';
 
 const ADMIN_EMAIL = "admin@vkdev.kz";
 
@@ -43,12 +44,25 @@ const HomePage = () => {
       .catch((err) => console.error('Не удалось проверить пропуски в отчётах ГПР:', err));
   }, [currentEmail]);
 
-  const isRequestsBlocked = missingGapDates.length > 0 || gprBlocked;
-  const blockedTitle = missingGapDates.length > 0
-    ? gapWarningMessage(missingGapDates)
-    : gprBlocked
-      ? gprBlockMessage(gprGaps)
-      : undefined;
+  // Ручная блокировка администратором (см. manualBlockGate.js) — её
+  // комментарий показываем первым, выше автоматических причин.
+  const [manualBlock, setManualBlock] = useState({ blocked: false, comment: '' });
+
+  useEffect(() => {
+    if (!currentEmail) return;
+    fetchManualBlock()
+      .then(setManualBlock)
+      .catch((err) => console.error('Не удалось проверить ручную блокировку:', err));
+  }, [currentEmail]);
+
+  const isRequestsBlocked = manualBlock.blocked || missingGapDates.length > 0 || gprBlocked;
+  const blockedTitle = manualBlock.blocked
+    ? manualBlockMessage(manualBlock.comment)
+    : missingGapDates.length > 0
+      ? gapWarningMessage(missingGapDates)
+      : gprBlocked
+        ? gprBlockMessage(gprGaps)
+        : undefined;
 
   const handleLogout = async () => {
     if (!window.confirm('Вы уверены, что хотите выйти?')) return;
@@ -89,6 +103,10 @@ const HomePage = () => {
       <img src="/Логотип.png" alt="Логотип" style={styles.logo} />
 
       <h1>Добро пожаловать!</h1>
+
+      {manualBlock.blocked && (
+        <div style={{ ...styles.gapWarning, whiteSpace: 'pre-wrap' }}>{manualBlockMessage(manualBlock.comment)}</div>
+      )}
 
       {missingGapDates.length > 0 && (
         <div style={styles.gapWarning}>{gapWarningMessage(missingGapDates)}</div>
